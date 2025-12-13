@@ -1,10 +1,5 @@
 # Copilot instructions for this repo
 
-## What this repo is
-
-- A network/server map/tracker.
-- Tracks routers, switches, servers, services, VLANs/subnets, and static IP reservations in Git-friendly files.
-
 ## Prime directives
 
 1. **Human-readable first**

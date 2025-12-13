@@ -1,0 +1,77 @@
+# Architecture
+
+## System overview
+
+Roller_hoops is a **Go + Node.js + PostgreSQL** system that runs fully in Docker.
+
+- **Traefik** routes traffic
+  - `/` → **ui-node** (Node.js / Next.js)
+  - `/api` → **core-go** (Go API)
+- **core-go** owns network discovery, normalisation, persistence, and the REST API.
+- **ui-node** owns HTML rendering, user workflows, and authentication UI/sessions.
+- **PostgreSQL** is the only database.
+
+## Service responsibilities
+
+### core-go (Go)
+
+Owns:
+
+- Network discovery
+- Polling/scheduling
+- Normalisation
+- Database access
+- REST API (`/api/v1/...`)
+- WebSockets (later; optional)
+
+Forbidden:
+
+- HTML rendering
+- UI workflows
+- Direct user interaction
+- Accessing UI session state
+
+### ui-node (Node.js / Next.js)
+
+Owns:
+
+- UI rendering (SSR-first)
+- Forms and workflows
+- Authentication UI and sessions
+- Calling the Go API
+
+Forbidden:
+
+- Network scanning
+- Direct database access
+- Re-implementing Go business rules
+
+## Routing and trust boundaries
+
+- Only Traefik publishes ports to the host.
+- `core-go` and `db` are private to the internal Docker network.
+- `ui-node` is the only component that accepts browser sessions.
+
+## API contract source of truth
+
+The API contract is defined in OpenAPI:
+
+- Canonical spec: `api/openapi.yaml`
+- Documentation: `docs/api-contract.md`
+
+Generated code (Go server stubs, TypeScript types) is **derived** from OpenAPI and should not diverge.
+
+## Configuration
+
+- All configuration is via **environment variables**.
+- No secrets are committed to this repository.
+
+## Observability
+
+Baseline expectations:
+
+- Structured JSON logs across services
+- A request ID is propagated end-to-end
+- Health endpoints:
+  - `GET /healthz` (liveness)
+  - `GET /readyz` (readiness)

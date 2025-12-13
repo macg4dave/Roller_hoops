@@ -1,3 +1,5 @@
+# Roadmap
+
 Here’s a **clean, realistic roadmap** that explicitly **reuses existing, proven components**, runs fully in **Docker**, and keeps Go and Node doing what they’re best at. No reinventing wheels.
 
 ---
@@ -24,14 +26,14 @@ A **self-hosted network tracker / mapper** that:
 
 * **Docker + docker-compose**
 * **Reverse proxy**: Traefik
-* **Database**: PostgreSQL
-* **Auth**: built-in
+* **Database**: PostgreSQL (only)
+* **Auth**: built-in (handled by UI; Go stays headless)
 
 ---
 
 ## Service layout (final target)
 
-```
+```text
 docker-compose.yml
 │
 ├─ traefik
@@ -43,7 +45,7 @@ docker-compose.yml
 │   └─ Go discovery + API service
 │
 ├─ db/
-│   └─ PostgreSQL or MySQL
+│   └─ PostgreSQL
 │
 └─ volumes/
     └─ persistent data
@@ -51,11 +53,12 @@ docker-compose.yml
 
 ---
 
-# Roadmap
+
+## Phases
 
 ## Phase 0 — Foundations
 
-* Pick DB: **PostgreSQL** 
+* Pick DB: **PostgreSQL**
 * Pick reverse proxy: **Traefik**
 * Pick API style: **REST over HTTP**
 
@@ -63,7 +66,7 @@ docker-compose.yml
 
 ## Phase 1 — Go core service (headless)
 
-**Do not build a UI yet**
+### Constraint: Do not build a UI yet
 
 ### Responsibilities
 
@@ -73,22 +76,29 @@ docker-compose.yml
 
 ### Components (existing, proven)
 
-* HTTP server: Go stdlib
-* DB access: `sqlc` or `gorm`
+* HTTP server: Go stdlib (`net/http`) + `chi` router
+* API contract: OpenAPI is canonical; Go server stubs are generated (no hand-rolled drift)
+* DB access: `sqlc` (PostgreSQL-first) + `pgx`
 * Migrations: `golang-migrate`
 * Config: env vars only (Docker-friendly)
-* Logging: `zap` or `zerolog`
+* Logging: `zerolog` (JSON logs)
+
+Operational defaults (v1):
+
+* Strict JSON decoding for requests (reject unknown fields)
+* Health endpoints: `/healthz` and `/readyz`
+* Request ID propagation end-to-end (UI → Traefik → Go)
 
 ### API (example)
 
-```
-GET    /api/devices
-GET    /api/devices/{id}
-POST   /api/devices
-PUT    /api/devices/{id}
+```text
+GET    /api/v1/devices
+GET    /api/v1/devices/{id}
+POST   /api/v1/devices
+PUT    /api/v1/devices/{id}
 
-POST   /api/discovery/run
-GET    /api/discovery/status
+POST   /api/v1/discovery/run
+GET    /api/v1/discovery/status
 ```
 
 ---
@@ -120,16 +130,16 @@ Deliverable:
 
 ## Phase 3 — Node.js UI service
 
-**Node does not touch the network**
+### Constraint: Node does not touch the network
 
 ### Stack
 
 * Node.js + TypeScript
-* Framework: **Next.js** or **Fastify + SSR**
-* UI: plain HTML + Tailwind *or* React (your choice)
-* API client: typed fetch
+* Framework: **Next.js** (SSR-first)
+* UI: plain HTML forms + Tailwind (progressive enhancement; avoid heavy client state early)
+* API client: typed `fetch` + generated TypeScript types from OpenAPI
 
-### Responsibilities
+### UI responsibilities
 
 * Forms
 * Editing metadata
@@ -142,6 +152,11 @@ Start simple:
 
 * Local users
 * Session cookies
+
+Rule (v1):
+
+* UI owns authentication and sessions.
+* Go stays headless and is not exposed directly to the public internet except via Traefik routing.
 
 Deliverable:
 
@@ -159,7 +174,7 @@ Use **existing battle-tested infra**
 * Routes `/` → Node
 * Routes `/api` → Go
 * Handles TLS
-* Handles auth later if needed
+* Does not replace application auth in v1 (auth remains a UI concern)
 
 Deliverable:
 
@@ -243,7 +258,7 @@ If you want next:
 * Define the **initial DB schema**
 * Sketch the **API contract** so it never breaks later
 
-## Furture work
+## Future work
 
 * Discovers and tracks devices
 * Decide discovery scope:

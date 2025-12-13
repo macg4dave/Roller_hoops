@@ -1,0 +1,150 @@
+openapi: 3.0.3
+info:
+  title: Roller_hoops API
+  version: 0.1.0
+  description: |
+    Canonical API contract for the Roller_hoops system.
+
+servers:
+  - url: /api
+
+tags:
+  - name: Devices
+  - name: Discovery
+
+paths:
+  /v1/devices:
+    get:
+      tags: [Devices]
+      summary: List devices
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Device'
+    post:
+      tags: [Devices]
+      summary: Create a device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+  /v1/devices/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Devices]
+      summary: Get device by ID
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags: [Devices]
+      summary: Update device by ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+  /v1/discovery/run:
+    post:
+      tags: [Discovery]
+      summary: Trigger a discovery pass
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /v1/discovery/status:
+    get:
+      tags: [Discovery]
+      summary: Get discovery status
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+components:
+  schemas:
+    Device:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+          description: Optional human-friendly name.
+    DeviceCreate:
+      type: object
+      description: |
+        Minimal create payload. Additional fields will be added as the data model is finalized.
+      properties:
+        display_name:
+          type: string
+    DeviceUpdate:
+      type: object
+      description: |
+        Minimal update payload. Additional fields will be added as the data model is finalized.
+      properties:
+        display_name:
+          type: string
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
