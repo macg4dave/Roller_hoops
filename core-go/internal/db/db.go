@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"roller_hoops/core-go/internal/sqlcgen"
 )
 
 type Pool struct {
@@ -37,4 +39,11 @@ func (p *Pool) Ping(ctx context.Context) error {
 		return nil
 	}
 	return p.pool.Ping(ctx)
+}
+
+func (p *Pool) Queries() *sqlcgen.Queries {
+	if p == nil || p.pool == nil {
+		return nil
+	}
+	return sqlcgen.New(p.pool)
 }

@@ -47,6 +47,14 @@ Example shape:
 }
 ```
 
+## Error codes (current)
+
+- `validation_failed`: JSON could not be decoded or failed schema validation.
+- `invalid_id`: path parameter could not be parsed as a UUID.
+- `not_found`: requested resource does not exist.
+- `db_unavailable`: database connection is missing or not ready.
+- `db_error`: unexpected persistence failure.
+
 ## Resource conventions
 
 - IDs are UUID strings.

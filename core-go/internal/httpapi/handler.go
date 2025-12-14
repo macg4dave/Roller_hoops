@@ -3,23 +3,33 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/rs/zerolog"
 
 	"roller_hoops/core-go/internal/db"
+	"roller_hoops/core-go/internal/sqlcgen"
 )
 
 type Handler struct {
-	log  zerolog.Logger
-	pool *db.Pool
+	log     zerolog.Logger
+	pool    *db.Pool
+	queries *sqlcgen.Queries
 }
 
 func NewHandler(log zerolog.Logger, pool *db.Pool) *Handler {
-	return &Handler{log: log, pool: pool}
+	var q *sqlcgen.Queries
+	if pool != nil {
+		q = pool.Queries()
+	}
+	return &Handler{log: log, pool: pool, queries: q}
 }
 
 func (h *Handler) Router() http.Handler {
@@ -97,7 +107,16 @@ func (h *Handler) writeError(w http.ResponseWriter, status int, code, msg string
 func decodeJSONStrict(r *http.Request, dst any) error {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
-	return dec.Decode(dst)
+	if err := dec.Decode(dst); err != nil {
+		return err
+	}
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return errors.New("unexpected extra data after JSON body")
+		}
+		return err
+	}
+	return nil
 }
 
 func (h *Handler) handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -108,11 +127,14 @@ func (h *Handler) handleReadyZ(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
-	if h.pool != nil {
-		if err := h.pool.Ping(ctx); err != nil {
-			h.writeError(w, http.StatusServiceUnavailable, "db_unavailable", "database not ready", map[string]any{"error": err.Error()})
-			return
-		}
+	if h.pool == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "db_unavailable", "database not configured", nil)
+		return
+	}
+
+	if err := h.pool.Ping(ctx); err != nil {
+		h.writeError(w, http.StatusServiceUnavailable, "db_unavailable", "database not ready", map[string]any{"error": err.Error()})
+		return
 	}
 
 	h.writeJSON(w, http.StatusOK, map[string]any{"ready": true})
@@ -131,9 +153,47 @@ type deviceUpdate struct {
 	DisplayName *string `json:"display_name,omitempty"`
 }
 
+func (h *Handler) ensureQueries(w http.ResponseWriter) bool {
+	if h.queries == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "db_unavailable", "database not configured", nil)
+		return false
+	}
+	return true
+}
+
+func toDevice(d sqlcgen.Device) device {
+	return device{
+		ID:          d.ID,
+		DisplayName: d.DisplayName,
+	}
+}
+
+func isInvalidUUID(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "22P02"
+	}
+	return false
+}
+
 func (h *Handler) handleListDevices(w http.ResponseWriter, r *http.Request) {
-	// v1 stub: return empty list until sqlc queries are wired.
-	h.writeJSON(w, http.StatusOK, []device{})
+	if !h.ensureQueries(w) {
+		return
+	}
+
+	rows, err := h.queries.ListDevices(r.Context())
+	if err != nil {
+		h.log.Error().Err(err).Msg("list devices failed")
+		h.writeError(w, http.StatusInternalServerError, "db_error", "failed to list devices", nil)
+		return
+	}
+
+	resp := make([]device, 0, len(rows))
+	for _, d := range rows {
+		resp = append(resp, toDevice(d))
+	}
+
+	h.writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) handleCreateDevice(w http.ResponseWriter, r *http.Request) {
@@ -143,15 +203,41 @@ func (h *Handler) handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// v1 stub: no DB insert yet.
-	resp := device{ID: "00000000-0000-0000-0000-000000000000", DisplayName: req.DisplayName}
-	h.writeJSON(w, http.StatusCreated, resp)
+	if !h.ensureQueries(w) {
+		return
+	}
+
+	row, err := h.queries.CreateDevice(r.Context(), req.DisplayName)
+	if err != nil {
+		h.log.Error().Err(err).Msg("create device failed")
+		h.writeError(w, http.StatusInternalServerError, "db_error", "failed to create device", nil)
+		return
+	}
+
+	h.writeJSON(w, http.StatusCreated, toDevice(row))
 }
 
 func (h *Handler) handleGetDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	// v1 stub: always not found.
-	h.writeError(w, http.StatusNotFound, "not_found", "device not found", map[string]any{"id": id})
+	if !h.ensureQueries(w) {
+		return
+	}
+
+	row, err := h.queries.GetDevice(r.Context(), id)
+	if err != nil {
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			h.writeError(w, http.StatusNotFound, "not_found", "device not found", map[string]any{"id": id})
+		case isInvalidUUID(err):
+			h.writeError(w, http.StatusBadRequest, "invalid_id", "device id is not a valid uuid", map[string]any{"id": id})
+		default:
+			h.log.Error().Err(err).Str("id", id).Msg("get device failed")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to fetch device", nil)
+		}
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, toDevice(row))
 }
 
 func (h *Handler) handleUpdateDevice(w http.ResponseWriter, r *http.Request) {
@@ -162,9 +248,28 @@ func (h *Handler) handleUpdateDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// v1 stub: echo payload.
-	resp := device{ID: id, DisplayName: req.DisplayName}
-	h.writeJSON(w, http.StatusOK, resp)
+	if !h.ensureQueries(w) {
+		return
+	}
+
+	row, err := h.queries.UpdateDevice(r.Context(), sqlcgen.UpdateDeviceParams{
+		ID:          id,
+		DisplayName: req.DisplayName,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			h.writeError(w, http.StatusNotFound, "not_found", "device not found", map[string]any{"id": id})
+		case isInvalidUUID(err):
+			h.writeError(w, http.StatusBadRequest, "invalid_id", "device id is not a valid uuid", map[string]any{"id": id})
+		default:
+			h.log.Error().Err(err).Str("id", id).Msg("update device failed")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to update device", nil)
+		}
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, toDevice(row))
 }
 
 func (h *Handler) handleDiscoveryRun(w http.ResponseWriter, r *http.Request) {

@@ -1,8 +1,7 @@
 FROM golang:1.22-alpine AS build
 WORKDIR /src
 
-COPY go.mod ./
-# no go.sum yet (first build will generate it)
+COPY go.mod go.sum ./
 
 RUN go mod download
 

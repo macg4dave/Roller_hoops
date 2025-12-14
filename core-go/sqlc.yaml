@@ -5,6 +5,11 @@ sql:
       - "migrations"
     queries:
       - "queries"
+    overrides:
+      - db_type: "uuid"
+        go_type: "string"
+      - column: "devices.display_name"
+        go_type: "*string"
     gen:
       go:
         package: "sqlcgen"
