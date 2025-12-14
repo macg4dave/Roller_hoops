@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -19,23 +20,44 @@ import (
 )
 
 type Handler struct {
-	log     zerolog.Logger
-	pool    *db.Pool
-	queries *sqlcgen.Queries
+	log       zerolog.Logger
+	pool      *db.Pool
+	devices   deviceQueries
+	discovery discoveryQueries
+}
+
+type deviceQueries interface {
+	ListDevices(ctx context.Context) ([]sqlcgen.Device, error)
+	GetDevice(ctx context.Context, id string) (sqlcgen.Device, error)
+	CreateDevice(ctx context.Context, displayName *string) (sqlcgen.Device, error)
+	UpdateDevice(ctx context.Context, arg sqlcgen.UpdateDeviceParams) (sqlcgen.Device, error)
+	UpsertDeviceMetadata(ctx context.Context, arg sqlcgen.UpsertDeviceMetadataParams) (sqlcgen.DeviceMetadata, error)
+}
+
+type discoveryQueries interface {
+	InsertDiscoveryRun(ctx context.Context, arg sqlcgen.InsertDiscoveryRunParams) (sqlcgen.DiscoveryRun, error)
+	UpdateDiscoveryRun(ctx context.Context, arg sqlcgen.UpdateDiscoveryRunParams) (sqlcgen.DiscoveryRun, error)
+	GetLatestDiscoveryRun(ctx context.Context) (sqlcgen.DiscoveryRun, error)
+	GetDiscoveryRun(ctx context.Context, id string) (sqlcgen.DiscoveryRun, error)
+	InsertDiscoveryRunLog(ctx context.Context, arg sqlcgen.InsertDiscoveryRunLogParams) error
 }
 
 func NewHandler(log zerolog.Logger, pool *db.Pool) *Handler {
-	var q *sqlcgen.Queries
+	var dq deviceQueries
+	var drq discoveryQueries
 	if pool != nil {
-		q = pool.Queries()
+		q := pool.Queries()
+		dq = q
+		drq = q
 	}
-	return &Handler{log: log, pool: pool, queries: q}
+	return &Handler{log: log, pool: pool, devices: dq, discovery: drq}
 }
 
 func (h *Handler) Router() http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
+	r.Use(h.ensureResponseRequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(15 * time.Second))
@@ -65,6 +87,16 @@ func (h *Handler) Router() http.Handler {
 	})
 
 	return r
+}
+
+func (h *Handler) ensureResponseRequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if rid := middleware.GetReqID(r.Context()); rid != "" {
+			// Echo request id so clients (and upstream proxies) can correlate logs.
+			w.Header().Set("X-Request-ID", rid)
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (h *Handler) accessLog(next http.Handler) http.Handler {
@@ -141,20 +173,35 @@ func (h *Handler) handleReadyZ(w http.ResponseWriter, r *http.Request) {
 }
 
 type device struct {
-	ID          string  `json:"id"`
-	DisplayName *string `json:"display_name,omitempty"`
+	ID          string          `json:"id"`
+	DisplayName *string         `json:"display_name,omitempty"`
+	Metadata    *deviceMetadata `json:"metadata,omitempty"`
+}
+
+type deviceMetadata struct {
+	Owner    *string `json:"owner,omitempty"`
+	Location *string `json:"location,omitempty"`
+	Notes    *string `json:"notes,omitempty"`
+}
+
+type deviceMetadataBody struct {
+	Owner    *string `json:"owner,omitempty"`
+	Location *string `json:"location,omitempty"`
+	Notes    *string `json:"notes,omitempty"`
 }
 
 type deviceCreate struct {
-	DisplayName *string `json:"display_name,omitempty"`
+	DisplayName *string             `json:"display_name,omitempty"`
+	Metadata    *deviceMetadataBody `json:"metadata,omitempty"`
 }
 
 type deviceUpdate struct {
-	DisplayName *string `json:"display_name,omitempty"`
+	DisplayName *string             `json:"display_name,omitempty"`
+	Metadata    *deviceMetadataBody `json:"metadata,omitempty"`
 }
 
-func (h *Handler) ensureQueries(w http.ResponseWriter) bool {
-	if h.queries == nil {
+func (h *Handler) ensureDeviceQueries(w http.ResponseWriter) bool {
+	if h.devices == nil {
 		h.writeError(w, http.StatusServiceUnavailable, "db_unavailable", "database not configured", nil)
 		return false
 	}
@@ -162,10 +209,99 @@ func (h *Handler) ensureQueries(w http.ResponseWriter) bool {
 }
 
 func toDevice(d sqlcgen.Device) device {
+	var meta *deviceMetadata
+	if d.Owner != nil || d.Location != nil || d.Notes != nil {
+		meta = &deviceMetadata{
+			Owner:    d.Owner,
+			Location: d.Location,
+			Notes:    d.Notes,
+		}
+	}
+
 	return device{
 		ID:          d.ID,
 		DisplayName: d.DisplayName,
+		Metadata:    meta,
 	}
+}
+
+func normalizeMetadataBody(body *deviceMetadataBody) *deviceMetadataBody {
+	if body == nil {
+		return nil
+	}
+
+	trim := func(v *string) *string {
+		if v == nil {
+			return nil
+		}
+		s := strings.TrimSpace(*v)
+		if s == "" {
+			return nil
+		}
+		return &s
+	}
+
+	normalized := &deviceMetadataBody{
+		Owner:    trim(body.Owner),
+		Location: trim(body.Location),
+		Notes:    trim(body.Notes),
+	}
+
+	if normalized.Owner == nil && normalized.Location == nil && normalized.Notes == nil {
+		return nil
+	}
+
+	return normalized
+}
+
+type discoveryRun struct {
+	ID          string         `json:"id"`
+	Status      string         `json:"status"`
+	Scope       *string        `json:"scope,omitempty"`
+	Stats       map[string]any `json:"stats,omitempty"`
+	StartedAt   time.Time      `json:"started_at"`
+	CompletedAt *time.Time     `json:"completed_at,omitempty"`
+	LastError   *string        `json:"last_error,omitempty"`
+}
+
+type discoveryStatus struct {
+	Status    string        `json:"status"`
+	LatestRun *discoveryRun `json:"latest_run,omitempty"`
+}
+
+type discoveryRunRequest struct {
+	Scope *string `json:"scope,omitempty"`
+}
+
+func (h *Handler) ensureDiscoveryQueries(w http.ResponseWriter) bool {
+	if h.discovery == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "db_unavailable", "database not configured", nil)
+		return false
+	}
+	return true
+}
+
+func toDiscoveryRun(dr sqlcgen.DiscoveryRun) discoveryRun {
+	return discoveryRun{
+		ID:          dr.ID,
+		Status:      dr.Status,
+		Scope:       dr.Scope,
+		Stats:       dr.Stats,
+		StartedAt:   dr.StartedAt,
+		CompletedAt: dr.CompletedAt,
+		LastError:   dr.LastError,
+	}
+}
+
+func normalizeScope(scope *string) *string {
+	if scope == nil {
+		return nil
+	}
+	s := strings.TrimSpace(*scope)
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func isInvalidUUID(err error) bool {
@@ -177,11 +313,11 @@ func isInvalidUUID(err error) bool {
 }
 
 func (h *Handler) handleListDevices(w http.ResponseWriter, r *http.Request) {
-	if !h.ensureQueries(w) {
+	if !h.ensureDeviceQueries(w) {
 		return
 	}
 
-	rows, err := h.queries.ListDevices(r.Context())
+	rows, err := h.devices.ListDevices(r.Context())
 	if err != nil {
 		h.log.Error().Err(err).Msg("list devices failed")
 		h.writeError(w, http.StatusInternalServerError, "db_error", "failed to list devices", nil)
@@ -203,15 +339,36 @@ func (h *Handler) handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.ensureQueries(w) {
+	req.Metadata = normalizeMetadataBody(req.Metadata)
+
+	if !h.ensureDeviceQueries(w) {
 		return
 	}
 
-	row, err := h.queries.CreateDevice(r.Context(), req.DisplayName)
+	ctx := r.Context()
+	row, err := h.devices.CreateDevice(ctx, req.DisplayName)
 	if err != nil {
 		h.log.Error().Err(err).Msg("create device failed")
 		h.writeError(w, http.StatusInternalServerError, "db_error", "failed to create device", nil)
 		return
+	}
+
+	if req.Metadata != nil {
+		meta, err := h.devices.UpsertDeviceMetadata(ctx, sqlcgen.UpsertDeviceMetadataParams{
+			DeviceID: row.ID,
+			Owner:    req.Metadata.Owner,
+			Location: req.Metadata.Location,
+			Notes:    req.Metadata.Notes,
+		})
+		if err != nil {
+			h.log.Error().Err(err).Str("device_id", row.ID).Msg("failed to upsert metadata")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to create device metadata", nil)
+			return
+		}
+
+		row.Owner = meta.Owner
+		row.Location = meta.Location
+		row.Notes = meta.Notes
 	}
 
 	h.writeJSON(w, http.StatusCreated, toDevice(row))
@@ -219,11 +376,11 @@ func (h *Handler) handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleGetDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if !h.ensureQueries(w) {
+	if !h.ensureDeviceQueries(w) {
 		return
 	}
 
-	row, err := h.queries.GetDevice(r.Context(), id)
+	row, err := h.devices.GetDevice(r.Context(), id)
 	if err != nil {
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
@@ -248,11 +405,14 @@ func (h *Handler) handleUpdateDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.ensureQueries(w) {
+	req.Metadata = normalizeMetadataBody(req.Metadata)
+
+	if !h.ensureDeviceQueries(w) {
 		return
 	}
 
-	row, err := h.queries.UpdateDevice(r.Context(), sqlcgen.UpdateDeviceParams{
+	ctx := r.Context()
+	row, err := h.devices.UpdateDevice(ctx, sqlcgen.UpdateDeviceParams{
 		ID:          id,
 		DisplayName: req.DisplayName,
 	})
@@ -269,15 +429,121 @@ func (h *Handler) handleUpdateDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Metadata != nil {
+		meta, err := h.devices.UpsertDeviceMetadata(ctx, sqlcgen.UpsertDeviceMetadataParams{
+			DeviceID: id,
+			Owner:    req.Metadata.Owner,
+			Location: req.Metadata.Location,
+			Notes:    req.Metadata.Notes,
+		})
+		if err != nil {
+			h.log.Error().Err(err).Str("id", id).Msg("update device metadata failed")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to update device metadata", nil)
+			return
+		}
+
+		row.Owner = meta.Owner
+		row.Location = meta.Location
+		row.Notes = meta.Notes
+	}
+
 	h.writeJSON(w, http.StatusOK, toDevice(row))
 }
 
 func (h *Handler) handleDiscoveryRun(w http.ResponseWriter, r *http.Request) {
-	// v1 stub: accept request.
-	h.writeJSON(w, http.StatusAccepted, map[string]any{"status": "accepted"})
+	if !h.ensureDiscoveryQueries(w) {
+		return
+	}
+
+	var req discoveryRunRequest
+	if r.ContentLength > 0 {
+		if err := decodeJSONStrict(r, &req); err != nil {
+			h.writeError(w, http.StatusBadRequest, "validation_failed", "invalid json body", map[string]any{"error": err.Error()})
+			return
+		}
+	}
+	req.Scope = normalizeScope(req.Scope)
+
+	run, err := h.discovery.InsertDiscoveryRun(r.Context(), sqlcgen.InsertDiscoveryRunParams{
+		Status: "queued",
+		Scope:  req.Scope,
+		Stats:  map[string]any{"stage": "queued"},
+	})
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to create discovery run")
+		h.writeError(w, http.StatusInternalServerError, "db_error", "failed to start discovery", nil)
+		return
+	}
+
+	h.writeJSON(w, http.StatusAccepted, toDiscoveryRun(run))
+	h.startDiscoverySimulation(run.ID, req.Scope)
 }
 
 func (h *Handler) handleDiscoveryStatus(w http.ResponseWriter, r *http.Request) {
-	// v1 stub.
-	h.writeJSON(w, http.StatusOK, map[string]any{"status": "idle"})
+	if !h.ensureDiscoveryQueries(w) {
+		return
+	}
+
+	run, err := h.discovery.GetLatestDiscoveryRun(r.Context())
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			h.writeJSON(w, http.StatusOK, discoveryStatus{Status: "idle"})
+			return
+		}
+
+		h.log.Error().Err(err).Msg("failed to fetch discovery status")
+		h.writeError(w, http.StatusInternalServerError, "db_error", "failed to load discovery status", nil)
+		return
+	}
+
+	latest := toDiscoveryRun(run)
+	h.writeJSON(w, http.StatusOK, discoveryStatus{
+		Status:    run.Status,
+		LatestRun: &latest,
+	})
+}
+
+func (h *Handler) startDiscoverySimulation(runID string, scope *string) {
+	if h.discovery == nil {
+		return
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if _, err := h.discovery.UpdateDiscoveryRun(ctx, sqlcgen.UpdateDiscoveryRunParams{
+			ID:     runID,
+			Status: "running",
+			Stats:  map[string]any{"stage": "running", "scope": scope},
+		}); err != nil {
+			h.log.Warn().Err(err).Str("run_id", runID).Msg("failed to mark discovery as running")
+			return
+		}
+
+		_ = h.discovery.InsertDiscoveryRunLog(ctx, sqlcgen.InsertDiscoveryRunLogParams{
+			RunID:   runID,
+			Level:   "info",
+			Message: "discovery run started",
+		})
+
+		time.Sleep(800 * time.Millisecond)
+
+		completedAt := time.Now()
+		if _, err := h.discovery.UpdateDiscoveryRun(ctx, sqlcgen.UpdateDiscoveryRunParams{
+			ID:          runID,
+			Status:      "succeeded",
+			Stats:       map[string]any{"stage": "completed", "devices_seen": 0},
+			CompletedAt: &completedAt,
+		}); err != nil {
+			h.log.Warn().Err(err).Str("run_id", runID).Msg("failed to mark discovery as complete")
+			return
+		}
+
+		_ = h.discovery.InsertDiscoveryRunLog(ctx, sqlcgen.InsertDiscoveryRunLogParams{
+			RunID:   runID,
+			Level:   "info",
+			Message: "discovery run completed",
+		})
+	}()
 }

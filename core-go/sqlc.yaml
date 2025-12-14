@@ -10,6 +10,16 @@ sql:
         go_type: "string"
       - column: "devices.display_name"
         go_type: "*string"
+      - column: "device_metadata.owner"
+        go_type: "*string"
+      - column: "device_metadata.location"
+        go_type: "*string"
+      - column: "device_metadata.notes"
+        go_type: "*string"
+      - column: "discovery_runs.scope"
+        go_type: "*string"
+      - column: "discovery_runs.stats"
+        go_type: "map[string]any"
     gen:
       go:
         package: "sqlcgen"

@@ -1,21 +1,48 @@
--- name: ListDevices :many
-SELECT id, display_name
-FROM devices
-ORDER BY created_at DESC;
+SELECT d.id,
+       d.display_name,
+       m.owner,
+       m.location,
+       m.notes
+FROM devices d
+LEFT JOIN device_metadata m ON m.device_id = d.id
+ORDER BY d.created_at DESC;
 
 -- name: GetDevice :one
-SELECT id, display_name
-FROM devices
-WHERE id = $1;
+SELECT d.id,
+       d.display_name,
+       m.owner,
+       m.location,
+       m.notes
+FROM devices d
+LEFT JOIN device_metadata m ON m.device_id = d.id
+WHERE d.id = $1;
 
 -- name: CreateDevice :one
-INSERT INTO devices (display_name)
-VALUES ($1)
-RETURNING id, display_name;
+WITH inserted AS (
+  INSERT INTO devices (display_name)
+  VALUES ($1)
+  RETURNING id, display_name
+)
+SELECT i.id,
+       i.display_name,
+       m.owner,
+       m.location,
+       m.notes
+FROM inserted i
+LEFT JOIN device_metadata m ON m.device_id = i.id;
 
 -- name: UpdateDevice :one
-UPDATE devices
-SET display_name = $2,
-    updated_at = now()
-WHERE id = $1
-RETURNING id, display_name;
+WITH updated AS (
+  UPDATE devices
+  SET display_name = $2,
+      updated_at = now()
+  WHERE id = $1
+  RETURNING id, display_name
+)
+SELECT u.id,
+       u.display_name,
+       m.owner,
+       m.location,
+       m.notes
+FROM updated u
+LEFT JOIN device_metadata m ON m.device_id = u.id;

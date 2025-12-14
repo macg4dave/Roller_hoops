@@ -1,10 +1,12 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
+import { randomUUID } from 'crypto';
 
-import { Device } from './types';
+import { Device, DiscoveryRun } from './types';
 
-import { CreateDeviceState } from './state';
+import { CreateDeviceState, DiscoveryRunState } from './state';
 
 function apiBase() {
   return process.env.CORE_GO_BASE_URL ?? 'http://localhost:8081';
@@ -24,15 +26,40 @@ export async function createDevice(
   formData: FormData
 ): Promise<CreateDeviceState> {
   const displayNameRaw = formData.get('display_name');
-  const payload: Record<string, string> = {};
+  const payload: Record<string, unknown> = {};
 
   if (typeof displayNameRaw === 'string' && displayNameRaw.trim().length > 0) {
     payload.display_name = displayNameRaw.trim();
   }
 
+  const ownerRaw = formData.get('owner');
+  const locationRaw = formData.get('location');
+  const notesRaw = formData.get('notes');
+
+  const metadata: Record<string, string> = {};
+  if (typeof ownerRaw === 'string' && ownerRaw.trim().length > 0) {
+    metadata.owner = ownerRaw.trim();
+  }
+  if (typeof locationRaw === 'string' && locationRaw.trim().length > 0) {
+    metadata.location = locationRaw.trim();
+  }
+  if (typeof notesRaw === 'string' && notesRaw.trim().length > 0) {
+    metadata.notes = notesRaw.trim();
+  }
+
+  if (Object.keys(metadata).length > 0) {
+    payload.metadata = metadata;
+  }
+
+  const reqId = (await headers()).get('x-request-id') ?? randomUUID();
+
   const res = await fetch(`${apiBase()}/api/v1/devices`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'X-Request-ID': reqId
+    },
     cache: 'no-store',
     body: JSON.stringify(payload)
   });
@@ -46,4 +73,39 @@ export async function createDevice(
   revalidatePath('/devices');
   const label = device.display_name?.trim() || 'device';
   return { status: 'success', message: `Created ${label} (${device.id})` };
+}
+
+export async function triggerDiscovery(
+  _prevState: DiscoveryRunState,
+  formData: FormData
+): Promise<DiscoveryRunState> {
+  const scopeRaw = formData.get('scope');
+  const payload: Record<string, unknown> = {};
+  if (typeof scopeRaw === 'string' && scopeRaw.trim().length > 0) {
+    payload.scope = scopeRaw.trim();
+  }
+
+  const reqId = (await headers()).get('x-request-id') ?? randomUUID();
+  const res = await fetch(`${apiBase()}/api/v1/discovery/run`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'X-Request-ID': reqId
+    },
+    cache: 'no-store',
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const message = (await extractErrorMessage(res)) ?? `Request failed (${res.status})`;
+    return { status: 'error', message };
+  }
+
+  const run = (await res.json()) as DiscoveryRun;
+  revalidatePath('/devices');
+  return {
+    status: 'success',
+    message: `Discovery run ${run.id} queued (${run.status})`
+  };
 }

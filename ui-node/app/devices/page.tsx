@@ -1,11 +1,16 @@
 import { CreateDeviceForm } from './CreateDeviceForm';
-import type { Device } from './types';
+import type { Device, DiscoveryStatus } from './types';
+import { DiscoveryPanel } from './DiscoveryPanel';
+import { headers } from 'next/headers';
+import { randomUUID } from 'crypto';
 
 async function fetchDevices(): Promise<Device[]> {
   const base = process.env.CORE_GO_BASE_URL ?? 'http://localhost:8081';
+  const reqId = (await headers()).get('x-request-id') ?? randomUUID();
   const res = await fetch(`${base}/api/v1/devices`, {
     // Server-side fetch; avoid caching so dev changes show up immediately.
-    cache: 'no-store'
+    cache: 'no-store',
+    headers: { 'X-Request-ID': reqId }
   });
 
   if (!res.ok) {
@@ -15,8 +20,23 @@ async function fetchDevices(): Promise<Device[]> {
   return (await res.json()) as Device[];
 }
 
+async function fetchDiscoveryStatus(): Promise<DiscoveryStatus> {
+  const base = process.env.CORE_GO_BASE_URL ?? 'http://localhost:8081';
+  const reqId = (await headers()).get('x-request-id') ?? randomUUID();
+  const res = await fetch(`${base}/api/v1/discovery/status`, {
+    cache: 'no-store',
+    headers: { 'X-Request-ID': reqId }
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to load discovery status: ${res.status}`);
+  }
+
+  return (await res.json()) as DiscoveryStatus;
+}
+
 export default async function DevicesPage() {
-  const devices = await fetchDevices();
+  const [devices, discoveryStatus] = await Promise.all([fetchDevices(), fetchDiscoveryStatus()]);
 
   return (
     <main>
@@ -25,6 +45,7 @@ export default async function DevicesPage() {
         CRUD backed by the Go API. The UI only talks to the API; no database access.
       </p>
 
+      <DiscoveryPanel status={discoveryStatus} />
       <CreateDeviceForm />
 
       {devices.length === 0 ? (
@@ -47,6 +68,24 @@ export default async function DevicesPage() {
                 <div style={{ fontWeight: 700 }}>{d.display_name ?? '(unnamed)'}</div>
                 <div style={{ color: '#555', fontSize: 14 }}>
                   <code>{d.id}</code>
+                </div>
+                <div style={{ color: '#333', fontSize: 14, marginTop: 6, display: 'grid', gap: 4 }}>
+                  {d.metadata?.owner ? (
+                    <div>
+                      <strong>Owner:</strong> {d.metadata.owner}
+                    </div>
+                  ) : null}
+                  {d.metadata?.location ? (
+                    <div>
+                      <strong>Location:</strong> {d.metadata.location}
+                    </div>
+                  ) : null}
+                  {d.metadata?.notes ? (
+                    <div style={{ color: '#444' }}>
+                      <strong>Notes:</strong> {d.metadata.notes}
+                    </div>
+                  ) : null}
+                  {!d.metadata && <div style={{ color: '#666' }}>No metadata yet.</div>}
                 </div>
               </div>
               <span

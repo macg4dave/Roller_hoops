@@ -110,14 +110,25 @@ paths:
     post:
       tags: [Discovery]
       summary: Trigger a discovery pass
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoveryRunRequest'
       responses:
         '202':
           description: Accepted
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                $ref: '#/components/schemas/DiscoveryRun'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /v1/discovery/status:
     get:
       tags: [Discovery]
@@ -128,8 +139,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                $ref: '#/components/schemas/DiscoveryStatus'
 
 components:
   schemas:
@@ -143,6 +153,8 @@ components:
         display_name:
           type: string
           description: Optional human-friendly name.
+        metadata:
+          $ref: '#/components/schemas/DeviceMetadata'
     DeviceCreate:
       type: object
       description: |
@@ -150,6 +162,8 @@ components:
       properties:
         display_name:
           type: string
+        metadata:
+          $ref: '#/components/schemas/DeviceMetadata'
     DeviceUpdate:
       type: object
       description: |
@@ -157,6 +171,59 @@ components:
       properties:
         display_name:
           type: string
+        metadata:
+          $ref: '#/components/schemas/DeviceMetadata'
+    DeviceMetadata:
+      type: object
+      properties:
+        owner:
+          type: string
+        location:
+          type: string
+        notes:
+          type: string
+    DiscoveryRunRequest:
+      type: object
+      properties:
+        scope:
+          type: string
+          description: Optional scope hint for the discovery engine.
+    DiscoveryRun:
+      type: object
+      required: [id, status, started_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued, running, succeeded, failed]
+        scope:
+          type: string
+          nullable: true
+        stats:
+          type: object
+          additionalProperties: true
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+    DiscoveryStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          description: |
+            High level status: "idle" when no runs exist, otherwise mirrors the latest run status.
+        latest_run:
+          $ref: '#/components/schemas/DiscoveryRun'
     ErrorResponse:
       type: object
       required: [error]

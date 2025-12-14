@@ -6,15 +6,13 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 func NewLogger(level string) zerolog.Logger {
 	zerolog.TimeFieldFormat = time.RFC3339Nano
 	zerolog.SetGlobalLevel(parseLevel(level))
 
-	l := log.Output(os.Stdout).With().Timestamp().Str("service", "core-go").Logger()
-	return l
+	return zerolog.New(os.Stdout).With().Timestamp().Str("service", "core-go").Logger()
 }
 
 func parseLevel(level string) zerolog.Level {

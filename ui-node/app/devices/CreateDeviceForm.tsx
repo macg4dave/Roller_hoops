@@ -51,6 +51,64 @@ export function CreateDeviceForm() {
         </p>
       </div>
 
+      <div style={{ display: 'grid', gap: 10 }}>
+        <div>
+          <label style={{ display: 'block', fontWeight: 600 }} htmlFor="owner">
+            Owner
+          </label>
+          <input
+            id="owner"
+            name="owner"
+            placeholder="e.g. network team"
+            style={{
+              marginTop: 6,
+              padding: '10px 12px',
+              width: '100%',
+              borderRadius: 6,
+              border: '1px solid #ccc'
+            }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontWeight: 600 }} htmlFor="location">
+            Location
+          </label>
+          <input
+            id="location"
+            name="location"
+            placeholder="e.g. data hall A / rack 3"
+            style={{
+              marginTop: 6,
+              padding: '10px 12px',
+              width: '100%',
+              borderRadius: 6,
+              border: '1px solid #ccc'
+            }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontWeight: 600 }} htmlFor="notes">
+            Notes
+          </label>
+          <textarea
+            id="notes"
+            name="notes"
+            placeholder="free-form notes"
+            rows={3}
+            style={{
+              marginTop: 6,
+              padding: '10px 12px',
+              width: '100%',
+              borderRadius: 6,
+              border: '1px solid #ccc',
+              resize: 'vertical'
+            }}
+          />
+        </div>
+      </div>
+
       <button
         type="submit"
         style={{

@@ -1,0 +1,39 @@
+{
+  "pages": {
+    "/_not-found/page": [
+      "static/chunks/webpack-5adebf9f62dc3001.js",
+      "static/chunks/4bd1b696-e8a5beaa3a1019ca.js",
+      "static/chunks/517-3380adabdb967d42.js",
+      "static/chunks/main-app-bddada3c2ed60db7.js",
+      "static/chunks/app/_not-found/page-0cb240f37ead8c1c.js"
+    ],
+    "/layout": [
+      "static/chunks/webpack-5adebf9f62dc3001.js",
+      "static/chunks/4bd1b696-e8a5beaa3a1019ca.js",
+      "static/chunks/517-3380adabdb967d42.js",
+      "static/chunks/main-app-bddada3c2ed60db7.js",
+      "static/chunks/app/layout-e0d5d3d36892748c.js"
+    ],
+    "/healthz/route": [
+      "static/chunks/webpack-5adebf9f62dc3001.js",
+      "static/chunks/4bd1b696-e8a5beaa3a1019ca.js",
+      "static/chunks/517-3380adabdb967d42.js",
+      "static/chunks/main-app-bddada3c2ed60db7.js",
+      "static/chunks/app/healthz/route-0ac38790441d68db.js"
+    ],
+    "/page": [
+      "static/chunks/webpack-5adebf9f62dc3001.js",
+      "static/chunks/4bd1b696-e8a5beaa3a1019ca.js",
+      "static/chunks/517-3380adabdb967d42.js",
+      "static/chunks/main-app-bddada3c2ed60db7.js",
+      "static/chunks/app/page-b82b5a7da18b45f8.js"
+    ],
+    "/devices/page": [
+      "static/chunks/webpack-5adebf9f62dc3001.js",
+      "static/chunks/4bd1b696-e8a5beaa3a1019ca.js",
+      "static/chunks/517-3380adabdb967d42.js",
+      "static/chunks/main-app-bddada3c2ed60db7.js",
+      "static/chunks/app/devices/page-59b876ccb8760760.js"
+    ]
+  }
+}

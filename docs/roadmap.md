@@ -54,6 +54,14 @@ docker-compose.yml
 ---
 
 
+## Current progress snapshot
+
+- Device CRUD live end-to-end via Go API and UI; metadata fields (`owner`, `location`, `notes`) persist in `device_metadata`.
+- Discovery endpoints now persist runs/logs (`discovery_runs`, `discovery_run_logs`) and return real run ids; UI can trigger a run and see the latest status (stubbed worker for now).
+- Traefik + docker-compose bring up UI, API, and PostgreSQL with health checks enabled.
+
+---
+
 ## Phases
 
 ## Phase 0 — Foundations
@@ -204,6 +212,16 @@ Deliverable:
 
 ---
 
+## MVP exit criteria (Phases 0-5)
+
+* docker compose brings up Traefik, UI, Go API, and PostgreSQL with named volumes; health checks pass.
+* Device CRUD flows work end-to-end (UI → API → DB) with request IDs in logs.
+* OpenAPI spec lives in the repo; Go server + Node client are generated from it.
+* Migrations are repeatable (`golang-migrate`), and a short doc exists for running them in dev/CI.
+* Minimal tests run in CI: Go handler test against Postgres, and a UI smoke that hits the real API.
+
+---
+
 ## Phase 6 — Live updates (optional)
 
 Two clean options:
@@ -227,12 +245,84 @@ Still no tight coupling.
 
 Only after core is stable.
 
-* Prometheus metrics
 * SNMP enrichment
 * VLAN / switch port mapping
 * Export to NetBox
 * Read-only LDAP auth
 * Multi-site support
+* Extra Prometheus exporters/dashboards for network-specific metrics (beyond baseline ops)
+
+---
+
+## Phase 8 — Discovery engine v1 (network scanning)
+
+Goals:
+
+* Decide discovery scope: start with ARP table scrape + ICMP ping; add read-only SNMP once the loop is solid.
+* Job model in Postgres: `discovery_runs` (id, scope, status, started_at, completed_at, stats JSON) and `discovery_run_logs` (structured log lines).
+* Worker loop in Go: timer-based plus manual trigger; single worker at first; cancellation and backoff on failure.
+* Observations table (append-only) to store IP/MAC/service findings per run; dedupe by stable keys when folding into current state.
+* Wire `/api/v1/discovery/run` to enqueue and return a run id; `/api/v1/discovery/status` returns latest run, progress, and last error.
+
+Deliverable:
+
+* Go service runs alone in Docker, performs a subnet sweep, populates devices/interfaces with timestamps, and returns real discovery status.
+
+---
+
+## Phase 9 — Historical state + diffing
+
+* Append-only observation log keyed by run id (`device_observations`, `interface_observations`, `service_observations`) with `observed_at`.
+* Derived "current" tables/views updated from latest observation; keep previous snapshot addressable.
+* State transitions captured (`online`, `offline`, `changed`) with an events table and run id references.
+* Retention knobs: keep raw observations for N days; keep rollups forever; indexes to keep queries fast.
+* API: list devices changed since a timestamp; fetch the history for a device; expose last run status and error.
+
+Deliverable:
+
+* You can diff any device across runs and show a timeline of changes without hand-written SQL.
+
+---
+
+## Phase 10 — UI workflows for operators
+
+* Device list: filters (online/offline/changed), search by display name/IP/MAC, sort by last seen.
+* Device detail: IPs, MACs, interfaces, services, metadata, change timeline; deep linkable.
+* Metadata editing: inline forms with optimistic UI and rollback on failure; uses typed client generated from OpenAPI.
+* Discovery UX: trigger a run, show queued/running/done with progress and errors; reuse polling/WebSocket choice from Phase 6.
+* Error and resilience: empty states, loading states, and friendly failure surfaces in UI.
+
+Deliverable:
+
+* An operator can sign in, launch discovery, watch progress, inspect a device, and edit metadata without using curl.
+
+---
+
+## Phase 11 — Auth + session hardening
+
+* Auth stays in the UI layer: local users stored in a dedicated schema/table owned by the UI service (still separate from core data access).
+* Passwords hashed (argon2id or bcrypt), session cookies signed/encrypted, CSRF protection on form posts.
+* Roles: admin vs read-only; authorization enforced in the UI layer before calling the Go API.
+* Account lifecycle: change password flow and a manual admin reset/one-time token flow for recovery.
+* Audit: minimal audit log of user actions stored via the Go API so the UI never writes to core tables directly.
+
+Deliverable:
+
+* Auth no longer relies on stubs; sign-in/out and role-based access work end-to-end with secure cookies and hashed credentials.
+
+---
+
+## Phase 12 — Observability & operations
+
+* Metrics: Prometheus endpoints from Go (HTTP + DB latency, discovery duration) and Traefik access logs/metrics.
+* Tracing/logging: request IDs end-to-end; structured logs on stdout; optional OpenTelemetry spans for discovery runs.
+* Runbooks: `docker compose` snippets for backup/restore (`pg_dump`), migrations (`golang-migrate up`), rotating secrets, and seeding a dev stack.
+* Testing: CI jobs for Go unit/integration (with Postgres container), UI smoke against `next dev` + API, and a contract test to keep OpenAPI in sync.
+* SLOs: health endpoints monitored by Traefik + simple uptime check; webhook/email alert stubs.
+
+Deliverable:
+
+* Operators have metrics, logs, backups, and tests so the stack can be run by someone who did not write it.
 
 ---
 
@@ -253,30 +343,19 @@ Only after core is stable.
 
 If you want next:
 
-* I can turn this into a **Git repo layout**
-* Write a **docker-compose.yml skeleton**
-* Define the **initial DB schema**
-* Sketch the **API contract** so it never breaks later
+* Lock the OpenAPI spec (devices, discovery runs, observations) and regenerate the Go/TS clients from it.
+* Add migrations + sqlc queries for `discovery_runs` and observations (Phase 8 prep) with a happy-path handler test.
+* Add a docker-compose dev profile with seeded data and CI health checks (lint + tests + migrate).
+* Ship the first UI smoke (create/list device) hitting the Go API to guard regressions.
 
-## Future work
+## Open decisions before Phase 8
 
-* Discovers and tracks devices
-* Decide discovery scope:
+* Default discovery scope order (ARP + ICMP first; SNMP once stable; mDNS/NetBIOS optional).
+* Run cadence and max runtime budget per subnet.
+* Retention window for raw observations vs rollups; defaults for trimming old runs.
 
-  * ARP
-  * ICMP ping
-  * SNMP (read-only)
-  * mDNS / NetBIOS (optional)
+## Definition of done for discovery (Phases 8-10)
 
-* Network discovery workers
-
-### Discovery model
-
-* Workers run on timers
-* Results deduplicated
-* State transitions tracked (online/offline/changed)
-
-Deliverable:
-
-* Go service runs alone in Docker
-* Can curl it and get real data
+* Discovery endpoints return real run ids and status, and populate device/interface/service data.
+* Device history/diffs are visible via API and UI (timeline).
+* Operators can trigger discovery and edit metadata without CLI access.
