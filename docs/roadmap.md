@@ -70,6 +70,7 @@ docker-compose.yml
 * DB schema intent: `docs/data-model.md` (implemented via migrations in `core-go/migrations/`)
 * Service boundaries: `docs/architecture.md`
 * Security guardrails: `docs/security.md`
+* Network map product direction + mocks: `docs/network_map/network_map_ideas.md` (mocks: `docs/network_map/idea1.png`, `docs/network_map/idea2.png`)
 
 ---
 
@@ -356,6 +357,235 @@ Deliverable:
 
 ---
 
+## Phase 13 — Network map v1 (Layered Explorer shell)
+
+**Status:** Planned
+
+Goal: land the **stable layout + interaction contract** from the mocks, without committing to any one “global topology” view.
+
+### Mock-driven UI contract (what the screenshots actually imply)
+
+The two mock screens in `docs/network_map/idea1.png` and `docs/network_map/idea2.png` anchor the v1 UX:
+
+* **Persistent 3-pane layout**
+  * Left: layer chooser (Physical / L2 / L3 / Services / Security)
+  * Center: canvas (dark theme + subtle depth)
+  * Right: inspector (identity + status + relationships)
+* **Object-first rendering**
+  * Default canvas is intentionally empty (hint text).
+  * Selecting a layer does not imply “draw everything”; you still need a focus.
+* **Inspector as the anchor**
+  * Inspector shows identity fields + a relationship action like “View L3” / “View in Physical”.
+* **No spaghetti edges**
+  * The mock uses a small number of intentional connectors and mostly relies on grouping/regions.
+
+Non-negotiables (from `docs/network_map/network_map_ideas.md` + mocks):
+
+* 3-pane layout is constant: **Layer panel (left)** / **Canvas (center)** / **Inspector (right)**
+* Only **one layer active** at a time; switching layers **fully re-renders** the canvas
+* Object-first: nothing renders by default; user selects a layer and a focus object/scope
+* “Stacked regions”, not wire soup (e.g., subnets as rounded regions; labels on hover)
+
+Tasks:
+
+* Add a `/map` route in the UI with the 3-pane shell and empty-state hint text.
+* Implement selection state (focused object, hover, breadcrumbs) and an always-on Inspector.
+* Add “View in {Layer}” cross-navigation stubs in the Inspector (no data coupling yet).
+* Add a map settings panel (toggles for labels, relationships, and a future timeline).
+
+Milestones (incremental, shippable):
+
+* M13.1 — Route + layout
+  * `/map` exists, SSR-friendly, loads fast, and renders with an empty canvas.
+* M13.2 — Layer switching contract
+  * Switching layers clears the canvas and rehydrates state for that layer only.
+  * Layer choice is encoded in the URL (`/map?layer=l3`) so deep links work.
+* M13.3 — Focus contract (object-first)
+  * Focus is encoded in the URL (`focusType`, `focusId`).
+  * No focus ⇒ empty graph + instructional hint.
+* M13.4 — Inspector contract
+  * Inspector always shows “Identity”, “Status”, and “Relationships” sections.
+  * Relationship actions exist (even if they are stubs initially).
+
+Acceptance criteria:
+
+* The UI matches the mock’s interaction philosophy: constant layout, mutually-exclusive layers, empty-by-default.
+* The inspector is always visible and stays in sync with focus.
+* Deep links are stable (layer/focus stored in URL).
+* No API changes required yet; mock data is acceptable for this phase.
+
+Deliverable:
+
+* UI has the layered map shell and interaction patterns, even with mocked data.
+
+---
+
+## Phase 14 — Map data model + API projections (layer-aware)
+
+**Status:** Planned
+
+Goal: make the map a **projection of structured objects**, not a hand-drawn diagram.
+
+### Data model (incremental, minimal v1)
+
+* Reuse existing core entities: `devices`, `interfaces`, IP/MAC facts, services.
+* Add the smallest set of new entities needed for projections:
+  * `subnets` (+ membership derived from IPs)
+  * `vlans` (+ interface association; reuse/extend existing VLAN/PVID enrichment tables)
+  * `links` (physical adjacency; start as user-entered, later LLDP/CDP enrichment)
+  * `zones` (security grouping; manual tags to start)
+
+### API (projection-first)
+
+Add read endpoints that return a **render-ready projection** for a given layer and focus:
+
+* `GET /api/v1/map/{layer}` with query params like `focusType=device|subnet|vlan|zone`, `focusId=...`, `scope=...`
+* Response contains:
+  * `regions[]` (e.g., subnets/zones as rounded containers)
+  * `nodes[]` (devices/interfaces/services)
+  * `edges[]` (layer-defined relationships only)
+  * `inspector` payload for the focused object
+
+Rules:
+
+* No “entire network graph” endpoint in v1.
+* Default response for no focus: empty graph + guidance message.
+* OpenAPI is canonical; add contract tests for projections (shape + required fields).
+
+Deliverable:
+
+* Selecting a focus object in the UI produces a real (small) graph for L3 from live data.
+
+Milestones (L3-first, smallest useful slice):
+
+* M14.1 — Projection schema pinned (OpenAPI-first)
+  * Define a `MapProjection` response shape in `api/openapi.yaml` (canonical).
+  * Add Go contract coverage so server/router cannot drift.
+* M14.2 — L3 projection (device focus)
+  * `GET /api/v1/map/l3?focusType=device&focusId=...` returns:
+    * Regions = subnets derived from the device’s IPs (and optionally neighbors).
+    * Nodes = device + peer devices that share those subnets.
+    * Edges = membership/attachment only (no arbitrary mesh).
+* M14.3 — L3 projection (subnet focus)
+  * `focusType=subnet` returns devices observed in that subnet with a predictable layout payload.
+* M14.4 — Inspector payload
+  * Projection returns an `inspector` block that UI can render without extra round trips.
+
+Acceptance criteria:
+
+* No endpoint returns a “whole network” graph.
+* Responses are stable and diff-friendly (sorted output, stable IDs).
+* A single focused device can render a subnet region view that resembles the L3 mock: a few regions, nodes inside, minimal connectors.
+
+---
+
+## Phase 15 — Layer implementations (Physical / L2 / L3)
+
+**Status:** Planned
+
+Goal: ship the first three layers that map directly to discovered data, matching the mock mental model.
+
+Layers:
+
+* **Physical**: devices + `links` (manual first), optional interface-level drilldown in Inspector.
+* **L2 (VLANs)**: VLAN regions + device/interface membership (start with PVID; add trunk/tagged later).
+* **L3 (Subnets)**: subnet regions + device membership based on IPs; show routing devices as “connectors”.
+
+UI tasks:
+
+* Canvas renderer with “stacked regions” (soft rounded containers) and node placement per region.
+* Minimal, deterministic layout rules first (avoid force-graph chaos); semantic zoom deferred.
+* Inspector shows identity/status/relationships and “View in …” links between layers.
+
+Deliverable:
+
+* A user can click a device, view its L3 subnet relationships, and jump to Physical/L2 views via Inspector links.
+
+Milestones (match mock intent before “smart” layout):
+
+* M15.1 — L3 “stacked regions” renderer
+  * Rounded region boxes per subnet (accent color per region), nodes placed inside.
+  * Labels on hover; minimal always-on labels.
+* M15.2 — Physical v1 projection + renderer
+  * Physical is not “every cable”; it’s a small, readable adjacency/tree.
+  * Start with manual `links` for adjacency; show a simple hierarchical layout similar to the Physical mock.
+* M15.3 — L2 v1 projection + renderer
+  * VLAN “tint regions” and membership.
+  * Start with PVID-only membership (since that’s what enrichment reliably provides today).
+* M15.4 — Cross-layer navigation
+  * Inspector links (“View L3”, “View in Physical”) preserve focus where possible.
+
+Acceptance criteria:
+
+* L3 view shows subnet regions and device membership; no edge explosion.
+* Physical view shows a small adjacency view that can be edited/curated manually.
+* L2 view shows VLAN membership based on existing `interface_vlans` PVID facts.
+* The inspector allows jumping between layers without losing context.
+
+---
+
+## Phase 16 — Layer implementations (Services / Security) + modes
+
+**Status:** Planned
+
+Goal: add the two “meaning” layers and the product modes from the spec without mixing layers.
+
+Layers:
+
+* **Services**: service nodes grouped by host; dependencies optional and can start as user-entered.
+* **Security**: zones as regions; policies/flows as edges (manual first).
+
+Modes (top bar in the spec):
+
+* **Explore**: read-only, minimal chrome
+* **Build**: allows editing links/regions/tags (writes to metadata tables via Go API)
+* **Secure**: focuses on zones/policies only (hides unrelated objects)
+* **Operate**: overlays status + last-seen + changes (pairs with Phase 9/10 diffing)
+
+Deliverable:
+
+* Services and Security layers exist with a clean inspector-driven workflow, plus initial mode gating.
+
+Milestones:
+
+* M16.1 — Modes UI
+  * Top bar with Explore / Build / Secure / Operate.
+  * Modes gate actions and rendering density; they do not blend layers.
+* M16.2 — Services v1
+  * Service nodes grouped by host; source is existing `services` table.
+  * Dependencies are manual-first (optional) and must be modeled as explicit edges.
+* M16.3 — Security v1
+  * Zones are manual groupings to start; projection shows zones as regions.
+  * Policies/flows are manual-first; projection shows only zone-to-zone edges.
+* M16.4 — Operate overlays
+  * “Last seen” and “changed” overlays sourced from discovery history/diffing (Phase 9).
+
+Acceptance criteria:
+
+* Explore is clean/read-only.
+* Build can author truth (links/zones/dependencies) via Go APIs (no UI DB access).
+* Secure hides non-security objects.
+* Operate can overlay state without turning into a monitoring dashboard.
+
+---
+
+## Open decisions before Phase 13 (network map)
+
+* **Renderer**: SVG (simple, accessible) vs Canvas/WebGL (performance) vs React Flow (speed of delivery).
+* **Layout strategy**: deterministic region layout (recommended for v1) vs force-directed.
+* **Editing model**: what becomes user-authored truth (`links`, `zones`, `service deps`) vs discovered truth.
+* **Search/focus**: how users pick the first object (global search, devices list, or “pick subnet”).
+* **Time axis**: whether the map timeline is built directly on Phase 9 observations/events or starts as “last seen” only.
+
+Suggested defaults (to keep v1 boring and shippable):
+
+* Renderer: **SVG first** (predictable, inspectable, accessible); consider Canvas/WebGL only when performance demands it.
+* Layout: **deterministic region layout** (no force-directed graph in v1).
+* Editing: manual truth for `links`/`zones`/`service_deps`, discovered truth for device/interface/IP/service facts.
+* Time axis: collapsed placeholder that starts with “last seen” (timeline scrubber comes after Phase 9 APIs exist).
+
+---
+
 ## What you are *explicitly not* building
 
 * A custom web server
@@ -395,9 +625,20 @@ Use this as the “what’s next” checklist; the detailed feature inventory st
 * [x] **Discovery deployment plan**: documented Docker networking/capabilities + safe scope targeting (`docs/discovery-deployment.md`).
 * [x] **Discovery worker v1**: implements queued→running→(succeeded|failed) with a bounded ICMP sweep (best-effort) + ARP scrape that writes observations/current state.
 * [x] **Production DB posture**: removed dev `trust` auth; Postgres password is provided via env/secret injection.
+* [ ] **Network map v1 shell**: add `/map` route with 3-pane layout + inspector + layer switcher.
+* [ ] **Map projection API (L3 first)**: add `GET /api/v1/map/l3` that returns regions/nodes/edges for a focused device/subnet.
+* [ ] **Physical/L2/L3 layers**: implement the three projections + UI renderers matching the mocks (no “full graph” view).
+* [ ] **Services/Security layers + modes**: implement two more layers plus Explore/Build/Secure/Operate gating.
 
 ## Definition of done for discovery (Phases 8-10)
 
 * Discovery endpoints return real run ids and status, and populate device/interface/service data.
 * Device history/diffs are visible via API and UI (timeline).
 * Operators can trigger discovery and edit metadata without CLI access.
+
+## Definition of done for network map (Phases 13-16)
+
+* The UI matches the mock interaction contract: constant 3-pane layout, mutually-exclusive layers, object-first rendering.
+* L3 view can render subnet regions + device membership from real data, and Inspector can cross-navigate between layers.
+* Physical/L2 views work with a minimal, deterministic layout; no uncontrolled “spaghetti graph” screens.
+* Services/Security views can start manual-first, but are served via projection endpoints (no direct DB access from UI).

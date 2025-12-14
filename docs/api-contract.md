@@ -80,6 +80,10 @@ Initial endpoints (from `docs/roadmap.md`):
   - `POST /api/v1/discovery/run`
   - `GET /api/v1/discovery/status`
 
+- Network map (planned)
+  - `GET /api/v1/map/{layer}` (layer-aware projections; no global graph)
+    - Initial target: `GET /api/v1/map/l3`
+
 ### Discovery behaviour (v1)
 
 - `POST /api/v1/discovery/run` accepts an optional `scope` hint; it returns a `DiscoveryRun` with a real run id (queued).
@@ -94,3 +98,55 @@ v1 intent:
 - `core-go` remains headless and is not exposed directly to browsers.
 
 (Exact auth propagation and authorization rules will be pinned in OpenAPI and `docs/architecture.md` once the first implementation lands.)
+
+## Network map projections (planned)
+
+The network map is **projection-first**:
+
+- The API returns a **small, render-ready projection** for a specific layer and focus.
+- The API must **not** provide a “whole network graph” endpoint in v1.
+
+### Layers
+
+Layers are mutually exclusive:
+
+- `physical`
+- `l2`
+- `l3`
+- `services`
+- `security`
+
+### Focus-driven query
+
+Projection endpoints accept a focus. Proposed query params (exact names live in OpenAPI):
+
+- `focusType`: `device` | `subnet` | `vlan` | `zone` | `service`
+- `focusId`: stable identifier for the focus object (UUID for device; other types are layer-defined)
+- Optional scoping hints:
+  - `depth` (small integer, default 1)
+  - `limit` (hard capped)
+
+No focus provided ⇒ return an empty projection + a guidance message (still 200 OK).
+
+### Response shape
+
+Map endpoints return a single JSON object (proposed top-level keys):
+
+- `layer` (string)
+- `focus` (object)
+- `regions[]` (containers like subnets/zones/VLANs)
+- `nodes[]` (devices/interfaces/services)
+- `edges[]` (relationships defined by the active layer only)
+- `inspector` (render-ready details for the focused object)
+
+Rules:
+
+- The response should be deterministic (stable sorting, stable IDs).
+- Avoid overloading `edges`; prefer region membership + a small number of intentional connectors.
+- Errors use the standard error envelope (see “Error format”).
+
+### Error handling expectations
+
+- Invalid focus IDs return `400 invalid_id`.
+- Unknown focus resources return `404 not_found`.
+- Unknown layer returns `400 validation_failed` (or a specific `invalid_layer` if introduced).

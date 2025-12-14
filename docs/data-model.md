@@ -185,3 +185,91 @@ Minimum columns (v1):
 - `device_id` (uuid, foreign key → `devices.id`)
 - `mac` (macaddr)
 - `observed_at` (timestamptz)
+
+## Network map (planned)
+
+This section documents **planned** entities needed for the Layered Network Explorer (`docs/network_map/network_map_ideas.md`).
+
+Important:
+
+- These tables do **not** exist unless and until a migration lands in `core-go/migrations/`.
+- The UI must never access Postgres directly; all reads/writes happen through `core-go` APIs.
+- Prefer projections derived from existing facts first; persist curated/manual truth only when necessary.
+
+### Subnets (derived first; optional persistence later)
+
+For the L3 layer, subnets can be derived from `ip_addresses.ip` by grouping on CIDR boundaries.
+
+If we need stable subnet IDs beyond “CIDR as identifier” (e.g., attach metadata like site/owner), introduce a `subnets` table.
+
+Proposed `subnets` (optional) columns:
+
+- `id` (uuid)
+- `cidr` (cidr, unique)
+- `display_name` (text, nullable)
+- `created_at` (timestamptz)
+
+### VLAN metadata (optional)
+
+The L2 layer can start purely from `interface_vlans.vlan_id` membership.
+If we need names/notes per VLAN (beyond SNMP), introduce a `vlans` table.
+
+Proposed `vlans` (optional) columns:
+
+- `id` (uuid)
+- `vlan_id` (integer, unique)
+- `name` (text, nullable)
+- `notes` (text, nullable)
+- `created_at` (timestamptz)
+
+### `links` (manual physical adjacency)
+
+Purpose: represent curated physical adjacency for the Physical layer (manual-first; later enrichment may write with `source=lldp|cdp`).
+
+Proposed columns:
+
+- `id` (uuid)
+- `a_device_id` (uuid, foreign key → `devices.id`)
+- `a_interface_id` (uuid, foreign key → `interfaces.id`, nullable)
+- `b_device_id` (uuid, foreign key → `devices.id`)
+- `b_interface_id` (uuid, foreign key → `interfaces.id`, nullable)
+- `link_type` (text; e.g. `ethernet` | `wireless` | `virtual`, nullable)
+- `source` (text; `manual` | `lldp` | `cdp`)
+- `observed_at` (timestamptz, nullable)
+- `created_at` (timestamptz)
+
+Constraints:
+
+- Enforce a canonical ordering so `(a,b)` and `(b,a)` are not duplicates (implementation detail; can be done in app logic or via a computed key).
+
+### `zones` + membership (security grouping)
+
+Purpose: define security zones/regions for the Security layer.
+
+Proposed `zones` columns:
+
+- `id` (uuid)
+- `name` (text, unique)
+- `description` (text, nullable)
+- `created_at` (timestamptz)
+
+Proposed `device_zones` join table:
+
+- `device_id` (uuid, foreign key → `devices.id`)
+- `zone_id` (uuid, foreign key → `zones.id`)
+- `created_at` (timestamptz)
+
+### Service dependencies (manual-first)
+
+Purpose: express explicit dependencies for the Services layer without inferring a noisy global service graph.
+
+Two common shapes are acceptable; pick one when implementing and document it in OpenAPI:
+
+- Service-to-service: `service_dependencies(source_service_id → services.id, target_service_id → services.id)`
+- Host-to-host: `device_dependencies(source_device_id → devices.id, target_device_id → devices.id)`
+
+Whichever shape is chosen, include:
+
+- `id` (uuid)
+- `source` (text; `manual` | `imported` | `inferred`)
+- `created_at` (timestamptz)
