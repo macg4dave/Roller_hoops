@@ -44,6 +44,8 @@ Minimum columns (v1):
 
 - `id` (uuid)
 - `device_id` (uuid, foreign key → `devices.id`)
+- `name` (text, nullable)
+- `ifindex` (integer, nullable)
 
 ### `ip_addresses`
 
@@ -56,6 +58,11 @@ Minimum columns (v1):
 - `interface_id` (uuid, foreign key → `interfaces.id`, nullable)
 - `ip` (inet)
 
+Constraints (v1):
+
+- at least one of `device_id` or `interface_id` must be present
+- uniqueness is enforced per parent (`(device_id, ip)` and `(interface_id, ip)` via partial unique indexes)
+
 ### `mac_addresses`
 
 Purpose: MAC addresses observed on interfaces/devices.
@@ -67,6 +74,11 @@ Minimum columns (v1):
 - `interface_id` (uuid, foreign key → `interfaces.id`, nullable)
 - `mac` (macaddr)
 
+Constraints (v1):
+
+- at least one of `device_id` or `interface_id` must be present
+- uniqueness is enforced per parent (`(device_id, mac)` and `(interface_id, mac)` via partial unique indexes)
+
 ### `services`
 
 Purpose: discovered services (ports/protocols) on a device.
@@ -75,8 +87,9 @@ Minimum columns (v1):
 
 - `id` (uuid)
 - `device_id` (uuid, foreign key → `devices.id`)
-
-Service details (port/protocol/name) are **TBD**.
+- `protocol` (text, nullable; when present: `tcp` or `udp`)
+- `port` (integer, nullable; when present: 1–65535)
+- `name` (text, nullable)
 
 ### `device_metadata`
 
@@ -88,4 +101,3 @@ Minimum columns (v1):
 - `device_id` (uuid, foreign key → `devices.id`, unique)
 
 Metadata fields are **TBD** and will be added as UI workflows are implemented.
-

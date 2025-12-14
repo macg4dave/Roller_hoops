@@ -6,10 +6,11 @@ Status values: `planned` | `in-progress` | `complete` | `deprecated`
 
 | Feature | Description | Owning service | API endpoints | DB tables | Status |
 |---|---|---|---|---|---|
+| Core schema (interfaces/IPs/MACs/services) | Normalized tables exist for discovery facts | core-go | (TBD) | `interfaces`, `ip_addresses`, `mac_addresses`, `services` | complete |
 | Devices API | CRUD for devices (headless) | core-go | `/api/v1/devices` | `devices` | complete |
-| Device metadata | User-editable metadata stored in DB | core-go (store), ui-node (edit) | `/api/v1/devices/{id}` | `device_metadata` | in-progress |
-| Discovery run | Trigger a discovery pass | core-go | `/api/v1/discovery/run` | `discovery_runs`, `discovery_run_logs` | in-progress |
-| Discovery status | Report last run + current status | core-go | `/api/v1/discovery/status` | `discovery_runs` | in-progress |
+| Device metadata | User-editable metadata stored in DB | core-go (store), ui-node (edit) | `/api/v1/devices/{id}` | `device_metadata` | complete |
+| Discovery run | Trigger a discovery pass | core-go | `/api/v1/discovery/run` | `discovery_runs`, `discovery_run_logs` | complete |
+| Discovery status | Report last run + current status | core-go | `/api/v1/discovery/status` | `discovery_runs` | complete |
 | Discovery worker | Executes discovery runs (scanning + persistence) | core-go | (uses existing discovery endpoints) | (TBD: observations/current-state tables) | planned |
 | Historical observations + diffing | Append-only observations + derived “current state” | core-go | (TBD) | `*_observations` (TBD), `devices`, `interfaces`, `ip_addresses`, `services`, `mac_addresses` | planned |
 | UI device list + create | Browse devices and create new devices | ui-node | (calls Go API) | none (no DB access) | complete |

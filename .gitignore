@@ -9,8 +9,38 @@ __pycache__/
 # Node
 node_modules/
 
+# Node/JS tooling caches
+.npm/
+.pnp.*
+.yarn/
+.pnpm-store/
+.eslintcache
+.stylelintcache
+.parcel-cache/
+.cache/
+
+# Next.js
+.next/
+out/
+.vercel/
+.turbo/
+
+# Next.js (optional)
+.swc/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
 # Secrets / exports
 .env
+.env.*
+!.env.example
+!.env.template
+!.env.sample
 *.pem
 *.key
 *.p12
@@ -19,5 +49,35 @@ node_modules/
 secrets*.yml
 secrets*.yaml
 
-# Editor
+# Go
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go caches
+.gocache/
+.golangci-lint/
+
+*.test
+*.out
+coverage.out
+
+# Coverage output folders
+coverage/
+.nyc_output/
+
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
 .vscode/*.log
+
+# Local runtime data
+volumes/
+
+# Build outputs (common)
+dist/
+build/
