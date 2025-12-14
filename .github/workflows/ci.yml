@@ -1,0 +1,58 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  core-go-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: go test
+        working-directory: core-go
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+        run: go test ./...
+
+  docker-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: bring up stack (dev profile)
+        env:
+          POSTGRES_PASSWORD: postgres
+        run: docker compose --profile dev up -d --build
+      - name: smoke (UI calls API)
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://localhost/healthz >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          html="$(curl -fsS http://localhost/devices)"
+          echo "$html" | grep -q "Devices"
+          echo "$html" | grep -q "Seeded Office Router"
+      - name: tear down
+        if: always()
+        run: docker compose --profile dev down -v
+

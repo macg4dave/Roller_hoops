@@ -46,6 +46,26 @@ services:
       - postgres://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/roller_hoops?sslmode=disable
       - up
 
+  dev-seed:
+    image: postgres:16-alpine
+    profiles:
+      - dev
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    command:
+      - sh
+      - -c
+      - |
+        until pg_isready -h db -U postgres -d roller_hoops; do
+          sleep 1
+        done
+        PGPASSWORD=$${POSTGRES_PASSWORD:-postgres} \
+          psql -h db -U postgres -d roller_hoops -f /seed/dev-seed.sql
+    volumes:
+      - ./docker/dev/dev-seed.sql:/seed/dev-seed.sql:ro
+
   core-go:
     build:
       context: ./core-go
@@ -82,6 +102,31 @@ services:
       timeout: 3s
       retries: 10
       start_period: 5s
+
+  prod-readiness:
+    image: curlimages/curl:8.3.0
+    profiles:
+      - prod
+    depends_on:
+      core-go:
+        condition: service_healthy
+      ui-node:
+        condition: service_healthy
+    restart: "no"
+    entrypoint:
+      - sh
+      - -c
+    command: |
+      for attempt in $(seq 1 30); do
+        if curl --fail http://ui-node:3000/healthz && \
+           curl --fail http://core-go:8081/readyz; then
+          echo "prod stack healthy"
+          exit 0
+        fi
+        sleep 1
+      done
+      echo "prod stack health checks failed"
+      exit 1
 
 volumes:
   db_data:

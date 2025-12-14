@@ -5,8 +5,15 @@ Self-hosted network tracker / mapper (Go + Node.js + PostgreSQL), fully containe
 ## Quickstart (dev)
 
 - Start the full stack: `docker compose up --build`
+- Optional: copy `.env.example` to `.env` to override local settings like `POSTGRES_PASSWORD`.
 - Open the UI: <http://localhost/>
 - The Go API is **not exposed directly to browsers**; ui-node calls it over the internal Docker network (via Traefik’s internal-only entrypoint).
+
+## Compose profiles
+
+- `docker compose up --build` (default) launches Traefik, core-go, ui-node, the database, and runs migrations.
+- `docker compose --profile dev up --build` runs the default stack and, once the database is healthy, executes the idempotent SQL in `docker/dev/dev-seed.sql` to populate a sample device, metadata, and related discovery rows.
+- `docker compose --profile prod up --build` executes the same stack plus the `prod-readiness` service that waits for both `/healthz` and `/readyz` before exiting successfully, which can be handy for deployment smoke tests.
 
 ## Services (responsibilities)
 

@@ -221,6 +221,8 @@ Deliverable:
 
 ## Phase 5 — Docker polish
 
+**Status:** Closed
+
 ### Docker rules
 
 * One process per container
@@ -232,6 +234,11 @@ Deliverable:
 * Profiles for dev / prod
 * Named volumes for DB
 * Health checks
+
+### Compose profiles
+
+* `docker compose --profile dev up` runs the base stack plus the idempotent SQL loader in `docker/dev/dev-seed.sql`, which seeds a sample device, metadata row, interface, IP, MAC, and service entry for local testing.
+* `docker compose --profile prod up` runs the stack plus the `prod-readiness` service, which waits for `/healthz` on the UI and `/readyz` on core-go before exiting, making it useful for deployment smoke tests.
 
 Deliverable:
 
