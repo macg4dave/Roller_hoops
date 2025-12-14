@@ -68,6 +68,12 @@ Generated code (Go server stubs, TypeScript types) is **derived** from OpenAPI a
 - All configuration is via **environment variables**.
 - No secrets are committed to this repository.
 
+## Discovery deployment
+
+Discovery (ARP/ICMP/SNMP, etc.) depends on Docker networking and container capabilities. Operational guidance lives in:
+
+- `docs/discovery-deployment.md`
+
 ## Observability
 
 Baseline expectations:

@@ -179,6 +179,40 @@ func (q *Queries) InsertDiscoveryRun(ctx context.Context, arg InsertDiscoveryRun
 	return i, err
 }
 
+const claimNextDiscoveryRun = `-- name: ClaimNextDiscoveryRun :one
+WITH next AS (
+  SELECT id
+  FROM discovery_runs
+  WHERE status = 'queued'
+  ORDER BY started_at ASC
+  LIMIT 1
+  FOR UPDATE SKIP LOCKED
+)
+UPDATE discovery_runs dr
+SET status = 'running',
+    stats = COALESCE($1, dr.stats),
+    completed_at = NULL,
+    last_error = NULL
+FROM next
+WHERE dr.id = next.id
+RETURNING dr.id, dr.status, dr.scope, dr.stats, dr.started_at, dr.completed_at, dr.last_error
+`
+
+func (q *Queries) ClaimNextDiscoveryRun(ctx context.Context, stats map[string]any) (DiscoveryRun, error) {
+	row := q.db.QueryRow(ctx, claimNextDiscoveryRun, stats)
+	var i DiscoveryRun
+	err := row.Scan(
+		&i.ID,
+		&i.Status,
+		&i.Scope,
+		&i.Stats,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.LastError,
+	)
+	return i, err
+}
+
 const updateDiscoveryRun = `-- name: UpdateDiscoveryRun :one
 UPDATE discovery_runs
 SET status = $2,

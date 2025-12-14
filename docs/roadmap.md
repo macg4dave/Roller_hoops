@@ -388,7 +388,7 @@ Use this as the “what’s next” checklist; the detailed feature inventory st
 
 * [x] **Protect `/api` before shipping auth**: implemented UI-as-BFF; `core-go` is private and Traefik only routes to the UI.
 * [x] **Add an OpenAPI drift gate**: added a Go contract test that compares `api/openapi.yaml` to registered chi routes.
-* [ ] **Discovery deployment plan**: document the required Docker networking/capabilities and how to target subnets safely.
+* [x] **Discovery deployment plan**: documented Docker networking/capabilities + safe scope targeting (`docs/discovery-deployment.md`).
 * [ ] **Discovery worker v1**: implement a real queued→running→(succeeded|failed) state machine and a minimal ICMP sweep that writes observations/current state.
 * [x] **Production DB posture**: removed dev `trust` auth; Postgres password is provided via env/secret injection.
 
