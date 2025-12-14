@@ -88,6 +88,6 @@ Initial endpoints (from `docs/roadmap.md`):
 v1 intent:
 
 - Authentication and sessions are owned by **ui-node**.
-- `core-go` remains headless and is only routed via Traefik.
+- `core-go` remains headless and is not exposed directly to browsers.
 
 (Exact auth propagation and authorization rules will be pinned in OpenAPI and `docs/architecture.md` once the first implementation lands.)

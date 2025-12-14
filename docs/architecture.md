@@ -6,7 +6,7 @@ Roller_hoops is a **Go + Node.js + PostgreSQL** system that runs fully in Docker
 
 - **Traefik** routes traffic
   - `/` → **ui-node** (Node.js / Next.js)
-  - `/api` → **core-go** (Go API)
+- **core-go** is not exposed directly to browsers; it stays private on the Docker network.
 - **core-go** owns network discovery, normalisation, persistence, and the REST API.
 - **ui-node** owns HTML rendering, user workflows, and authentication UI/sessions.
 - **PostgreSQL** is the only database.
@@ -51,6 +51,8 @@ Forbidden:
 - Only Traefik publishes ports to the host.
 - `core-go` and `db` are private to the internal Docker network.
 - `ui-node` is the only component that accepts browser sessions.
+
+This makes **ui-node the BFF** (backend-for-frontend): browser traffic only hits the UI, and the UI performs server-side calls to the Go API via `CORE_GO_BASE_URL`.
 
 ## API contract source of truth
 

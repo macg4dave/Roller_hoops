@@ -1,12 +1,5 @@
 http:
   routers:
-    api:
-      rule: "PathPrefix(`/api`)"
-      entryPoints:
-        - web
-      priority: 100
-      service: core-go
-
     ui:
       rule: "PathPrefix(`/`)"
       entryPoints:
@@ -15,11 +8,6 @@ http:
       service: ui-node
 
   services:
-    core-go:
-      loadBalancer:
-        servers:
-          - url: "http://core-go:8081"
-
     ui-node:
       loadBalancer:
         servers:

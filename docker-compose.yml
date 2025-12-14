@@ -19,8 +19,9 @@ services:
     environment:
       POSTGRES_DB: roller_hoops
       POSTGRES_USER: postgres
-      # Dev-only: avoid storing secrets in repo; use trust auth inside the Docker network.
-      POSTGRES_HOST_AUTH_METHOD: trust
+      # Note: do not commit real secrets. For production, provide this via your secret manager.
+      # For local dev, docker compose will read POSTGRES_PASSWORD from .env (gitignored).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
@@ -41,7 +42,7 @@ services:
       - -path
       - /migrations
       - -database
-      - postgres://postgres@db:5432/roller_hoops?sslmode=disable
+      - postgres://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/roller_hoops?sslmode=disable
       - up
 
   core-go:
@@ -53,7 +54,7 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgres://postgres@db:5432/roller_hoops?sslmode=disable
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/roller_hoops?sslmode=disable
       HTTP_ADDR: :8081
       LOG_LEVEL: info
     healthcheck:
@@ -62,11 +63,6 @@ services:
       timeout: 3s
       retries: 10
       start_period: 5s
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.core-go.rule=PathPrefix(`/api`)
-      - traefik.http.routers.core-go.entrypoints=web
-      - traefik.http.services.core-go.loadbalancer.server.port=8081
 
   ui-node:
     build:
@@ -84,11 +80,6 @@ services:
       timeout: 3s
       retries: 10
       start_period: 5s
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.ui-node.rule=PathPrefix(`/`)
-      - traefik.http.routers.ui-node.entrypoints=web
-      - traefik.http.services.ui-node.loadbalancer.server.port=3000
 
 volumes:
   db_data:

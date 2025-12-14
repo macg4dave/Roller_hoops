@@ -47,11 +47,11 @@ func (f fakeDeviceQueries) UpsertDeviceMetadata(ctx context.Context, arg sqlcgen
 }
 
 type fakeDiscoveryQueries struct {
-	insertFn     func(ctx context.Context, arg sqlcgen.InsertDiscoveryRunParams) (sqlcgen.DiscoveryRun, error)
-	updateFn     func(ctx context.Context, arg sqlcgen.UpdateDiscoveryRunParams) (sqlcgen.DiscoveryRun, error)
-	getLatestFn  func(ctx context.Context) (sqlcgen.DiscoveryRun, error)
-	getFn        func(ctx context.Context, id string) (sqlcgen.DiscoveryRun, error)
-	insertLogFn  func(ctx context.Context, arg sqlcgen.InsertDiscoveryRunLogParams) error
+	insertFn    func(ctx context.Context, arg sqlcgen.InsertDiscoveryRunParams) (sqlcgen.DiscoveryRun, error)
+	updateFn    func(ctx context.Context, arg sqlcgen.UpdateDiscoveryRunParams) (sqlcgen.DiscoveryRun, error)
+	getLatestFn func(ctx context.Context) (sqlcgen.DiscoveryRun, error)
+	getFn       func(ctx context.Context, id string) (sqlcgen.DiscoveryRun, error)
+	insertLogFn func(ctx context.Context, arg sqlcgen.InsertDiscoveryRunLogParams) error
 }
 
 func (f fakeDiscoveryQueries) InsertDiscoveryRun(ctx context.Context, arg sqlcgen.InsertDiscoveryRunParams) (sqlcgen.DiscoveryRun, error) {
@@ -370,5 +370,123 @@ func TestDiscovery_Run_StartsRun(t *testing.T) {
 	}
 	if _, ok := body["id"]; !ok {
 		t.Fatalf("expected a run id, got %v", body)
+	}
+}
+
+func TestDiscovery_Run_RejectsUnknownFields(t *testing.T) {
+	h := NewHandler(NewLogger("debug"), nil)
+	h.discovery = fakeDiscoveryQueries{
+		insertFn: func(ctx context.Context, arg sqlcgen.InsertDiscoveryRunParams) (sqlcgen.DiscoveryRun, error) {
+			// Should not be reached.
+			t.Fatalf("expected request validation to fail before insert")
+			return sqlcgen.DiscoveryRun{}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/discovery/run", strings.NewReader(`{"scope":"10.0.0.0/24","nope":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	body := decodeBody(t, rr)
+	errObj := body["error"].(map[string]any)
+	if errObj["code"] != "validation_failed" {
+		t.Fatalf("expected validation_failed, got %v", errObj["code"])
+	}
+}
+
+func TestDiscovery_Run_AllowsEmptyBody(t *testing.T) {
+	h := NewHandler(NewLogger("debug"), nil)
+	now := time.Now()
+
+	h.discovery = fakeDiscoveryQueries{
+		insertFn: func(ctx context.Context, arg sqlcgen.InsertDiscoveryRunParams) (sqlcgen.DiscoveryRun, error) {
+			if arg.Scope != nil {
+				t.Fatalf("expected nil scope when body omitted, got %v", *arg.Scope)
+			}
+			return sqlcgen.DiscoveryRun{ID: "run-empty", Status: arg.Status, Scope: arg.Scope, Stats: arg.Stats, StartedAt: now}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/discovery/run", nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	body := decodeBody(t, rr)
+	if body["status"] != "queued" {
+		t.Fatalf("expected queued status, got %v", body["status"])
+	}
+}
+
+func TestDiscovery_Run_TrimsScope(t *testing.T) {
+	h := NewHandler(NewLogger("debug"), nil)
+	now := time.Now()
+
+	h.discovery = fakeDiscoveryQueries{
+		insertFn: func(ctx context.Context, arg sqlcgen.InsertDiscoveryRunParams) (sqlcgen.DiscoveryRun, error) {
+			if arg.Scope == nil || *arg.Scope != "10.0.0.0/24" {
+				t.Fatalf("expected trimmed scope 10.0.0.0/24, got %v", arg.Scope)
+			}
+			return sqlcgen.DiscoveryRun{ID: "run-trim", Status: arg.Status, Scope: arg.Scope, Stats: arg.Stats, StartedAt: now}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/discovery/run", strings.NewReader(`{"scope":" 10.0.0.0/24  "}`))
+	req.Header.Set("Content-Type", "application/json")
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestDiscovery_Status_ReturnsLatestRun(t *testing.T) {
+	h := NewHandler(NewLogger("debug"), nil)
+	now := time.Now()
+	completed := now.Add(1 * time.Second)
+	lastErr := ""
+
+	h.discovery = fakeDiscoveryQueries{
+		getLatestFn: func(ctx context.Context) (sqlcgen.DiscoveryRun, error) {
+			scope := "10.0.0.0/24"
+			return sqlcgen.DiscoveryRun{
+				ID:          "run-99",
+				Status:      "succeeded",
+				Scope:       &scope,
+				Stats:       map[string]any{"devices_seen": 1},
+				StartedAt:   now,
+				CompletedAt: &completed,
+				LastError:   &lastErr,
+			}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/discovery/status", nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	body := decodeBody(t, rr)
+	if body["status"] != "succeeded" {
+		t.Fatalf("expected succeeded status, got %v", body["status"])
+	}
+	latest, ok := body["latest_run"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected latest_run object, got %v", body)
+	}
+	if latest["id"] != "run-99" {
+		t.Fatalf("expected latest_run.id run-99, got %v", latest["id"])
 	}
 }

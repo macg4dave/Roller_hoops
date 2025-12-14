@@ -53,12 +53,32 @@ docker-compose.yml
 
 ---
 
-
 ## Current progress snapshot
 
-- Device CRUD live end-to-end via Go API and UI; metadata fields (`owner`, `location`, `notes`) persist in `device_metadata`.
-- Discovery endpoints now persist runs/logs (`discovery_runs`, `discovery_run_logs`) and return real run ids; UI can trigger a run and see the latest status (stubbed worker for now).
-- Traefik + docker-compose bring up UI, API, and PostgreSQL with health checks enabled.
+* Device CRUD live end-to-end via Go API and UI; metadata fields (`owner`, `location`, `notes`) persist in `device_metadata`.
+* Discovery endpoints now persist runs/logs (`discovery_runs`, `discovery_run_logs`) and return real run ids; UI can trigger a run and see the latest status (stubbed worker for now).
+* Traefik + docker-compose bring up UI and PostgreSQL with health checks enabled; **core-go stays private on the Docker network**.
+* OpenAPI spec exists at `api/openapi.yaml`, and a **Go contract test prevents drift** between the spec and the chi router.
+* Dev DB auth uses a password via env vars (no more `trust` by default); secrets are injected via `.env` (gitignored) or a secret manager.
+
+---
+
+## Project trackers (source of truth)
+
+* Feature inventory + status: `docs/feature-matrix.md`
+* API rules + conventions: `docs/api-contract.md` (canonical spec: `api/openapi.yaml`)
+* DB schema intent: `docs/data-model.md` (implemented via migrations in `core-go/migrations/`)
+* Service boundaries: `docs/architecture.md`
+* Security guardrails: `docs/security.md`
+
+---
+
+## Blockers & risks (current)
+
+* **Auth boundary is not enforced yet (security)**: auth is not implemented, but the browser → Go API bypass is mitigated by keeping `core-go` private and only exposing the UI via Traefik.
+* **Discovery inside Docker needs a deployment decision**: ARP/ICMP/SNMP fidelity depends on container networking and capabilities (e.g., `CAP_NET_RAW`, host networking, or a dedicated scanner container deployed on the target network).
+* **Production secret injection needs a runbook**: decide and document where `POSTGRES_PASSWORD` and future app secrets live (env, docker secrets, external secret manager), and how they’re rotated.
+* **Historical model not implemented yet**: observations/diffing (Phases 9+) will change query/index requirements; schema choices made in Phase 8 should assume high write volume and retention controls.
 
 ---
 
@@ -74,7 +94,7 @@ docker-compose.yml
 
 ## Phase 1 — Go core service (headless)
 
-### Constraint: Do not build a UI yet
+### Constraint (still true): core-go stays headless
 
 ### Responsibilities
 
@@ -85,7 +105,7 @@ docker-compose.yml
 ### Components (existing, proven)
 
 * HTTP server: Go stdlib (`net/http`) + `chi` router
-* API contract: OpenAPI is canonical; Go server stubs are generated (no hand-rolled drift)
+* API contract: OpenAPI is canonical (codegen/drift checks are planned, not yet enforced)
 * DB access: `sqlc` (PostgreSQL-first) + `pgx`
 * Migrations: `golang-migrate`
 * Config: env vars only (Docker-friendly)
@@ -138,14 +158,14 @@ Deliverable:
 
 ## Phase 3 — Node.js UI service
 
-### Constraint: Node does not touch the network
+### Constraint: Node does not do discovery/scanning
 
 ### Stack
 
 * Node.js + TypeScript
 * Framework: **Next.js** (SSR-first)
 * UI: plain HTML forms + Tailwind (progressive enhancement; avoid heavy client state early)
-* API client: typed `fetch` + generated TypeScript types from OpenAPI
+* API client: typed `fetch` (+ planned generated TypeScript types from OpenAPI)
 
 ### UI responsibilities
 
@@ -216,7 +236,7 @@ Deliverable:
 
 * docker compose brings up Traefik, UI, Go API, and PostgreSQL with named volumes; health checks pass.
 * Device CRUD flows work end-to-end (UI → API → DB) with request IDs in logs.
-* OpenAPI spec lives in the repo; Go server + Node client are generated from it.
+* OpenAPI spec lives in the repo; API behaviour matches it (via codegen or contract tests).
 * Migrations are repeatable (`golang-migrate`), and a short doc exists for running them in dev/CI.
 * Minimal tests run in CI: Go handler test against Postgres, and a UI smoke that hits the real API.
 
@@ -288,7 +308,7 @@ Deliverable:
 
 * Device list: filters (online/offline/changed), search by display name/IP/MAC, sort by last seen.
 * Device detail: IPs, MACs, interfaces, services, metadata, change timeline; deep linkable.
-* Metadata editing: inline forms with optimistic UI and rollback on failure; uses typed client generated from OpenAPI.
+* Metadata editing: inline forms with optimistic UI and rollback on failure; uses typed client (+ planned generated client/types from OpenAPI).
 * Discovery UX: trigger a run, show queued/running/done with progress and errors; reuse polling/WebSocket choice from Phase 6.
 * Error and resilience: empty states, loading states, and friendly failure surfaces in UI.
 
@@ -353,6 +373,18 @@ If you want next:
 * Default discovery scope order (ARP + ICMP first; SNMP once stable; mDNS/NetBIOS optional).
 * Run cadence and max runtime budget per subnet.
 * Retention window for raw observations vs rollups; defaults for trimming old runs.
+
+---
+
+## Updated trackers (next milestones)
+
+Use this as the “what’s next” checklist; the detailed feature inventory stays in `docs/feature-matrix.md`.
+
+* [x] **Protect `/api` before shipping auth**: implemented UI-as-BFF; `core-go` is private and Traefik only routes to the UI.
+* [x] **Add an OpenAPI drift gate**: added a Go contract test that compares `api/openapi.yaml` to registered chi routes.
+* [ ] **Discovery deployment plan**: document the required Docker networking/capabilities and how to target subnets safely.
+* [ ] **Discovery worker v1**: implement a real queued→running→(succeeded|failed) state machine and a minimal ICMP sweep that writes observations/current state.
+* [x] **Production DB posture**: removed dev `trust` auth; Postgres password is provided via env/secret injection.
 
 ## Definition of done for discovery (Phases 8-10)
 

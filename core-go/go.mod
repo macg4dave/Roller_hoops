@@ -6,6 +6,7 @@ require (
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/rs/zerolog v1.33.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
