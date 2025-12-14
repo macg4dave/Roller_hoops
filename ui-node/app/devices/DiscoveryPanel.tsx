@@ -1,13 +1,14 @@
 'use client';
 
-import { randomUUID } from 'crypto';
 import { useEffect, useState } from 'react';
 import { useFormState } from 'react-dom';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 
 import type { DiscoveryStatus } from './types';
 import { initialDiscoveryRunState } from './state';
 import { triggerDiscovery } from './actions';
+import { api } from '../../lib/api-client';
 
 type Props = {
   status: DiscoveryStatus;
@@ -41,7 +42,27 @@ export function DiscoveryPanel({ status }: Props) {
   const router = useRouter();
   const [state, formAction] = useFormState(triggerDiscovery, initialDiscoveryRunState());
   const [liveStatus, setLiveStatus] = useState<DiscoveryStatus>(status);
-  const latest = liveStatus.latest_run ?? undefined;
+
+  const statusQuery = useQuery({
+    queryKey: ['discovery-status'],
+    initialData: status,
+    queryFn: async ({ signal }) => {
+      const res = await api.GET('/v1/discovery/status', {
+        signal,
+        headers: {
+          'X-Request-ID': globalThis.crypto?.randomUUID?.()
+        }
+      });
+
+      if (res.error) {
+        throw new Error('Failed to fetch discovery status.');
+      }
+      return (res.data ?? status) as DiscoveryStatus;
+    },
+    refetchInterval: 10_000
+  });
+
+  const latest = statusQuery.data.latest_run ?? undefined;
 
   useEffect(() => {
     if (state.status === 'success') {
@@ -50,45 +71,8 @@ export function DiscoveryPanel({ status }: Props) {
   }, [state.status, router]);
 
   useEffect(() => {
-    setLiveStatus(status);
-  }, [status]);
-
-  useEffect(() => {
-    let alive = true;
-    const controller = new AbortController();
-
-    const poll = async () => {
-      try {
-        const res = await fetch('/api/v1/discovery/status', {
-          cache: 'no-store',
-          signal: controller.signal,
-          headers: {
-            'X-Request-ID': randomUUID()
-          }
-        });
-        if (!res.ok) {
-          return;
-        }
-        const json = (await res.json()) as DiscoveryStatus;
-        if (alive) {
-          setLiveStatus(json);
-        }
-      } catch {
-        if (!alive) {
-          return;
-        }
-      }
-    };
-
-    poll();
-    const interval = window.setInterval(poll, 10000);
-
-    return () => {
-      alive = false;
-      controller.abort();
-      clearInterval(interval);
-    };
-  }, []);
+    setLiveStatus(statusQuery.data);
+  }, [statusQuery.data]);
 
   const colors = statusBadgeColor(liveStatus.status);
 

@@ -577,6 +577,10 @@ Acceptance criteria:
 * **Search/focus**: how users pick the first object (global search, devices list, or “pick subnet”).
 * **Time axis**: whether the map timeline is built directly on Phase 9 observations/events or starts as “last seen” only.
 
+Related decision support:
+
+* `docs/network_map/implementation-stack.md` — curated libraries/tools to avoid reinventing graph/layout/type plumbing.
+
 Suggested defaults (to keep v1 boring and shippable):
 
 * Renderer: **SVG first** (predictable, inspectable, accessible); consider Canvas/WebGL only when performance demands it.

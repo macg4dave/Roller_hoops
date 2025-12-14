@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, type FormEvent } from 'react';
-import { revalidatePath } from 'next/cache';
+import { useRouter } from 'next/navigation';
 
 type PanelState = {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -40,6 +40,7 @@ function digestImportResponse(payload: string) {
 }
 
 export function ImportExportPanel() {
+  const router = useRouter();
   const [state, setState] = useState<PanelState>(initialState);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -100,7 +101,7 @@ export function ImportExportPanel() {
       }
 
       setState({ status: 'success', message: digestImportResponse(payload) });
-      revalidatePath('/devices');
+      router.refresh();
     } catch (error) {
       setState({ status: 'error', message: (error as Error).message || 'Import failed' });
     }

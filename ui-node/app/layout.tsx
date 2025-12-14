@@ -1,3 +1,5 @@
+import { Providers } from './providers';
+
 export const metadata = {
   title: 'Roller_hoops',
   description: 'Network tracker / mapper'
@@ -10,7 +12,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body style={{ fontFamily: 'system-ui, sans-serif', margin: 24 }}>{children}</body>
+      <body style={{ fontFamily: 'system-ui, sans-serif', margin: 24 }}>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }
