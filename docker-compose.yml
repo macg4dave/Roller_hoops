@@ -7,6 +7,7 @@ services:
       - --providers.file.filename=/etc/traefik/dynamic.yml
       - --providers.file.watch=true
       - --entrypoints.web.address=:80
+      - --entrypoints.internal.address=:8080
       - --log.level=INFO
     ports:
       - "80:80"
@@ -70,7 +71,8 @@ services:
     environment:
       PORT: 3000
       HOSTNAME: 0.0.0.0
-      CORE_GO_BASE_URL: http://core-go:8081
+      # Route API traffic through Traefik, but keep it internal-only for now (no host port published).
+      CORE_GO_BASE_URL: http://traefik:8080
     depends_on:
       core-go:
         condition: service_healthy

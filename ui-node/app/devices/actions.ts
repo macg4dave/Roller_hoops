@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 
 import { Device, DiscoveryRun } from './types';
 
-import { CreateDeviceState, DiscoveryRunState } from './state';
+import { CreateDeviceState, DiscoveryRunState, DeviceMetadataState } from './state';
 
 function apiBase() {
   return process.env.CORE_GO_BASE_URL ?? 'http://localhost:8081';
@@ -108,4 +108,59 @@ export async function triggerDiscovery(
     status: 'success',
     message: `Discovery run ${run.id} queued (${run.status})`
   };
+}
+
+export async function updateDeviceMetadata(
+  _prevState: DeviceMetadataState,
+  formData: FormData
+): Promise<DeviceMetadataState> {
+  const deviceId = formData.get('device_id');
+  if (typeof deviceId !== 'string' || deviceId.trim().length === 0) {
+    return { status: 'error', message: 'missing device id' };
+  }
+
+  const metadata: Record<string, string> = {};
+  const ownerRaw = formData.get('owner');
+  const locationRaw = formData.get('location');
+  const notesRaw = formData.get('notes');
+
+  const addField = (key: string, raw: FormDataEntryValue | null) => {
+    if (typeof raw !== 'string') return;
+    metadata[key] = raw.trim();
+  };
+
+  addField('owner', ownerRaw);
+  addField('location', locationRaw);
+  addField('notes', notesRaw);
+
+  const payload: Record<string, unknown> = {};
+  if (Object.keys(metadata).length > 0) {
+    payload.metadata = metadata;
+  }
+
+  if (Object.keys(payload).length === 0) {
+    return { status: 'error', message: 'nothing to update' };
+  }
+
+  const reqId = (await headers()).get('x-request-id') ?? randomUUID();
+  const res = await fetch(`${apiBase()}/api/v1/devices/${deviceId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'X-Request-ID': reqId
+    },
+    cache: 'no-store',
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const message = (await extractErrorMessage(res)) ?? `Request failed (${res.status})`;
+    return { status: 'error', message };
+  }
+
+  const device = (await res.json()) as Device;
+  revalidatePath('/devices');
+
+  return { status: 'success', message: `Metadata updated (${device.id})` };
 }

@@ -6,7 +6,7 @@ Self-hosted network tracker / mapper (Go + Node.js + PostgreSQL), fully containe
 
 - Start the full stack: `docker compose up --build`
 - Open the UI: <http://localhost/>
-- The Go API is **not exposed directly to browsers**; ui-node calls it over the internal Docker network.
+- The Go API is **not exposed directly to browsers**; ui-node calls it over the internal Docker network (via Traefik’s internal-only entrypoint).
 
 ## Services (responsibilities)
 

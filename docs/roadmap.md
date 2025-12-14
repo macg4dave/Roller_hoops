@@ -162,7 +162,7 @@ Deliverable:
 
 ## Phase 3 — Node.js UI service
 
-**Status:** In progress (MVP UI exists; auth + full workflows still pending)
+**Status:** Complete (MVP UI, metadata editing, and discovery panel live; auth and advanced workflows tracked in later phases)
 
 ### Constraint: Node does not do discovery/scanning
 
@@ -201,13 +201,15 @@ Deliverable:
 
 ## Phase 4 — Reverse proxy & routing
 
+**Status:** Complete (UI exposed; API kept private until auth)
+
 Use **existing battle-tested infra**
 
 ### Traefik
 
 * Routes `/` → Node
-* Routes `/api` → Go
-* Handles TLS
+* Routes `/api` → Go (internal-only entrypoint; not published to the host)
+* Handles TLS (production config; dev runs HTTP)
 * Does not replace application auth in v1 (auth remains a UI concern)
 
 Deliverable:
@@ -252,16 +254,10 @@ Deliverable:
 
 Two clean options:
 
-### Option A — Polling
 
 * UI polls `/api/devices`
 * Simple
 * Good enough for most networks
-
-### Option B — WebSockets
-
-* Go emits events
-* Node fans out to browsers
 
 Still no tight coupling.
 
@@ -273,10 +269,10 @@ Only after core is stable.
 
 * SNMP enrichment
 * VLAN / switch port mapping
-* Export to NetBox
-* Read-only LDAP auth
-* Multi-site support
-* Extra Prometheus exporters/dashboards for network-specific metrics (beyond baseline ops)
+* mDNS / NetBIOS name resolution
+* import/Export JSON
+
+
 
 ---
 

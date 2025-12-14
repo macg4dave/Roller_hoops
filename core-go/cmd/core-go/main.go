@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"roller_hoops/core-go/internal/db"
+	"roller_hoops/core-go/internal/discoveryworker"
 	"roller_hoops/core-go/internal/httpapi"
 )
 
@@ -30,6 +31,11 @@ func main() {
 		}
 		defer p.Close()
 		pool = p
+	}
+
+	if pool != nil {
+		worker := discoveryworker.New(logger, pool.Queries(), discoveryworker.Options{})
+		go worker.Run(ctx)
 	}
 
 	h := httpapi.NewHandler(logger, pool)

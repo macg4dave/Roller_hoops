@@ -1,6 +1,7 @@
 import { CreateDeviceForm } from './CreateDeviceForm';
 import type { Device, DiscoveryStatus } from './types';
 import { DiscoveryPanel } from './DiscoveryPanel';
+import { DeviceMetadataEditor } from './DeviceMetadataEditor';
 import { headers } from 'next/headers';
 import { randomUUID } from 'crypto';
 
@@ -87,6 +88,7 @@ export default async function DevicesPage() {
                   ) : null}
                   {!d.metadata && <div style={{ color: '#666' }}>No metadata yet.</div>}
                 </div>
+                <DeviceMetadataEditor device={d} />
               </div>
               <span
                 style={{

@@ -17,3 +17,12 @@ export type DiscoveryRunState = {
 export function initialDiscoveryRunState(): DiscoveryRunState {
   return { status: 'idle' };
 }
+
+export type DeviceMetadataState = {
+  status: 'idle' | 'success' | 'error';
+  message?: string;
+};
+
+export function initialDeviceMetadataState(): DeviceMetadataState {
+  return { status: 'idle' };
+}

@@ -476,7 +476,6 @@ func (h *Handler) handleDiscoveryRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.writeJSON(w, http.StatusAccepted, toDiscoveryRun(run))
-	h.startDiscoverySimulation(run.ID, req.Scope)
 }
 
 func (h *Handler) handleDiscoveryStatus(w http.ResponseWriter, r *http.Request) {
@@ -501,49 +500,4 @@ func (h *Handler) handleDiscoveryStatus(w http.ResponseWriter, r *http.Request) 
 		Status:    run.Status,
 		LatestRun: &latest,
 	})
-}
-
-func (h *Handler) startDiscoverySimulation(runID string, scope *string) {
-	if h.discovery == nil {
-		return
-	}
-
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		if _, err := h.discovery.UpdateDiscoveryRun(ctx, sqlcgen.UpdateDiscoveryRunParams{
-			ID:     runID,
-			Status: "running",
-			Stats:  map[string]any{"stage": "running", "scope": scope},
-		}); err != nil {
-			h.log.Warn().Err(err).Str("run_id", runID).Msg("failed to mark discovery as running")
-			return
-		}
-
-		_ = h.discovery.InsertDiscoveryRunLog(ctx, sqlcgen.InsertDiscoveryRunLogParams{
-			RunID:   runID,
-			Level:   "info",
-			Message: "discovery run started",
-		})
-
-		time.Sleep(800 * time.Millisecond)
-
-		completedAt := time.Now()
-		if _, err := h.discovery.UpdateDiscoveryRun(ctx, sqlcgen.UpdateDiscoveryRunParams{
-			ID:          runID,
-			Status:      "succeeded",
-			Stats:       map[string]any{"stage": "completed", "devices_seen": 0},
-			CompletedAt: &completedAt,
-		}); err != nil {
-			h.log.Warn().Err(err).Str("run_id", runID).Msg("failed to mark discovery as complete")
-			return
-		}
-
-		_ = h.discovery.InsertDiscoveryRunLog(ctx, sqlcgen.InsertDiscoveryRunLogParams{
-			RunID:   runID,
-			Level:   "info",
-			Message: "discovery run completed",
-		})
-	}()
 }

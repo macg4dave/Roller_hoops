@@ -52,7 +52,7 @@ Forbidden:
 - `core-go` and `db` are private to the internal Docker network.
 - `ui-node` is the only component that accepts browser sessions.
 
-This makes **ui-node the BFF** (backend-for-frontend): browser traffic only hits the UI, and the UI performs server-side calls to the Go API via `CORE_GO_BASE_URL`.
+This makes **ui-node the BFF** (backend-for-frontend): browser traffic only hits the UI, and the UI performs server-side calls to the Go API via `CORE_GO_BASE_URL` (wired in Docker Compose to a Traefik internal-only entrypoint).
 
 ## API contract source of truth
 
