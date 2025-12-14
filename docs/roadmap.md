@@ -92,7 +92,9 @@ docker-compose.yml
 
 ---
 
-## Phase 1 — Go core service (headless)
+## Phase 1 — Go core service (headless) (closed)
+
+**Status:** Closed
 
 ### Constraint (still true): core-go stays headless
 
@@ -105,7 +107,7 @@ docker-compose.yml
 ### Components (existing, proven)
 
 * HTTP server: Go stdlib (`net/http`) + `chi` router
-* API contract: OpenAPI is canonical (codegen/drift checks are planned, not yet enforced)
+* API contract: OpenAPI is canonical (a Go contract test gates drift against the chi router)
 * DB access: `sqlc` (PostgreSQL-first) + `pgx`
 * Migrations: `golang-migrate`
 * Config: env vars only (Docker-friendly)
@@ -131,7 +133,9 @@ GET    /api/v1/discovery/status
 
 ---
 
-## Phase 2 — Database schema (minimal but future-proof)
+## Phase 2 — Database schema (minimal but future-proof) (closed)
+
+**Status:** Closed
 
 Use **existing relational DBs**, no custom storage.
 
@@ -152,11 +156,13 @@ Avoid:
 Deliverable:
 
 * DB survives container restarts
-* Historical data works
+* Core schema supports future historical data (Phases 8+)
 
 ---
 
 ## Phase 3 — Node.js UI service
+
+**Status:** In progress (MVP UI exists; auth + full workflows still pending)
 
 ### Constraint: Node does not do discovery/scanning
 
@@ -164,7 +170,7 @@ Deliverable:
 
 * Node.js + TypeScript
 * Framework: **Next.js** (SSR-first)
-* UI: plain HTML forms + Tailwind (progressive enhancement; avoid heavy client state early)
+* UI: plain HTML forms + minimal CSS (Tailwind optional; avoid heavy client state early)
 * API client: typed `fetch` (+ planned generated TypeScript types from OpenAPI)
 
 ### UI responsibilities
