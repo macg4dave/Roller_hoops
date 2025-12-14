@@ -61,6 +61,58 @@ docker-compose.yml
 * OpenAPI spec exists at `api/openapi.yaml`, and a **Go contract test prevents drift** between the spec and the chi router.
 * Dev DB auth uses a password via env vars (no more `trust` by default); secrets are injected via `.env` (gitignored) or a secret manager.
 
+### Implemented APIs (current)
+
+Canonical contract: `api/openapi.yaml` (served under `/api`).
+
+`core-go` (REST, v1):
+
+```text
+GET    /api/v1/devices
+POST   /api/v1/devices
+GET    /api/v1/devices/{id}
+PUT    /api/v1/devices/{id}
+GET    /api/v1/devices/{id}/name-candidates
+
+GET    /api/v1/devices/export
+POST   /api/v1/devices/import
+
+POST   /api/v1/discovery/run
+GET    /api/v1/discovery/status
+```
+
+`core-go` (service health; not part of the public API contract):
+
+```text
+GET /healthz
+GET /readyz
+```
+
+`ui-node` (service health):
+
+```text
+GET /healthz
+```
+
+### Planned APIs (next)
+
+These “API surface” milestones are already described later in this roadmap (keep OpenAPI canonical; prefer adding endpoints/params over UI-side reconstruction):
+
+```text
+Phase 9 — historical/diffing
+GET    /api/v1/devices/changes?since=RFC3339&limit=N
+GET    /api/v1/devices/{id}/history?limit=N&cursor=...
+GET    /api/v1/discovery/runs
+GET    /api/v1/discovery/runs/{id}
+GET    /api/v1/discovery/runs/{id}/logs
+
+Phase 12 — ops/telemetry
+GET    /metrics
+
+Phase 14+ — map projections (read-only, focus-scoped)
+GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone&focusId=...
+```
+
 ---
 
 ## Project trackers (source of truth)
@@ -120,13 +172,17 @@ Operational defaults (v1):
 * Health endpoints: `/healthz` and `/readyz`
 * Request ID propagation end-to-end (UI → Traefik → Go)
 
-### API (example)
+### API (v1, implemented)
 
 ```text
 GET    /api/v1/devices
-GET    /api/v1/devices/{id}
 POST   /api/v1/devices
+GET    /api/v1/devices/{id}
 PUT    /api/v1/devices/{id}
+GET    /api/v1/devices/{id}/name-candidates
+
+GET    /api/v1/devices/export
+POST   /api/v1/devices/import
 
 POST   /api/v1/discovery/run
 GET    /api/v1/discovery/status
@@ -172,7 +228,12 @@ Deliverable:
 * Node.js + TypeScript
 * Framework: **Next.js** (SSR-first)
 * UI: plain HTML forms + minimal CSS (Tailwind optional; avoid heavy client state early)
-* API client: typed `fetch` (+ planned generated TypeScript types from OpenAPI)
+* API client: typed `fetch` (prefer `openapi-fetch`) + generated TypeScript types from OpenAPI (prefer `openapi-typescript` or `orval`)
+
+API-first rule (so we don’t re-implement server logic in the UI):
+
+* When a UI feature needs a new slice of data, prefer adding a **small new API endpoint** or **optional query params** to an existing endpoint.
+* Keep OpenAPI canonical and generate types/clients from it (avoid hand-written DTO drift).
 
 ### UI responsibilities
 
@@ -197,6 +258,12 @@ Deliverable:
 
 * UI talks only to Go API
 * No shared database access
+
+Implementation detail (already in place):
+
+* The UI acts as a BFF/proxy for the browser via `ui-node/app/api/[...path]/route.ts`.
+  * Browser calls `/api/...` on the UI.
+  * UI proxies to `core-go` on the private Docker network.
 
 ---
 
@@ -268,16 +335,33 @@ The UI now polls the Go API (`/api/v1/devices` and `/api/v1/discovery/status`) w
 
 ## Phase 7 — Nice-to-have integrations
 
-**Status:** In-progress
+**Status:** In-progress (snapshot + SNMP/VLAN/name-candidates shipped; mDNS/NetBIOS + service scanning + external inventory import planned)
 
-Only after core is stable. Current work includes scoping the SNMP enrichment pipeline, VLAN/switch-port linkage, and service discovery via mDNS/NetBIOS so the discovery engine can publish richer metadata. Import/export tooling is being drafted so operators can snapshot or restore device state.
+Only after core is stable. The intent is to enrich discovered devices by **reusing existing protocols/tools** (SNMP, mDNS, nmap, IPAM APIs), not by building bespoke scanners.
 
-* SNMP enrichment
-* VLAN / switch port mapping
-* mDNS / NetBIOS name resolution
+Implemented (current):
+
+* SNMP enrichment baseline (best-effort; behind enable flags): `device_snmp`, interface facts, VLAN PVIDs (`interface_vlans`)
+* Friendly-name candidates (reverse DNS + SNMP `sysName` today) via `GET /api/v1/devices/{id}/name-candidates`
 * Import/export JSON (Go endpoints + UI snapshot workflow live)
 
+Planned next (API/tool-first):
+
+* mDNS/Bonjour name candidates (prefer `zeroconf`)
+* NetBIOS name candidates (prefer an existing library/tool; best-effort)
+* Physical adjacency (LLDP/CDP) via SNMP LLDP-MIB / CISCO-CDP-MIB (optionally `gosmi` to avoid hardcoded OIDs)
+* Service/port discovery (prefer `nmap` with XML parsing; optional `masscan` for broad “is port open” sweeps), behind explicit enable flags/allowlists
+* External inventory/IPAM sync import (prefer NetBox or Nautobot APIs) instead of rebuilding IPAM workflows
+
 > Snapshot tooling is available via `/api/v1/devices/export` and `/api/v1/devices/import`, and the devices UI now offers download/upload controls.
+
+API surfaced by this phase (implemented):
+
+```text
+GET  /api/v1/devices/export
+POST /api/v1/devices/import
+GET  /api/v1/devices/{id}/name-candidates
+```
 
 
 
@@ -309,6 +393,19 @@ Deliverable:
 * Retention knobs: keep raw observations for N days; keep rollups forever; indexes to keep queries fast.
 * API: list devices changed since a timestamp; fetch the history for a device; expose last run status and error.
 
+API milestones (prefer server-side diffing over UI-side reconstruction):
+
+* M9.1 — Device change feed
+  * `GET /api/v1/devices/changes?since=RFC3339&limit=N`
+    * returns a stable, append-only-ish list of change events (or “changed device summaries”) suitable for polling.
+* M9.2 — Device history
+  * `GET /api/v1/devices/{id}/history?limit=N&cursor=...`
+    * returns a time-ordered history derived from observation snapshots/events.
+* M9.3 — Discovery run access (for debugging and timelines)
+  * `GET /api/v1/discovery/runs`
+  * `GET /api/v1/discovery/runs/{id}`
+  * `GET /api/v1/discovery/runs/{id}/logs`
+
 Deliverable:
 
 * You can diff any device across runs and show a timeline of changes without hand-written SQL.
@@ -327,6 +424,15 @@ Deliverable:
 
 * An operator can sign in, launch discovery, watch progress, inspect a device, and edit metadata without using curl.
 
+API preference for Phase 10 UX:
+
+* Prefer optional query params on `GET /api/v1/devices` (or small dedicated endpoints) for:
+  * server-side filtering (`status=online|offline|changed`)
+  * search (`q=...`)
+  * sorting (`sort=last_seen_desc`)
+  * pagination (`limit`, `cursor`)
+* Avoid pulling “all devices” to the browser just to re-filter/re-sort.
+
 ---
 
 ## Phase 11 — Auth + session hardening
@@ -336,10 +442,16 @@ Deliverable:
 * Roles: admin vs read-only; authorization enforced in the UI layer before calling the Go API.
 * Account lifecycle: change password flow and a manual admin reset/one-time token flow for recovery.
 * Audit: minimal audit log of user actions stored via the Go API so the UI never writes to core tables directly.
+* If we don’t want to hand-roll session plumbing, prefer Auth.js/NextAuth for cookie/session handling (credentials-based auth still fits the “UI-owned auth” rule).
 
 Deliverable:
 
 * Auth no longer relies on stubs; sign-in/out and role-based access work end-to-end with secure cookies and hashed credentials.
+
+API note:
+
+* Keep `core-go` headless. Authentication stays UI-owned; the browser should not call `core-go` directly.
+* Prefer small UI-owned auth routes (e.g. `/auth/login`, `/auth/logout`) and keep the core API stable and internal.
 
 ---
 
@@ -354,6 +466,11 @@ Deliverable:
 Deliverable:
 
 * Operators have metrics, logs, backups, and tests so the stack can be run by someone who did not write it.
+
+API/telemetry endpoints (planned):
+
+* `GET /metrics` on `core-go` (Prometheus scrape target; internal network)
+* Traefik metrics/access logs as configured per deployment
 
 ---
 
@@ -460,6 +577,7 @@ Milestones (L3-first, smallest useful slice):
 
 * M14.1 — Projection schema pinned (OpenAPI-first)
   * Define a `MapProjection` response shape in `api/openapi.yaml` (canonical).
+  * Generate TS types/clients from OpenAPI (prefer `openapi-typescript` + `openapi-fetch`, or `orval`) and validate projections in UI (prefer `zod`).
   * Add Go contract coverage so server/router cannot drift.
 * M14.2 — L3 projection (device focus)
   * `GET /api/v1/map/l3?focusType=device&focusId=...` returns:
@@ -587,6 +705,14 @@ Suggested defaults (to keep v1 boring and shippable):
 * Layout: **deterministic region layout** (no force-directed graph in v1).
 * Editing: manual truth for `links`/`zones`/`service_deps`, discovered truth for device/interface/IP/service facts.
 * Time axis: collapsed placeholder that starts with “last seen” (timeline scrubber comes after Phase 9 APIs exist).
+
+Preferred off-the-shelf picks (so we don’t build our own plumbing):
+
+* Map UI: SVG-first; if we need “batteries included”, use `reactflow` + `elkjs` (or `dagre`) for deterministic layout
+* API types/client: `openapi-typescript` + `openapi-fetch` (or `orval`) to avoid hand-written DTO drift
+* Data fetching/cache: `@tanstack/react-query` keyed by `(layer, focusType, focusId)`
+* Runtime validation: `zod` (especially for projection payloads)
+* UI primitives: `cmdk` (command palette), `Fuse.js` (search), `floating-ui` (tooltips/popovers)
 
 ---
 
