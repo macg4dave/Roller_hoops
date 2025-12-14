@@ -1,16 +1,18 @@
 services:
   traefik:
-    image: traefik:v3.2
+    image: traefik:v3.3
     command:
       - --api.dashboard=false
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
+      - --providers.docker=false
+      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --providers.file.watch=true
       - --entrypoints.web.address=:80
       - --log.level=INFO
     ports:
       - "80:80"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
 
   db:
     image: postgres:16-alpine
@@ -55,7 +57,7 @@ services:
       HTTP_ADDR: :8081
       LOG_LEVEL: info
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/healthz"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -71,12 +73,13 @@ services:
       context: ./ui-node
     environment:
       PORT: 3000
+      HOSTNAME: 0.0.0.0
       CORE_GO_BASE_URL: http://core-go:8081
     depends_on:
       core-go:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/healthz"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
       interval: 5s
       timeout: 3s
       retries: 10

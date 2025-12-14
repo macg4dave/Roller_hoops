@@ -4,12 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import { Device } from './types';
 
-export type CreateDeviceState = {
-  status: 'idle' | 'success' | 'error';
-  message?: string;
-};
-
-const defaultState: CreateDeviceState = { status: 'idle' };
+import { CreateDeviceState } from './state';
 
 function apiBase() {
   return process.env.CORE_GO_BASE_URL ?? 'http://localhost:8081';
@@ -51,8 +46,4 @@ export async function createDevice(
   revalidatePath('/devices');
   const label = device.display_name?.trim() || 'device';
   return { status: 'success', message: `Created ${label} (${device.id})` };
-}
-
-export function initialCreateDeviceState(): CreateDeviceState {
-  return { ...defaultState };
 }
