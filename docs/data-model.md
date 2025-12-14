@@ -47,6 +47,16 @@ Minimum columns (v1):
 - `name` (text, nullable)
 - `ifindex` (integer, nullable)
 
+Enrichment-derived columns (Phase 7/8):
+
+- `descr` (text, nullable; SNMP `ifDescr`)
+- `alias` (text, nullable; SNMP `ifAlias`)
+- `mac` (macaddr, nullable; SNMP `ifPhysAddress`)
+- `admin_status` (integer, nullable; SNMP `ifAdminStatus`)
+- `oper_status` (integer, nullable; SNMP `ifOperStatus`)
+- `mtu` (integer, nullable; SNMP `ifMtu`)
+- `speed_bps` (bigint, nullable; SNMP `ifSpeed`/`ifHighSpeed`)
+
 ### `ip_addresses`
 
 Purpose: IP addresses observed on interfaces/devices.
@@ -101,3 +111,77 @@ Minimum columns (v1):
 - `device_id` (uuid, foreign key → `devices.id`, unique)
 
 Metadata fields are **TBD** and will be added as UI workflows are implemented.
+
+## Enrichment (Phase 7/8)
+
+These tables store optional “facts” discovered via read-only enrichments (SNMP, name resolution, etc.).
+
+### `device_snmp`
+
+Purpose: latest SNMP “system group” snapshot per device (best-effort).
+
+Minimum columns:
+
+- `device_id` (uuid, primary key, foreign key → `devices.id`)
+- `address` (inet, nullable; address used for the last successful/attempted query)
+- `sys_name` (text, nullable)
+- `sys_descr` (text, nullable)
+- `sys_object_id` (text, nullable)
+- `sys_contact` (text, nullable)
+- `sys_location` (text, nullable)
+- `last_success_at` (timestamptz, nullable)
+- `last_error` (text, nullable)
+
+### `device_name_candidates`
+
+Purpose: store candidate human-friendly names found via enrichment sources (e.g. reverse DNS, SNMP).
+
+Minimum columns:
+
+- `id` (bigserial)
+- `device_id` (uuid, foreign key → `devices.id`)
+- `name` (text)
+- `source` (text)
+- `address` (inet, nullable)
+- `observed_at` (timestamptz)
+
+### `interface_vlans`
+
+Purpose: store VLAN membership observations per interface (v1 primarily stores PVID via SNMP bridge/q-bridge MIB).
+
+Minimum columns:
+
+- `id` (bigserial)
+- `interface_id` (uuid, foreign key → `interfaces.id`)
+- `vlan_id` (integer)
+- `role` (text; `pvid` | `tagged` | `untagged`)
+- `source` (text; `snmp`)
+- `observed_at` (timestamptz)
+
+## Observations (Phase 8+)
+
+These tables are append-only logs keyed by `discovery_runs.id`. They enable history/diffing later (Phase 9+) while keeping “current state” in the core tables (`ip_addresses`, `mac_addresses`, etc).
+
+### `ip_observations`
+
+Purpose: record that an IP was observed on a device during a discovery run.
+
+Minimum columns (v1):
+
+- `id` (bigserial)
+- `run_id` (uuid, foreign key → `discovery_runs.id`)
+- `device_id` (uuid, foreign key → `devices.id`)
+- `ip` (inet)
+- `observed_at` (timestamptz)
+
+### `mac_observations`
+
+Purpose: record that a MAC was observed on a device during a discovery run.
+
+Minimum columns (v1):
+
+- `id` (bigserial)
+- `run_id` (uuid, foreign key → `discovery_runs.id`)
+- `device_id` (uuid, foreign key → `devices.id`)
+- `mac` (macaddr)
+- `observed_at` (timestamptz)

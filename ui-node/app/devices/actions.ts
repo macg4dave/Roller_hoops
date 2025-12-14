@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 
 import { Device, DiscoveryRun } from './types';
 
-import { CreateDeviceState, DiscoveryRunState, DeviceMetadataState } from './state';
+import { CreateDeviceState, DiscoveryRunState, DeviceMetadataState, DeviceDisplayNameState } from './state';
 
 function apiBase() {
   return process.env.CORE_GO_BASE_URL ?? 'http://localhost:8081';
@@ -163,4 +163,42 @@ export async function updateDeviceMetadata(
   revalidatePath('/devices');
 
   return { status: 'success', message: `Metadata updated (${device.id})` };
+}
+
+export async function updateDeviceDisplayName(
+  _prevState: DeviceDisplayNameState,
+  formData: FormData
+): Promise<DeviceDisplayNameState> {
+  const deviceId = formData.get('device_id');
+  if (typeof deviceId !== 'string' || deviceId.trim().length === 0) {
+    return { status: 'error', message: 'missing device id' };
+  }
+
+  const displayNameRaw = formData.get('display_name');
+  if (typeof displayNameRaw !== 'string' || displayNameRaw.trim().length === 0) {
+    return { status: 'error', message: 'missing display name' };
+  }
+  const displayName = displayNameRaw.trim();
+
+  const reqId = (await headers()).get('x-request-id') ?? randomUUID();
+  const res = await fetch(`${apiBase()}/api/v1/devices/${deviceId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'X-Request-ID': reqId
+    },
+    cache: 'no-store',
+    body: JSON.stringify({ display_name: displayName })
+  });
+
+  if (!res.ok) {
+    const message = (await extractErrorMessage(res)) ?? `Request failed (${res.status})`;
+    return { status: 'error', message };
+  }
+
+  const device = (await res.json()) as Device;
+  revalidatePath('/devices');
+  const label = device.display_name?.trim() || 'device';
+  return { status: 'success', message: `Display name set to ${label}` };
 }

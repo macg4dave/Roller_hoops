@@ -106,6 +106,79 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /v1/devices/{id}/name-candidates:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Devices]
+      summary: List name candidates for a device
+      description: |
+        Returns friendly-name candidates discovered via enrichment (e.g. reverse DNS, SNMP sysName).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeviceNameCandidate'
+        '400':
+          description: Invalid ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/devices/export:
+    get:
+      tags: [Devices]
+      summary: Export devices as a JSON snapshot
+      description: |
+        Returns the complete list of devices, including metadata, as a downloadable JSON document.
+      responses:
+        '200':
+          description: Exported devices
+          headers:
+            Content-Disposition:
+              description: Indicates the downloaded filename.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Device'
+  /v1/devices/import:
+    post:
+      tags: [Devices]
+      summary: Import devices from a JSON snapshot
+      description: |
+        Accepts a list of devices to create or update. Existing devices are matched by ID and updated, while new entries are created.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceImportPayload'
+      responses:
+        '200':
+          description: Import result summarizing created and updated records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceImportResult'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /v1/discovery/run:
     post:
       tags: [Discovery]
@@ -173,6 +246,21 @@ components:
           type: string
         metadata:
           $ref: '#/components/schemas/DeviceMetadata'
+    DeviceNameCandidate:
+      type: object
+      required: [name, source, observed_at]
+      properties:
+        name:
+          type: string
+        source:
+          type: string
+          description: Candidate source (e.g. snmp, reverse_dns).
+        address:
+          type: string
+          description: Optional IP address the name was observed on.
+        observed_at:
+          type: string
+          format: date-time
     DeviceMetadata:
       type: object
       properties:
@@ -182,6 +270,31 @@ components:
           type: string
         notes:
           type: string
+    DeviceImport:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        metadata:
+          $ref: '#/components/schemas/DeviceMetadata'
+    DeviceImportPayload:
+      type: object
+      required: [devices]
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceImport'
+    DeviceImportResult:
+      type: object
+      properties:
+        created:
+          type: integer
+        updated:
+          type: integer
     DiscoveryRunRequest:
       type: object
       properties:

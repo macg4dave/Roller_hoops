@@ -1,3 +1,4 @@
+-- name: ListDevices :many
 SELECT d.id,
        d.display_name,
        m.owner,

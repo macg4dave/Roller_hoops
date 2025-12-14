@@ -1,7 +1,5 @@
-import { CreateDeviceForm } from './CreateDeviceForm';
+import { DevicesDashboard } from './DevicesDashboard';
 import type { Device, DiscoveryStatus } from './types';
-import { DiscoveryPanel } from './DiscoveryPanel';
-import { DeviceMetadataEditor } from './DeviceMetadataEditor';
 import { headers } from 'next/headers';
 import { randomUUID } from 'crypto';
 
@@ -46,66 +44,7 @@ export default async function DevicesPage() {
         CRUD backed by the Go API. The UI only talks to the API; no database access.
       </p>
 
-      <DiscoveryPanel status={discoveryStatus} />
-      <CreateDeviceForm />
-
-      {devices.length === 0 ? (
-        <p style={{ marginTop: 16 }}>No devices yet. Create the first device above.</p>
-      ) : (
-        <ul style={{ listStyle: 'none', padding: 0, marginTop: 24, display: 'grid', gap: 12 }}>
-          {devices.map((d) => (
-            <li
-              key={d.id}
-              style={{
-                border: '1px solid #e0e0e0',
-                borderRadius: 8,
-                padding: 12,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 700 }}>{d.display_name ?? '(unnamed)'}</div>
-                <div style={{ color: '#555', fontSize: 14 }}>
-                  <code>{d.id}</code>
-                </div>
-                <div style={{ color: '#333', fontSize: 14, marginTop: 6, display: 'grid', gap: 4 }}>
-                  {d.metadata?.owner ? (
-                    <div>
-                      <strong>Owner:</strong> {d.metadata.owner}
-                    </div>
-                  ) : null}
-                  {d.metadata?.location ? (
-                    <div>
-                      <strong>Location:</strong> {d.metadata.location}
-                    </div>
-                  ) : null}
-                  {d.metadata?.notes ? (
-                    <div style={{ color: '#444' }}>
-                      <strong>Notes:</strong> {d.metadata.notes}
-                    </div>
-                  ) : null}
-                  {!d.metadata && <div style={{ color: '#666' }}>No metadata yet.</div>}
-                </div>
-                <DeviceMetadataEditor device={d} />
-              </div>
-              <span
-                style={{
-                  background: '#eef2ff',
-                  color: '#4338ca',
-                  padding: '4px 8px',
-                  borderRadius: 999,
-                  fontSize: 12,
-                  fontWeight: 700
-                }}
-              >
-                device
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <DevicesDashboard devices={devices} discoveryStatus={discoveryStatus} />
     </main>
   );
 }

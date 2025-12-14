@@ -16,11 +16,12 @@ import (
 )
 
 type fakeDeviceQueries struct {
-	listFn   func(ctx context.Context) ([]sqlcgen.Device, error)
-	getFn    func(ctx context.Context, id string) (sqlcgen.Device, error)
-	createFn func(ctx context.Context, displayName *string) (sqlcgen.Device, error)
-	updateFn func(ctx context.Context, arg sqlcgen.UpdateDeviceParams) (sqlcgen.Device, error)
-	upsertFn func(ctx context.Context, arg sqlcgen.UpsertDeviceMetadataParams) (sqlcgen.DeviceMetadata, error)
+	listFn               func(ctx context.Context) ([]sqlcgen.Device, error)
+	getFn                func(ctx context.Context, id string) (sqlcgen.Device, error)
+	createFn             func(ctx context.Context, displayName *string) (sqlcgen.Device, error)
+	updateFn             func(ctx context.Context, arg sqlcgen.UpdateDeviceParams) (sqlcgen.Device, error)
+	upsertFn             func(ctx context.Context, arg sqlcgen.UpsertDeviceMetadataParams) (sqlcgen.DeviceMetadata, error)
+	listNameCandidatesFn func(ctx context.Context, deviceID string) ([]sqlcgen.DeviceNameCandidate, error)
 }
 
 func (f fakeDeviceQueries) ListDevices(ctx context.Context) ([]sqlcgen.Device, error) {
@@ -44,6 +45,13 @@ func (f fakeDeviceQueries) UpsertDeviceMetadata(ctx context.Context, arg sqlcgen
 		return sqlcgen.DeviceMetadata{}, nil
 	}
 	return f.upsertFn(ctx, arg)
+}
+
+func (f fakeDeviceQueries) ListDeviceNameCandidates(ctx context.Context, deviceID string) ([]sqlcgen.DeviceNameCandidate, error) {
+	if f.listNameCandidatesFn == nil {
+		return nil, nil
+	}
+	return f.listNameCandidatesFn(ctx, deviceID)
 }
 
 type fakeDiscoveryQueries struct {
@@ -127,6 +135,33 @@ func TestDevices_List_OK(t *testing.T) {
 	// Request ID should be set in responses by middleware.
 	if rr.Header().Get("X-Request-ID") == "" {
 		t.Fatalf("expected X-Request-ID header to be set")
+	}
+}
+
+func TestDevices_Export_Attachment(t *testing.T) {
+	h := NewHandler(NewLogger("debug"), nil)
+	name := "gateway"
+	h.devices = fakeDeviceQueries{
+		listFn: func(ctx context.Context) ([]sqlcgen.Device, error) {
+			return []sqlcgen.Device{{ID: "00000000-0000-0000-0000-000000000020", DisplayName: &name}}, nil
+		},
+		getFn:    func(ctx context.Context, id string) (sqlcgen.Device, error) { return sqlcgen.Device{}, nil },
+		createFn: func(ctx context.Context, displayName *string) (sqlcgen.Device, error) { return sqlcgen.Device{}, nil },
+		updateFn: func(ctx context.Context, arg sqlcgen.UpdateDeviceParams) (sqlcgen.Device, error) {
+			return sqlcgen.Device{}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/export", nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	if cd := rr.Header().Get("Content-Disposition"); cd != "attachment; filename=\"roller_hoops_devices.json\"" {
+		t.Fatalf("expected Content-Disposition attachment, got %q", cd)
 	}
 }
 
@@ -296,6 +331,72 @@ func TestDevices_Create_UsesUpstreamRequestID(t *testing.T) {
 
 	if got := rr.Header().Get("X-Request-ID"); got != "req-123" {
 		t.Fatalf("expected request id to be preserved, got %q", got)
+	}
+}
+
+func TestDevices_Import_CreatesAndUpdates(t *testing.T) {
+	created := 0
+	updated := 0
+	metadataCalls := make([]sqlcgen.UpsertDeviceMetadataParams, 0, 2)
+	h := NewHandler(NewLogger("debug"), nil)
+	h.devices = fakeDeviceQueries{
+		listFn: func(ctx context.Context) ([]sqlcgen.Device, error) { return nil, nil },
+		getFn:  func(ctx context.Context, id string) (sqlcgen.Device, error) { return sqlcgen.Device{}, nil },
+		createFn: func(ctx context.Context, displayName *string) (sqlcgen.Device, error) {
+			created++
+			return sqlcgen.Device{ID: "imported-1", DisplayName: displayName}, nil
+		},
+		updateFn: func(ctx context.Context, arg sqlcgen.UpdateDeviceParams) (sqlcgen.Device, error) {
+			updated++
+			if arg.ID != "00000000-0000-0000-0000-000000000030" {
+				t.Fatalf("unexpected device id: %s", arg.ID)
+			}
+			return sqlcgen.Device{ID: arg.ID, DisplayName: arg.DisplayName}, nil
+		},
+		upsertFn: func(ctx context.Context, arg sqlcgen.UpsertDeviceMetadataParams) (sqlcgen.DeviceMetadata, error) {
+			metadataCalls = append(metadataCalls, arg)
+			return sqlcgen.DeviceMetadata{
+				DeviceID: arg.DeviceID,
+				Owner:    arg.Owner,
+				Location: arg.Location,
+				Notes:    arg.Notes,
+			}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/import", strings.NewReader(`{
+	  "devices": [
+	    {"display_name": "imported device", "metadata": {"owner": " bob ", "notes": " info "}},
+	    {"id": "00000000-0000-0000-0000-000000000030", "display_name": "existing", "metadata": {"location": " rack "}}
+	  ]
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode import response: %v", err)
+	}
+
+	if body["created"] != float64(1) {
+		t.Fatalf("expected created=1, got %v", body["created"])
+	}
+	if body["updated"] != float64(1) {
+		t.Fatalf("expected updated=1, got %v", body["updated"])
+	}
+	if len(metadataCalls) != 2 {
+		t.Fatalf("expected 2 metadata upserts, got %d", len(metadataCalls))
+	}
+	if owner := metadataCalls[0].Owner; owner == nil || *owner != "bob" {
+		t.Fatalf("expected owner trimmed to bob, got %v", owner)
+	}
+	if location := metadataCalls[1].Location; location == nil || *location != "rack" {
+		t.Fatalf("expected location trimmed to rack, got %v", location)
 	}
 }
 

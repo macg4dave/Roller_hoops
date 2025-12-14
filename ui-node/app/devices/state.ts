@@ -26,3 +26,12 @@ export type DeviceMetadataState = {
 export function initialDeviceMetadataState(): DeviceMetadataState {
   return { status: 'idle' };
 }
+
+export type DeviceDisplayNameState = {
+  status: 'idle' | 'success' | 'error';
+  message?: string;
+};
+
+export function initialDeviceDisplayNameState(): DeviceDisplayNameState {
+  return { status: 'idle' };
+}

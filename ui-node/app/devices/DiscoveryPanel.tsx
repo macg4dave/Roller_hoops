@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { randomUUID } from 'crypto';
+import { useEffect, useState } from 'react';
 import { useFormState } from 'react-dom';
 import { useRouter } from 'next/navigation';
 
@@ -39,7 +40,8 @@ function statusBadgeColor(status: string) {
 export function DiscoveryPanel({ status }: Props) {
   const router = useRouter();
   const [state, formAction] = useFormState(triggerDiscovery, initialDiscoveryRunState());
-  const latest = status.latest_run ?? undefined;
+  const [liveStatus, setLiveStatus] = useState<DiscoveryStatus>(status);
+  const latest = liveStatus.latest_run ?? undefined;
 
   useEffect(() => {
     if (state.status === 'success') {
@@ -47,7 +49,48 @@ export function DiscoveryPanel({ status }: Props) {
     }
   }, [state.status, router]);
 
-  const colors = statusBadgeColor(status.status);
+  useEffect(() => {
+    setLiveStatus(status);
+  }, [status]);
+
+  useEffect(() => {
+    let alive = true;
+    const controller = new AbortController();
+
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/v1/discovery/status', {
+          cache: 'no-store',
+          signal: controller.signal,
+          headers: {
+            'X-Request-ID': randomUUID()
+          }
+        });
+        if (!res.ok) {
+          return;
+        }
+        const json = (await res.json()) as DiscoveryStatus;
+        if (alive) {
+          setLiveStatus(json);
+        }
+      } catch {
+        if (!alive) {
+          return;
+        }
+      }
+    };
+
+    poll();
+    const interval = window.setInterval(poll, 10000);
+
+    return () => {
+      alive = false;
+      controller.abort();
+      clearInterval(interval);
+    };
+  }, []);
+
+  const colors = statusBadgeColor(liveStatus.status);
 
   return (
     <section
@@ -76,7 +119,7 @@ export function DiscoveryPanel({ status }: Props) {
                 fontSize: 13
               }}
             >
-              {status.status}
+              {liveStatus.status}
             </span>
             {latest?.scope ? <span style={{ color: '#374151' }}>Scope: {latest.scope}</span> : null}
           </div>

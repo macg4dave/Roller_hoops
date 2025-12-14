@@ -70,8 +70,11 @@ Initial endpoints (from `docs/roadmap.md`):
 - Devices
   - `GET /api/v1/devices`
   - `GET /api/v1/devices/{id}`
+  - `GET /api/v1/devices/{id}/name-candidates`
   - `POST /api/v1/devices`
   - `PUT /api/v1/devices/{id}`
+  - `GET /api/v1/devices/export`
+  - `POST /api/v1/devices/import`
 
 - Discovery
   - `POST /api/v1/discovery/run`

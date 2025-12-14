@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -32,6 +33,7 @@ type deviceQueries interface {
 	CreateDevice(ctx context.Context, displayName *string) (sqlcgen.Device, error)
 	UpdateDevice(ctx context.Context, arg sqlcgen.UpdateDeviceParams) (sqlcgen.Device, error)
 	UpsertDeviceMetadata(ctx context.Context, arg sqlcgen.UpsertDeviceMetadataParams) (sqlcgen.DeviceMetadata, error)
+	ListDeviceNameCandidates(ctx context.Context, deviceID string) ([]sqlcgen.DeviceNameCandidate, error)
 }
 
 type discoveryQueries interface {
@@ -72,9 +74,12 @@ func (h *Handler) Router() http.Handler {
 		r.Route("/v1", func(r chi.Router) {
 			r.Route("/devices", func(r chi.Router) {
 				r.Get("/", h.handleListDevices)
+				r.Get("/export", h.handleExportDevices)
 				r.Post("/", h.handleCreateDevice)
+				r.Post("/import", h.handleImportDevices)
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", h.handleGetDevice)
+					r.Get("/name-candidates", h.handleListDeviceNameCandidates)
 					r.Put("/", h.handleUpdateDevice)
 				})
 			})
@@ -178,6 +183,13 @@ type device struct {
 	Metadata    *deviceMetadata `json:"metadata,omitempty"`
 }
 
+type deviceNameCandidate struct {
+	Name       string  `json:"name"`
+	Source     string  `json:"source"`
+	Address    *string `json:"address,omitempty"`
+	ObservedAt string  `json:"observed_at"`
+}
+
 type deviceMetadata struct {
 	Owner    *string `json:"owner,omitempty"`
 	Location *string `json:"location,omitempty"`
@@ -198,6 +210,21 @@ type deviceCreate struct {
 type deviceUpdate struct {
 	DisplayName *string             `json:"display_name,omitempty"`
 	Metadata    *deviceMetadataBody `json:"metadata,omitempty"`
+}
+
+type importDevice struct {
+	ID          *string             `json:"id,omitempty"`
+	DisplayName *string             `json:"display_name,omitempty"`
+	Metadata    *deviceMetadataBody `json:"metadata,omitempty"`
+}
+
+type importDevicesRequest struct {
+	Devices []importDevice `json:"devices"`
+}
+
+type importDevicesResult struct {
+	Created int `json:"created"`
+	Updated int `json:"updated"`
 }
 
 func (h *Handler) ensureDeviceQueries(w http.ResponseWriter) bool {
@@ -254,6 +281,45 @@ func normalizeMetadataBody(body *deviceMetadataBody) *deviceMetadataBody {
 	return normalized
 }
 
+func normalizeID(id *string) *string {
+	if id == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*id)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
+func (h *Handler) listDevicesPayload(ctx context.Context) ([]device, error) {
+	rows, err := h.devices.ListDevices(ctx)
+	if err != nil {
+		return nil, err
+	}
+	resp := make([]device, 0, len(rows))
+	for _, d := range rows {
+		resp = append(resp, toDevice(d))
+	}
+	return resp, nil
+}
+
+func (h *Handler) persistImportMetadata(ctx context.Context, deviceID string, meta *deviceMetadataBody) error {
+	if meta == nil {
+		return nil
+	}
+	_, err := h.devices.UpsertDeviceMetadata(ctx, sqlcgen.UpsertDeviceMetadataParams{
+		DeviceID: deviceID,
+		Owner:    meta.Owner,
+		Location: meta.Location,
+		Notes:    meta.Notes,
+	})
+	if err != nil {
+		h.log.Error().Err(err).Str("device_id", deviceID).Msg("failed to import metadata")
+	}
+	return err
+}
+
 type discoveryRun struct {
 	ID          string         `json:"id"`
 	Status      string         `json:"status"`
@@ -304,6 +370,28 @@ func normalizeScope(scope *string) *string {
 	return &s
 }
 
+func validateAndCanonicalizeScope(scope *string) (*string, error) {
+	if scope == nil {
+		return nil, nil
+	}
+
+	s := strings.TrimSpace(*scope)
+	if s == "" {
+		return nil, nil
+	}
+
+	if p, err := netip.ParsePrefix(s); err == nil {
+		c := p.String()
+		return &c, nil
+	}
+	if a, err := netip.ParseAddr(s); err == nil {
+		c := a.String()
+		return &c, nil
+	}
+
+	return nil, errors.New("scope must be a CIDR prefix (e.g. 10.0.0.0/24) or a single IP (e.g. 10.0.0.5)")
+}
+
 func isInvalidUUID(err error) bool {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
@@ -317,18 +405,29 @@ func (h *Handler) handleListDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := h.devices.ListDevices(r.Context())
+	resp, err := h.listDevicesPayload(r.Context())
 	if err != nil {
 		h.log.Error().Err(err).Msg("list devices failed")
 		h.writeError(w, http.StatusInternalServerError, "db_error", "failed to list devices", nil)
 		return
 	}
 
-	resp := make([]device, 0, len(rows))
-	for _, d := range rows {
-		resp = append(resp, toDevice(d))
+	h.writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handler) handleExportDevices(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureDeviceQueries(w) {
+		return
 	}
 
+	resp, err := h.listDevicesPayload(r.Context())
+	if err != nil {
+		h.log.Error().Err(err).Msg("export devices failed")
+		h.writeError(w, http.StatusInternalServerError, "db_error", "failed to export devices", nil)
+		return
+	}
+
+	w.Header().Set("Content-Disposition", "attachment; filename=\"roller_hoops_devices.json\"")
 	h.writeJSON(w, http.StatusOK, resp)
 }
 
@@ -374,6 +473,68 @@ func (h *Handler) handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusCreated, toDevice(row))
 }
 
+func (h *Handler) handleImportDevices(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureDeviceQueries(w) {
+		return
+	}
+
+	var req importDevicesRequest
+	if err := decodeJSONStrict(r, &req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "validation_failed", "invalid json body", map[string]any{"error": err.Error()})
+		return
+	}
+
+	if len(req.Devices) == 0 {
+		h.writeError(w, http.StatusBadRequest, "validation_failed", "no devices provided", nil)
+		return
+	}
+
+	ctx := r.Context()
+	result := importDevicesResult{}
+
+	for _, entry := range req.Devices {
+		meta := normalizeMetadataBody(entry.Metadata)
+		if id := normalizeID(entry.ID); id != nil {
+			row, err := h.devices.UpdateDevice(ctx, sqlcgen.UpdateDeviceParams{
+				ID:          *id,
+				DisplayName: entry.DisplayName,
+			})
+			if err != nil {
+				switch {
+				case errors.Is(err, pgx.ErrNoRows):
+					h.writeError(w, http.StatusNotFound, "not_found", "device not found", map[string]any{"id": *id})
+				case isInvalidUUID(err):
+					h.writeError(w, http.StatusBadRequest, "invalid_id", "device id is not a valid uuid", map[string]any{"id": *id})
+				default:
+					h.log.Error().Err(err).Str("id", *id).Msg("update device failed during import")
+					h.writeError(w, http.StatusInternalServerError, "db_error", "failed to update device", nil)
+				}
+				return
+			}
+			if err := h.persistImportMetadata(ctx, row.ID, meta); err != nil {
+				h.writeError(w, http.StatusInternalServerError, "db_error", "failed to import device metadata", nil)
+				return
+			}
+			result.Updated++
+			continue
+		}
+
+		row, err := h.devices.CreateDevice(ctx, entry.DisplayName)
+		if err != nil {
+			h.log.Error().Err(err).Msg("create device failed during import")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to create device", nil)
+			return
+		}
+		if err := h.persistImportMetadata(ctx, row.ID, meta); err != nil {
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to import device metadata", nil)
+			return
+		}
+		result.Created++
+	}
+
+	h.writeJSON(w, http.StatusOK, result)
+}
+
 func (h *Handler) handleGetDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if !h.ensureDeviceQueries(w) {
@@ -395,6 +556,36 @@ func (h *Handler) handleGetDevice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.writeJSON(w, http.StatusOK, toDevice(row))
+}
+
+func (h *Handler) handleListDeviceNameCandidates(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if !h.ensureDeviceQueries(w) {
+		return
+	}
+
+	rows, err := h.devices.ListDeviceNameCandidates(r.Context(), id)
+	if err != nil {
+		switch {
+		case isInvalidUUID(err):
+			h.writeError(w, http.StatusBadRequest, "invalid_id", "device id is not a valid uuid", map[string]any{"id": id})
+		default:
+			h.log.Error().Err(err).Str("id", id).Msg("list device name candidates failed")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to list device name candidates", nil)
+		}
+		return
+	}
+
+	out := make([]deviceNameCandidate, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, deviceNameCandidate{
+			Name:       row.Name,
+			Source:     row.Source,
+			Address:    row.Address,
+			ObservedAt: row.ObservedAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	h.writeJSON(w, http.StatusOK, out)
 }
 
 func (h *Handler) handleUpdateDevice(w http.ResponseWriter, r *http.Request) {
@@ -463,6 +654,12 @@ func (h *Handler) handleDiscoveryRun(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	req.Scope = normalizeScope(req.Scope)
+	var err error
+	req.Scope, err = validateAndCanonicalizeScope(req.Scope)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "validation_failed", "invalid discovery scope", map[string]any{"error": err.Error()})
+		return
+	}
 
 	run, err := h.discovery.InsertDiscoveryRun(r.Context(), sqlcgen.InsertDiscoveryRunParams{
 		Status: "queued",

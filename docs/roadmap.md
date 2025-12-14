@@ -56,7 +56,7 @@ docker-compose.yml
 ## Current progress snapshot
 
 * Device CRUD live end-to-end via Go API and UI; metadata fields (`owner`, `location`, `notes`) persist in `device_metadata`.
-* Discovery endpoints now persist runs/logs (`discovery_runs`, `discovery_run_logs`) and return real run ids; UI can trigger a run and see the latest status (stubbed worker for now).
+* Discovery endpoints persist runs/logs (`discovery_runs`, `discovery_run_logs`) and return real run ids; the Go worker claims queued runs and performs an ARP scrape + best-effort ICMP sweep (where available) to populate current IP/MAC facts and per-run observations, with optional enrichment (reverse DNS + SNMP) writing `device_name_candidates`, `device_snmp`, interface details, and VLAN PVIDs (`interface_vlans`) when enabled.
 * Traefik + docker-compose bring up UI and PostgreSQL with health checks enabled; **core-go stays private on the Docker network**.
 * OpenAPI spec exists at `api/openapi.yaml`, and a **Go contract test prevents drift** between the spec and the chi router.
 * Dev DB auth uses a password via env vars (no more `trust` by default); secrets are injected via `.env` (gitignored) or a secret manager.
@@ -259,31 +259,32 @@ Deliverable:
 
 ## Phase 6 — Live updates (optional)
 
-Two clean options:
+**Status:** Closed
 
-
-* UI polls `/api/devices`
-* Simple
-* Good enough for most networks
-
-Still no tight coupling.
+The UI now polls the Go API (`/api/v1/devices` and `/api/v1/discovery/status`) whenever the devices dashboard or discovery panel is visible. This keeps the operator experience live without coupling the services more tightly, so the last-known state, discovery progress, and device metadata stay up to date with a lightweight polling loop.
 
 ---
 
-## Phase 7 — Nice-to-have integrations (later)
+## Phase 7 — Nice-to-have integrations
 
-Only after core is stable.
+**Status:** In-progress
+
+Only after core is stable. Current work includes scoping the SNMP enrichment pipeline, VLAN/switch-port linkage, and service discovery via mDNS/NetBIOS so the discovery engine can publish richer metadata. Import/export tooling is being drafted so operators can snapshot or restore device state.
 
 * SNMP enrichment
 * VLAN / switch port mapping
 * mDNS / NetBIOS name resolution
-* import/Export JSON
+* Import/export JSON (Go endpoints + UI snapshot workflow live)
+
+> Snapshot tooling is available via `/api/v1/devices/export` and `/api/v1/devices/import`, and the devices UI now offers download/upload controls.
 
 
 
 ---
 
 ## Phase 8 — Discovery engine v1 (network scanning)
+
+**Status:** Complete
 
 Goals:
 
@@ -392,7 +393,7 @@ Use this as the “what’s next” checklist; the detailed feature inventory st
 * [x] **Protect `/api` before shipping auth**: implemented UI-as-BFF; `core-go` is private and Traefik only routes to the UI.
 * [x] **Add an OpenAPI drift gate**: added a Go contract test that compares `api/openapi.yaml` to registered chi routes.
 * [x] **Discovery deployment plan**: documented Docker networking/capabilities + safe scope targeting (`docs/discovery-deployment.md`).
-* [ ] **Discovery worker v1**: implement a real queued→running→(succeeded|failed) state machine and a minimal ICMP sweep that writes observations/current state.
+* [x] **Discovery worker v1**: implements queued→running→(succeeded|failed) with a bounded ICMP sweep (best-effort) + ARP scrape that writes observations/current state.
 * [x] **Production DB posture**: removed dev `trust` auth; Postgres password is provided via env/secret injection.
 
 ## Definition of done for discovery (Phases 8-10)

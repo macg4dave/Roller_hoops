@@ -10,6 +10,13 @@ export type Device = {
   metadata?: DeviceMetadata | null;
 };
 
+export type DeviceNameCandidate = {
+  name: string;
+  source: string;
+  address?: string | null;
+  observed_at: string;
+};
+
 export type DiscoveryRun = {
   id: string;
   status: string;

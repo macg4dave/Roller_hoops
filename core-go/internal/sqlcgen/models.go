@@ -10,6 +10,14 @@ type Device struct {
 	Notes       *string
 }
 
+type DeviceNameCandidate struct {
+	DeviceID   string
+	Name       string
+	Source     string
+	Address    *string
+	ObservedAt time.Time
+}
+
 type DeviceMetadata struct {
 	DeviceID string
 	Owner    *string
