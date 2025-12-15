@@ -815,12 +815,12 @@ Tasks:
 * [x] Polish polling UX for live updates during discovery.
 * [x] Ensure read-only role cannot trigger discovery.
 * [x] Add “discovery in progress” indicators across the UI (e.g., banner on devices list).
-* [ ] Add confirmation modals for destructive actions (if any).
-* [ ] Add rate-limiting feedback if discovery is triggered too often.
+* [x] Add confirmation modals for destructive actions (if any).
+* [x] Add rate-limiting feedback if discovery is triggered too often.
 * [x] Ensure discovery scope is clear (e.g., subnet being scanned).
-* [ ] Add time estimates or progress bars if possible.
-* [ ] Handle cancellation gracefully (if supported by API).
-* [ ] Ensure accessibility basics (keyboard nav, focus states).
+* [x] Add time estimates or progress bars if possible.
+* [x] Handle cancellation gracefully (if supported by API).
+* [x] Ensure accessibility basics (keyboard nav, focus states).
 * [x] Add tooltips or help text for complex concepts (e.g., what “discovery” entails).
 * [x] Optimize for performance (avoid jank during polling updates).
 * [x] Ensure responsiveness (works well on various screen sizes).
@@ -835,9 +835,9 @@ Acceptance criteria:
 
 Tasks:
 
-* [ ] Accessibility pass: keyboard nav, focus ring, contrast, reduced motion.
-* [ ] Error resilience: retries, “last updated” stamps for live panels, and stable polling.
-* [ ] Performance guardrails: avoid unnecessary client JS; keep interactions snappy.
+* [x] Accessibility pass: keyboard nav, focus ring, contrast, reduced motion.
+* [x] Error resilience: retries, “last updated” stamps for live panels, and stable polling.
+* [x] Performance guardrails: avoid unnecessary client JS; keep interactions snappy.
 
 Acceptance criteria:
 

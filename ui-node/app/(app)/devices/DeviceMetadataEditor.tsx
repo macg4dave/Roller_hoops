@@ -2,9 +2,9 @@
 
 import { useFormState } from 'react-dom';
 
-import { updateDeviceMetadata } from './actions';
-import type { Device } from './types';
-import { initialDeviceMetadataState } from './state';
+import { updateDeviceMetadata } from '@/app/(app)/devices/actions';
+import type { Device } from '@/app/(app)/devices/types';
+import { initialDeviceMetadataState } from '@/app/(app)/devices/state';
 import { Card, CardBody } from '../../_components/ui/Card';
 import { Field, Label } from '../../_components/ui/Field';
 import { Input, Textarea } from '../../_components/ui/Inputs';

@@ -233,46 +233,46 @@ FROM (
 	FROM computed c
 	WHERE
 		(
-			$1 IS NULL
+			$1::text IS NULL
 			OR (
-				c.id::text ILIKE $1
-				OR COALESCE(c.display_name, '') ILIKE $1
-				OR COALESCE(c.owner, '') ILIKE $1
-				OR COALESCE(c.location, '') ILIKE $1
-				OR COALESCE(c.notes, '') ILIKE $1
-				OR COALESCE(c.primary_ip, '') ILIKE $1
+				c.id::text ILIKE $1::text
+				OR COALESCE(c.display_name, '') ILIKE $1::text
+				OR COALESCE(c.owner, '') ILIKE $1::text
+				OR COALESCE(c.location, '') ILIKE $1::text
+				OR COALESCE(c.notes, '') ILIKE $1::text
+				OR COALESCE(c.primary_ip, '') ILIKE $1::text
 				OR EXISTS (
 					SELECT 1
 					FROM ip_addresses ia
 					LEFT JOIN interfaces i ON i.id = ia.interface_id
 					WHERE (ia.device_id = c.id OR i.device_id = c.id)
-					  AND ia.ip::text ILIKE $1
+					  AND ia.ip::text ILIKE $1::text
 				)
 				OR EXISTS (
 					SELECT 1
 					FROM mac_addresses ma
 					LEFT JOIN interfaces i ON i.id = ma.interface_id
 					WHERE (ma.device_id = c.id OR i.device_id = c.id)
-					  AND ma.mac::text ILIKE $1
+					  AND ma.mac::text ILIKE $1::text
 				)
 				OR EXISTS (
 					SELECT 1
 					FROM device_snmp ds
 					WHERE ds.device_id = c.id AND (
-						COALESCE(ds.sys_name, '') ILIKE $1
-						OR COALESCE(ds.sys_descr, '') ILIKE $1
-						OR COALESCE(ds.sys_location, '') ILIKE $1
-						OR COALESCE(ds.sys_contact, '') ILIKE $1
+						COALESCE(ds.sys_name, '') ILIKE $1::text
+						OR COALESCE(ds.sys_descr, '') ILIKE $1::text
+						OR COALESCE(ds.sys_location, '') ILIKE $1::text
+						OR COALESCE(ds.sys_contact, '') ILIKE $1::text
 					)
 				)
 			)
 		)
 		AND (
-			$2 IS NULL
-			OR $2 = ''
-			OR ($2 = 'online' AND c.last_seen_at IS NOT NULL AND c.last_seen_at >= $4)
-			OR ($2 = 'offline' AND (c.last_seen_at IS NULL OR c.last_seen_at < $4))
-			OR ($2 = 'changed' AND c.last_change_at >= $5)
+			$2::text IS NULL
+			OR $2::text = ''
+			OR ($2::text = 'online' AND c.last_seen_at IS NOT NULL AND c.last_seen_at >= $4)
+			OR ($2::text = 'offline' AND (c.last_seen_at IS NULL OR c.last_seen_at < $4))
+			OR ($2::text = 'changed' AND c.last_change_at >= $5)
 		)
 ) q
 WHERE
@@ -1378,8 +1378,8 @@ SELECT
 	details
 FROM events
 WHERE
-	($1 IS NULL OR (event_at < $1 OR (event_at = $1 AND event_id < $2)))
-	AND ($3 IS NULL OR event_at >= $3)
+	($1::timestamptz IS NULL OR (event_at < $1::timestamptz OR (event_at = $1::timestamptz AND event_id < $2::text)))
+	AND ($3::timestamptz IS NULL OR event_at >= $3::timestamptz)
 ORDER BY event_at DESC, event_id DESC
 LIMIT $4
 `
@@ -1532,7 +1532,7 @@ SELECT
 FROM events
 WHERE
 	device_id = $1
-	AND ($2 IS NULL OR (event_at < $2 OR (event_at = $2 AND event_id < $3)))
+	AND ($2::timestamptz IS NULL OR (event_at < $2::timestamptz OR (event_at = $2::timestamptz AND event_id < $3::text)))
 ORDER BY event_at DESC, event_id DESC
 LIMIT $4
 `
@@ -1561,7 +1561,7 @@ const listDiscoveryRuns = `-- name: ListDiscoveryRuns :many
 SELECT id, status, scope, stats, started_at, completed_at, last_error
 FROM discovery_runs
 WHERE
-	($1 IS NULL OR (started_at < $1 OR (started_at = $1 AND id < $2)))
+	($1::timestamptz IS NULL OR (started_at < $1::timestamptz OR (started_at = $1::timestamptz AND id < $2::uuid)))
 ORDER BY started_at DESC, id DESC
 LIMIT $3
 `
@@ -1597,7 +1597,7 @@ SELECT id, run_id, level, message, created_at
 FROM discovery_run_logs
 WHERE
 	run_id = $1
-	AND ($2 IS NULL OR (created_at < $2 OR (created_at = $2 AND id < $3)))
+	AND ($2::timestamptz IS NULL OR (created_at < $2::timestamptz OR (created_at = $2::timestamptz AND id < $3::bigint)))
 ORDER BY created_at DESC, id DESC
 LIMIT $4
 `

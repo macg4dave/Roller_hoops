@@ -49,7 +49,7 @@ VALUES ($1, $2, $3);
 SELECT id, status, scope, stats, started_at, completed_at, last_error
 FROM discovery_runs
 WHERE
-    ($1 IS NULL OR (started_at < $1 OR (started_at = $1 AND id < $2)))
+    ($1::timestamptz IS NULL OR (started_at < $1::timestamptz OR (started_at = $1::timestamptz AND id < $2::uuid)))
 ORDER BY started_at DESC, id DESC
 LIMIT $3;
 
@@ -58,6 +58,6 @@ SELECT id, run_id, level, message, created_at
 FROM discovery_run_logs
 WHERE
     run_id = $1
-    AND ($2 IS NULL OR (created_at < $2 OR (created_at = $2 AND id < $3)))
+    AND ($2::timestamptz IS NULL OR (created_at < $2::timestamptz OR (created_at = $2::timestamptz AND id < $3::bigint)))
 ORDER BY created_at DESC, id DESC
 LIMIT $4;

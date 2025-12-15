@@ -2,8 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 
 import { LogoutButton } from './LogoutButton';
+import { api } from '@/lib/api-client';
+import { Badge } from './ui/Badge';
+import { getDiscoveryStatusBadgeTone } from '../(app)/discovery/status';
+
+import type { DiscoveryStatus } from '../(app)/devices/types';
 
 type SessionUser = {
   username: string;
@@ -25,6 +31,49 @@ const NAV_ITEMS: NavItem[] = [
 function isActivePath(pathname: string, href: string) {
   if (href === '/') return pathname === '/';
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function DiscoveryHeaderIndicator() {
+  const statusQuery = useQuery({
+    queryKey: ['discovery-status'],
+    queryFn: async ({ signal }) => {
+      const res = await api.GET('/v1/discovery/status', {
+        signal,
+        headers: {
+          'X-Request-ID': globalThis.crypto?.randomUUID?.()
+        }
+      });
+
+      if (res.error) {
+        throw new Error('Failed to fetch discovery status.');
+      }
+      return (res.data ?? { status: 'unknown', latest_run: null }) as DiscoveryStatus;
+    },
+    refetchInterval: () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return false;
+      }
+      return 10_000;
+    },
+    refetchIntervalInBackground: false
+  });
+
+  const status = statusQuery.data?.status;
+  const inProgress = status === 'queued' || status === 'running';
+
+  if (!inProgress) return null;
+
+  return (
+    <Link
+      href="/discovery"
+      className="headerIndicator"
+      aria-label={`Discovery ${status} — view details`}
+      title={`Discovery ${status}`}
+    >
+      <span className="headerIndicatorLabel">Discovery</span>
+      <Badge tone={getDiscoveryStatusBadgeTone(status)}>{status}</Badge>
+    </Link>
+  );
 }
 
 export function AppHeader({ user }: { user: SessionUser }) {
@@ -60,6 +109,7 @@ export function AppHeader({ user }: { user: SessionUser }) {
         </div>
 
         <div className="headerRight">
+          <DiscoveryHeaderIndicator />
           <div className="userMeta">
             <div className="userName">{user.username}</div>
             <div className="userRole">{user.role}</div>

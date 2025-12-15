@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { api } from '@/lib/api-client';
 import { Alert } from '@/app/_components/ui/Alert';
@@ -16,6 +16,23 @@ import type { DiscoveryRun, DiscoveryRunPage } from '@/app/(app)/devices/types';
 
 const PAGE_LIMIT = 8;
 
+function getApiErrorMessage(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object') {
+    return undefined;
+  }
+
+  const record = error as Record<string, unknown>;
+  if (typeof record.message === 'string') {
+    return record.message;
+  }
+  const nested = record.error;
+  if (nested && typeof nested === 'object' && typeof (nested as Record<string, unknown>).message === 'string') {
+    return (nested as Record<string, unknown>).message as string;
+  }
+
+  return undefined;
+}
+
 async function loadDiscoveryRuns(cursor?: string | null, limit = PAGE_LIMIT) {
   const response = await api.GET('/v1/discovery/runs', {
     query: {
@@ -24,7 +41,7 @@ async function loadDiscoveryRuns(cursor?: string | null, limit = PAGE_LIMIT) {
     }
   });
   if (response.error) {
-    throw new Error(response.error.message ?? 'Failed to load discovery runs.');
+    throw new Error(getApiErrorMessage(response.error) ?? 'Failed to load discovery runs.');
   }
   return response.data ?? { runs: [], cursor: null };
 }
@@ -43,6 +60,15 @@ function formatTimestamp(value?: string | null) {
   }).format(parsed);
 }
 
+function formatLastUpdated(updatedAtMs: number) {
+  if (!Number.isFinite(updatedAtMs) || updatedAtMs <= 0) return '—';
+  const deltaMs = Date.now() - updatedAtMs;
+  if (deltaMs < 2000) return 'just now';
+  if (deltaMs < 60_000) return `${Math.round(deltaMs / 1000)}s ago`;
+  if (deltaMs < 60 * 60_000) return `${Math.round(deltaMs / 60_000)}m ago`;
+  return new Date(updatedAtMs).toLocaleString();
+}
+
 type Props = {
   initialPage?: DiscoveryRunPage | null;
   limit?: number;
@@ -51,12 +77,18 @@ type Props = {
 
 export function DiscoveryRunList({ initialPage, limit = PAGE_LIMIT, errorMessage }: Props) {
   const router = useRouter();
-  const { data, isError, error, isFetching } = useQuery({
+  const { data, isError, error, isFetching, dataUpdatedAt } = useQuery<DiscoveryRunPage, Error>({
     queryKey: ['discovery-runs-page', limit],
     queryFn: () => loadDiscoveryRuns(null, limit),
-    initialData: initialPage ?? undefined,
-    refetchInterval: 10000,
-    keepPreviousData: true
+    ...(initialPage ? { initialData: initialPage } : {}),
+    refetchInterval: (query) => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return false;
+      }
+      return query.state.status === 'error' ? 30_000 : 10_000;
+    },
+    refetchIntervalInBackground: false,
+    placeholderData: keepPreviousData
   });
   const [pages, setPages] = useState<DiscoveryRunPage[]>(() => (initialPage ? [initialPage] : []));
   const [loadingMore, setLoadingMore] = useState(false);
@@ -123,7 +155,11 @@ export function DiscoveryRunList({ initialPage, limit = PAGE_LIMIT, errorMessage
             <p className="kicker">Discovery runs</p>
             <h2 style={{ margin: '6px 0' }}>Run history</h2>
           </div>
-          <Hint>Latest runs stay up to date automatically while you keep the page open.</Hint>
+          <Hint aria-live="polite">
+            Last updated {formatLastUpdated(dataUpdatedAt)}
+            {isFetching ? ' (refreshing…)'
+            : ''}
+          </Hint>
         </div>
         {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
         {isError ? <Alert tone="danger">{statusErrorMessage ?? 'Unable to refresh run list.'}</Alert> : null}

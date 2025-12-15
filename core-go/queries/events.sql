@@ -125,8 +125,8 @@ SELECT
   details
 FROM events
 WHERE
-  ($1 IS NULL OR (event_at < $1 OR (event_at = $1 AND event_id < $2)))
-  AND ($3 IS NULL OR event_at >= $3)
+  ($1::timestamptz IS NULL OR (event_at < $1::timestamptz OR (event_at = $1::timestamptz AND event_id < $2::text)))
+  AND ($3::timestamptz IS NULL OR event_at >= $3::timestamptz)
 ORDER BY event_at DESC, event_id DESC
 LIMIT $4;
 
@@ -258,6 +258,6 @@ SELECT
 FROM events
 WHERE
   device_id = $1
-  AND ($2 IS NULL OR (event_at < $2 OR (event_at = $2 AND event_id < $3)))
+  AND ($2::timestamptz IS NULL OR (event_at < $2::timestamptz OR (event_at = $2::timestamptz AND event_id < $3::text)))
 ORDER BY event_at DESC, event_id DESC
 LIMIT $4;

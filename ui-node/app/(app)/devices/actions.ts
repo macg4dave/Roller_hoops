@@ -23,6 +23,29 @@ async function extractErrorMessage(res: Response) {
   }
 }
 
+function formatRetryAfter(retryAfter: string | null) {
+  if (!retryAfter) return undefined;
+  const seconds = Number.parseInt(retryAfter, 10);
+  if (Number.isFinite(seconds)) {
+    if (seconds <= 1) return 'in a moment';
+    if (seconds < 60) return `in ${seconds}s`;
+    const minutes = Math.ceil(seconds / 60);
+    return `in ~${minutes}m`;
+  }
+
+  const parsed = Date.parse(retryAfter);
+  if (Number.isFinite(parsed)) {
+    const deltaMs = parsed - Date.now();
+    if (deltaMs <= 0) return 'soon';
+    const deltaSeconds = Math.ceil(deltaMs / 1000);
+    if (deltaSeconds < 60) return `in ${deltaSeconds}s`;
+    const minutes = Math.ceil(deltaSeconds / 60);
+    return `in ~${minutes}m`;
+  }
+
+  return undefined;
+}
+
 export async function createDevice(
   _prevState: CreateDeviceState,
   formData: FormData
@@ -127,7 +150,17 @@ export async function triggerDiscovery(
   });
 
   if (!res.ok) {
-    const message = (await extractErrorMessage(res)) ?? `Request failed (${res.status})`;
+    const apiMessage = await extractErrorMessage(res);
+    if (res.status === 429) {
+      const retryAfterHint = formatRetryAfter(res.headers.get('retry-after'));
+      const suffix = retryAfterHint ? ` Please try again ${retryAfterHint}.` : ' Please wait a bit and try again.';
+      return {
+        status: 'error',
+        message: (apiMessage ? `${apiMessage}.` : 'Discovery triggered too often.') + suffix
+      };
+    }
+
+    const message = apiMessage ?? `Request failed (${res.status})`;
     return { status: 'error', message };
   }
 

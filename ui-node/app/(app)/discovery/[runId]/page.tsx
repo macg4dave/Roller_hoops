@@ -10,9 +10,9 @@ import { fetchDiscoveryRun, fetchDiscoveryRunLogs } from '../api';
 import type { DiscoveryRunLogPage } from '@/app/(app)/devices/types';
 
 type Props = {
-  params: {
+  params: Promise<{
     runId: string;
-  };
+  }>;
 };
 
 function formatTimestamp(value?: string | null) {
@@ -25,6 +25,25 @@ function formatTimestamp(value?: string | null) {
     dateStyle: 'medium',
     timeStyle: 'short'
   }).format(parsed);
+}
+
+function formatDurationMs(ms: number) {
+  if (!Number.isFinite(ms) || ms < 0) return '—';
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes <= 0) return `${seconds}s`;
+  return `${minutes}m ${seconds}s`;
+}
+
+function computeDurationLabel(run: { started_at: string; completed_at?: string | null }) {
+  const started = Date.parse(run.started_at);
+  if (!Number.isFinite(started)) return null;
+  const end = run.completed_at ? Date.parse(run.completed_at) : Date.now();
+  if (!Number.isFinite(end)) return null;
+  const ms = end - started;
+  const prefix = run.completed_at ? 'Duration' : 'Elapsed';
+  return `${prefix}: ${formatDurationMs(ms)}`;
 }
 
 function renderStats(run: { stats?: Record<string, unknown> | null }) {
@@ -45,7 +64,9 @@ function renderStats(run: { stats?: Record<string, unknown> | null }) {
 }
 
 export default async function DiscoveryRunPage({ params }: Props) {
-  const run = await fetchDiscoveryRun(params.runId);
+  const { runId } = await params;
+  const run = await fetchDiscoveryRun(runId);
+  const durationLabel = computeDurationLabel(run);
   let initialLogs: DiscoveryRunLogPage = { logs: [], cursor: null };
   let logError: string | null = null;
   try {
@@ -74,6 +95,8 @@ export default async function DiscoveryRunPage({ params }: Props) {
               </div>
               <div className="hint">Started {formatTimestamp(run.started_at)}</div>
               <div className="hint">Completed {formatTimestamp(run.completed_at ?? null)}</div>
+              {durationLabel ? <div className="hint">{durationLabel}</div> : null}
+              <div className="hint">Cancellation: not supported (yet).</div>
             </div>
             <div className="hint" style={{ textAlign: 'right' }}>
               {run.last_error ? 'Failure detected' : 'Last run completed without error'}

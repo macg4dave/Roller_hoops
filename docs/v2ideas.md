@@ -5,21 +5,25 @@ This file is a working checklist for implementing the Phase 7 (“nice-to-have i
 ## Phase 8 — Discovery engine v1 (network scanning)
 
 ### Step 1 — Observations (IP/MAC) + fold into current state
+
 - [x] Add `ip_observations` + `mac_observations` tables (append-only per run).
 - [x] Worker writes observations for every discovered IP/MAC.
 - [x] Worker upserts “current state” into `ip_addresses` / `mac_addresses` (already exists).
 
 ### Step 2 — Scope limits + runtime budget
+
 - [x] Refuse huge scopes by default (e.g. >1024 targets) unless explicitly overridden.
 - [x] Record scope + limits in `discovery_runs.stats`.
 - [x] Make the worker runtime/ping budgets configurable via `DISCOVERY_*` env vars and apply backoff when claim/run fails.
 
 ### Step 3 — ICMP sweep (best-effort in Docker)
+
 - [x] For an explicit scope, run a bounded ICMP “ping sweep” to stimulate ARP population.
 - [x] Degrade gracefully if ICMP is unavailable (no `ping`, missing caps).
 - [x] Ship `ping` in the `core-go` image (still best-effort depending on container caps/policy).
 
 ### Step 4 — SNMP read-only enrichment (optional, Phase 7/8 overlap)
+
 - [x] Decide approach: Go SNMP library (`gosnmp`) + stub client under `core-go/internal/enrichment/snmp` to capture config, target discovery, and future data mapping.
 - [x] Store enrichments in normalized columns (sysName/sysDescr etc.) + link to interfaces (schema/migration work pending).
 
