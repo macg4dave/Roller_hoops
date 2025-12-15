@@ -15,6 +15,7 @@ import { Input } from '../../_components/ui/Inputs';
 import { Button } from '../../_components/ui/Button';
 import { Badge } from '../../_components/ui/Badge';
 import { Alert } from '../../_components/ui/Alert';
+import { getDiscoveryStatusBadgeTone } from '../discovery/status';
 
 type Props = {
   status: DiscoveryStatus;
@@ -28,21 +29,6 @@ function formatTimestamp(ts?: string | null) {
     return ts;
   }
   return d.toLocaleString();
-}
-
-function statusBadgeColor(status: string) {
-  switch (status) {
-    case 'running':
-      return 'warning' as const;
-    case 'succeeded':
-      return 'success' as const;
-    case 'failed':
-      return 'danger' as const;
-    case 'queued':
-      return 'info' as const;
-    default:
-      return 'neutral' as const;
-  }
 }
 
 export function DiscoveryPanel({ status, readOnly = false }: Props) {
@@ -81,7 +67,7 @@ export function DiscoveryPanel({ status, readOnly = false }: Props) {
     setLiveStatus(statusQuery.data);
   }, [statusQuery.data]);
 
-  const badgeTone = statusBadgeColor(liveStatus.status);
+  const badgeTone = getDiscoveryStatusBadgeTone(liveStatus.status);
 
   return (
     <Card>

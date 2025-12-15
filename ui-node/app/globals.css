@@ -518,6 +518,78 @@ pre {
   }
 }
 
+.discoveryRunSection {
+  margin-top: 16px;
+}
+
+.discoveryRunGrid {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.discoveryRunCard {
+  border-radius: var(--radius);
+}
+
+.discoveryRunStats {
+  margin-top: 10px;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.discoveryRunFooter {
+  margin-top: 12px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.discoveryRunDetail {
+  margin-top: 16px;
+}
+
+.discoveryLogSection {
+  margin-top: 16px;
+}
+
+.discoveryLogList {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.runLogEntry {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  background: var(--panel);
+}
+
+.runLogEntry p {
+  margin: 6px 0 0;
+  font-size: 14px;
+}
+
+.discoveryLogFooter {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.discoveryBanner {
+  margin: 10px 0;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--warning-bg);
+  border: 1px solid #fde68a;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .skeleton {
     animation: none;

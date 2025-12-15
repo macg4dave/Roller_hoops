@@ -304,6 +304,14 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
   const nextCursor = devicePage.cursor;
   const hasCursorParam = Boolean(searchParams?.get('cursor'));
 
+  const discoveryInProgress = discoveryStatus.status === 'running' || discoveryStatus.status === 'queued';
+  const latestDiscoveryRun = discoveryStatus.latest_run;
+  const discoveryBannerHint = latestDiscoveryRun
+    ? `Scope: ${latestDiscoveryRun.scope ?? 'default'} · Started ${formatDateTime(latestDiscoveryRun.started_at)}${
+        latestDiscoveryRun.completed_at ? ` · Completed ${formatDateTime(latestDiscoveryRun.completed_at)}` : ''
+      }`
+    : 'Waiting for the first run...';
+
   const copyText = async (text: string) => {
     const value = text.trim();
     if (!value) return;
@@ -350,6 +358,14 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
         <DiscoveryPanel status={discoveryStatus} readOnly={isReadOnly} />
         <ImportExportPanel readOnly={isReadOnly} />
       </div>
+
+      {discoveryInProgress ? (
+        <div className="discoveryBanner">
+          <strong>Discovery in progress</strong>
+          <span>{discoveryBannerHint}</span>
+          <span className="hint">Updates roll in every 10 seconds.</span>
+        </div>
+      ) : null}
 
       <div className="devicesDashboardControls">
         <form onSubmit={handleSearchSubmit} className="devicesDashboardSearch">

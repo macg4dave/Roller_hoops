@@ -131,3 +131,20 @@ export type DiscoveryStatus = {
   status: string;
   latest_run?: DiscoveryRun | null;
 };
+
+export type DiscoveryRunPage = {
+  runs?: DiscoveryRun[];
+  cursor?: string | null;
+};
+
+export type DiscoveryRunLogEntry = {
+  id: number;
+  level: string;
+  message: string;
+  created_at: string;
+};
+
+export type DiscoveryRunLogPage = {
+  logs?: DiscoveryRunLogEntry[];
+  cursor?: string | null;
+};
