@@ -36,7 +36,32 @@ type DiscoveryRun struct {
 }
 
 type DiscoveryRunLog struct {
-	RunID   string
-	Level   string
-	Message string
+	ID        int64
+	RunID     string
+	Level     string
+	Message   string
+	CreatedAt time.Time
+}
+
+type DeviceChangeEvent struct {
+	EventID  string
+	DeviceID string
+	EventAt  time.Time
+	Kind     string
+	Summary  string
+	Details  map[string]any
+}
+
+type ListDeviceChangeEventsParams struct {
+	BeforeEventAt *time.Time
+	BeforeEventID *string
+	SinceEventAt  *time.Time
+	Limit         int32
+}
+
+type ListDeviceChangeEventsForDeviceParams struct {
+	DeviceID      string
+	BeforeEventAt *time.Time
+	BeforeEventID *string
+	Limit         int32
 }

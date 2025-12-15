@@ -58,6 +58,7 @@ secrets*.yaml
 # Go caches
 .gocache/
 .golangci-lint/
+.gomodcache/
 
 *.test
 *.out

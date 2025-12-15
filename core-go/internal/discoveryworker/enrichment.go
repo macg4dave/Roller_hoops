@@ -3,6 +3,7 @@ package discoveryworker
 import (
 	"context"
 	"net/netip"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,6 +32,7 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 			"snmp_ok":       0,
 			"names_written": 0,
 			"vlans_written": 0,
+			"links_written": 0,
 		}
 	}
 
@@ -56,6 +58,7 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 	var snmpOK int32
 	var namesWritten int32
 	var vlansWritten int32
+	var linksWritten int32
 
 	snmpAttempted := sync.Map{}
 
@@ -76,7 +79,10 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 				nameCtx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
 				cands, err := resolver.LookupAddr(nameCtx, t.DeviceID, ipStr)
 				cancel()
-				if err == nil {
+				if err != nil && len(cands) == 0 {
+					w.log.Debug().Err(err).Str("ip", ipStr).Msg("name resolution failed")
+				}
+				if len(cands) > 0 {
 					for _, c := range cands {
 						if c.Name == "" {
 							continue
@@ -90,12 +96,10 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 							atomic.AddInt32(&namesWritten, 1)
 						}
 					}
-					if len(cands) > 0 {
-						_, _ = w.q.SetDeviceDisplayNameIfUnset(ctx, sqlcgen.SetDeviceDisplayNameIfUnsetParams{
-							ID:          t.DeviceID,
-							DisplayName: cands[0].Name,
-						})
-					}
+					_, _ = w.q.SetDeviceDisplayNameIfUnset(ctx, sqlcgen.SetDeviceDisplayNameIfUnsetParams{
+						ID:          t.DeviceID,
+						DisplayName: cands[0].Name,
+					})
 				}
 			}
 
@@ -206,6 +210,109 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 						}
 					}
 				}
+
+				if (w.topologyLLDPEnabled || w.topologyCDPEnabled) && allowedByAllowlist(t.IP, w.topologyAllowlist) {
+					var neighbors []snmp.Neighbor
+					if w.topologyLLDPEnabled {
+						if ns, err := snmpClient.WalkLLDPNeighbors(ctx, target); err == nil {
+							neighbors = append(neighbors, ns...)
+						}
+					}
+					if w.topologyCDPEnabled {
+						if ns, err := snmpClient.WalkCDPNeighbors(ctx, target); err == nil {
+							neighbors = append(neighbors, ns...)
+						}
+					}
+
+					now := time.Now()
+					linkType := "ethernet"
+					observedAt := &now
+
+					for _, n := range neighbors {
+						if ctx.Err() != nil {
+							return
+						}
+
+						remoteDeviceID := ""
+						if n.RemoteChassisMAC != nil && *n.RemoteChassisMAC != "" {
+							id, err := w.q.FindDeviceIDByMAC(ctx, *n.RemoteChassisMAC)
+							if err == nil {
+								remoteDeviceID = id
+							}
+						}
+						if remoteDeviceID == "" && n.RemoteMgmtIP != nil && *n.RemoteMgmtIP != "" {
+							id, err := w.q.FindDeviceIDByIP(ctx, *n.RemoteMgmtIP)
+							if err == nil {
+								remoteDeviceID = id
+							}
+						}
+
+						if remoteDeviceID == "" {
+							display := n.RemoteDeviceName
+							created, err := w.q.CreateDevice(ctx, display)
+							if err != nil {
+								continue
+							}
+							remoteDeviceID = created.ID
+						}
+						if remoteDeviceID == "" || remoteDeviceID == t.DeviceID {
+							continue
+						}
+
+						if n.RemoteChassisMAC != nil && *n.RemoteChassisMAC != "" {
+							_ = w.q.UpsertDeviceMAC(ctx, sqlcgen.UpsertDeviceMACParams{
+								DeviceID: remoteDeviceID,
+								MAC:      *n.RemoteChassisMAC,
+							})
+						}
+						if n.RemoteDeviceName != nil && strings.TrimSpace(*n.RemoteDeviceName) != "" {
+							_ = w.q.InsertDeviceNameCandidate(ctx, sqlcgen.InsertDeviceNameCandidateParams{
+								DeviceID: remoteDeviceID,
+								Name:     strings.TrimSpace(*n.RemoteDeviceName),
+								Source:   n.Source,
+								Address:  nil,
+							})
+							_, _ = w.q.SetDeviceDisplayNameIfUnset(ctx, sqlcgen.SetDeviceDisplayNameIfUnsetParams{
+								ID:          remoteDeviceID,
+								DisplayName: strings.TrimSpace(*n.RemoteDeviceName),
+							})
+						}
+
+						var localInterfaceID *string
+						if n.LocalIfIndex != nil {
+							ifaceID := ifIndexToInterfaceID[*n.LocalIfIndex]
+							if ifaceID != "" {
+								localInterfaceID = &ifaceID
+							}
+						}
+
+						var remoteInterfaceID *string
+						if n.RemotePortName != nil && strings.TrimSpace(*n.RemotePortName) != "" {
+							ifaceID, err := w.q.UpsertInterfaceByName(ctx, sqlcgen.UpsertInterfaceByNameParams{
+								DeviceID: remoteDeviceID,
+								Name:     strings.TrimSpace(*n.RemotePortName),
+							})
+							if err == nil && ifaceID != "" {
+								remoteInterfaceID = &ifaceID
+							}
+						}
+
+						aDev, aIf, bDev, bIf := canonicalizeLinkEndpoints(t.DeviceID, localInterfaceID, remoteDeviceID, remoteInterfaceID)
+						linkKey := makeLinkKey(n.Source, aDev, aIf, bDev, bIf)
+						if err := w.q.UpsertLink(ctx, sqlcgen.UpsertLinkParams{
+							LinkKey:      linkKey,
+							ADeviceID:    aDev,
+							AInterfaceID: aIf,
+							BDeviceID:    bDev,
+							BInterfaceID: bIf,
+							LinkType:     &linkType,
+							Source:       n.Source,
+							ObservedAt:   observedAt,
+						}); err == nil {
+							atomic.AddInt32(&linksWritten, 1)
+						}
+					}
+				}
 			}
 		}
 	}
@@ -224,13 +331,14 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 		case <-ctx.Done():
 			close(jobs)
 			wg.Wait()
-			return map[string]any{
-				"targets":       len(targets),
-				"snmp_ok":       int(snmpOK),
-				"names_written": int(namesWritten),
-				"vlans_written": int(vlansWritten),
-				"canceled":      true,
-			}
+	return map[string]any{
+		"targets":       len(targets),
+		"snmp_ok":       int(snmpOK),
+		"names_written": int(namesWritten),
+		"vlans_written": int(vlansWritten),
+		"links_written": int(linksWritten),
+		"canceled":      true,
+	}
 		case jobs <- t:
 		}
 	}
@@ -242,5 +350,52 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 		"snmp_ok":       int(snmpOK),
 		"names_written": int(namesWritten),
 		"vlans_written": int(vlansWritten),
+		"links_written": int(linksWritten),
 	}
+}
+
+func allowedByAllowlist(ip netip.Addr, allowlist []netip.Prefix) bool {
+	if !ip.IsValid() || len(allowlist) == 0 {
+		return false
+	}
+	for _, p := range allowlist {
+		if p.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func canonicalizeLinkEndpoints(aDev string, aIf *string, bDev string, bIf *string) (string, *string, string, *string) {
+	if aDev < bDev {
+		return aDev, aIf, bDev, bIf
+	}
+	if aDev > bDev {
+		return bDev, bIf, aDev, aIf
+	}
+
+	aIfKey := ""
+	if aIf != nil {
+		aIfKey = *aIf
+	}
+	bIfKey := ""
+	if bIf != nil {
+		bIfKey = *bIf
+	}
+	if aIfKey <= bIfKey {
+		return aDev, aIf, bDev, bIf
+	}
+	return bDev, bIf, aDev, aIf
+}
+
+func makeLinkKey(source string, aDev string, aIf *string, bDev string, bIf *string) string {
+	aIfKey := "-"
+	if aIf != nil && strings.TrimSpace(*aIf) != "" {
+		aIfKey = strings.TrimSpace(*aIf)
+	}
+	bIfKey := "-"
+	if bIf != nil && strings.TrimSpace(*bIf) != "" {
+		bIfKey = strings.TrimSpace(*bIf)
+	}
+	return strings.TrimSpace(source) + ":" + aDev + ":" + aIfKey + ":" + bDev + ":" + bIfKey
 }

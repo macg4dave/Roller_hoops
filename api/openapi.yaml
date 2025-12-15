@@ -11,6 +11,7 @@ servers:
 tags:
   - name: Devices
   - name: Discovery
+  - name: Inventory
 
 paths:
   /v1/devices:
@@ -214,6 +215,256 @@ paths:
               schema:
                 $ref: '#/components/schemas/DiscoveryStatus'
 
+  /v1/discovery/runs:
+    get:
+      tags: [Discovery]
+      summary: List discovery runs
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 200
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Cursor returning `started_at|id` from the prior page.
+      responses:
+        '200':
+          description: Discovery run list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryRunPage'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/discovery/runs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Discovery]
+      summary: Get discovery run by ID
+      responses:
+        '200':
+          description: Discovery run detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryRun'
+        '400':
+          description: Invalid ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/discovery/runs/{id}/logs:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Discovery]
+      summary: List logs for a discovery run
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Cursor representing `created_at|log_id` for pagination.
+      responses:
+        '200':
+          description: Discovery run logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryRunLogPage'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Run not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/inventory/netbox/import:
+    post:
+      tags: [Inventory]
+      summary: Import devices from a NetBox export payload
+      description: |
+        Accepts a NetBox API payload (or an extracted device list) and imports devices into the local catalog.
+        The request wraps the upstream JSON as `payload` so unknown upstream fields do not break strict decoding.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryImportRequest'
+      responses:
+        '200':
+          description: Imported inventory
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryImportResult'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Database not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/devices/changes:
+    get:
+      tags: [Devices]
+      summary: List device change events
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Inclusive RFC3339 timestamp filter (newer than or equal to value).
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Cursor from a previous page (`event_at|event_id`).
+      responses:
+        '200':
+          description: Device change feed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceChangeFeed'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/devices/{id}/history:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Devices]
+      summary: Device history timeline
+      description: |
+        Returns the change events for a single device, ordered newest-first. Supports pagination via `limit` and `cursor`.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Cursor returned from the previous page (`event_at|event_id`).
+      responses:
+        '200':
+          description: Device history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceChangeFeed'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Device not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/inventory/nautobot/import:
+    post:
+      tags: [Inventory]
+      summary: Import devices from a Nautobot export payload
+      description: |
+        Accepts a Nautobot API payload (or an extracted device list) and imports devices into the local catalog.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryImportRequest'
+      responses:
+        '200':
+          description: Imported inventory
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryImportResult'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Database not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   schemas:
     Device:
@@ -295,6 +546,33 @@ components:
           type: integer
         updated:
           type: integer
+    InventoryImportRequest:
+      type: object
+      required: [payload]
+      properties:
+        payload:
+          description: |
+            Raw upstream inventory JSON (e.g. a NetBox/Nautobot API response with `results[]` or a direct device list).
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: array
+              items:
+                type: object
+                additionalProperties: true
+    InventoryImportResult:
+      type: object
+      properties:
+        created:
+          type: integer
+        matched_existing:
+          type: integer
+        ip_written:
+          type: integer
+        metadata_written:
+          type: integer
+        skipped:
+          type: integer
     DiscoveryRunRequest:
       type: object
       properties:
@@ -337,6 +615,68 @@ components:
             High level status: "idle" when no runs exist, otherwise mirrors the latest run status.
         latest_run:
           $ref: '#/components/schemas/DiscoveryRun'
+    DeviceChangeEvent:
+      type: object
+      required: [event_id, device_id, event_at, kind, summary]
+      properties:
+        event_id:
+          type: string
+        device_id:
+          type: string
+          format: uuid
+        event_at:
+          type: string
+          format: date-time
+        kind:
+          type: string
+        summary:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    DeviceChangeFeed:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceChangeEvent'
+        cursor:
+          type: string
+          nullable: true
+    DiscoveryRunPage:
+      type: object
+      properties:
+        runs:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiscoveryRun'
+        cursor:
+          type: string
+          nullable: true
+    DiscoveryRunLogEntry:
+      type: object
+      required: [id, level, message, created_at]
+      properties:
+        id:
+          type: integer
+        level:
+          type: string
+        message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    DiscoveryRunLogPage:
+      type: object
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiscoveryRunLogEntry'
+        cursor:
+          type: string
+          nullable: true
     ErrorResponse:
       type: object
       required: [error]

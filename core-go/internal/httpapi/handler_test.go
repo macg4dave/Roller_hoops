@@ -22,6 +22,8 @@ type fakeDeviceQueries struct {
 	updateFn             func(ctx context.Context, arg sqlcgen.UpdateDeviceParams) (sqlcgen.Device, error)
 	upsertFn             func(ctx context.Context, arg sqlcgen.UpsertDeviceMetadataParams) (sqlcgen.DeviceMetadata, error)
 	listNameCandidatesFn func(ctx context.Context, deviceID string) ([]sqlcgen.DeviceNameCandidate, error)
+	listChangeEventsFn   func(ctx context.Context, arg sqlcgen.ListDeviceChangeEventsParams) ([]sqlcgen.DeviceChangeEvent, error)
+	listHistoryFn        func(ctx context.Context, arg sqlcgen.ListDeviceChangeEventsForDeviceParams) ([]sqlcgen.DeviceChangeEvent, error)
 }
 
 func (f fakeDeviceQueries) ListDevices(ctx context.Context) ([]sqlcgen.Device, error) {
@@ -54,12 +56,28 @@ func (f fakeDeviceQueries) ListDeviceNameCandidates(ctx context.Context, deviceI
 	return f.listNameCandidatesFn(ctx, deviceID)
 }
 
+func (f fakeDeviceQueries) ListDeviceChangeEvents(ctx context.Context, arg sqlcgen.ListDeviceChangeEventsParams) ([]sqlcgen.DeviceChangeEvent, error) {
+	if f.listChangeEventsFn == nil {
+		return nil, nil
+	}
+	return f.listChangeEventsFn(ctx, arg)
+}
+
+func (f fakeDeviceQueries) ListDeviceChangeEventsForDevice(ctx context.Context, arg sqlcgen.ListDeviceChangeEventsForDeviceParams) ([]sqlcgen.DeviceChangeEvent, error) {
+	if f.listHistoryFn == nil {
+		return nil, nil
+	}
+	return f.listHistoryFn(ctx, arg)
+}
+
 type fakeDiscoveryQueries struct {
 	insertFn    func(ctx context.Context, arg sqlcgen.InsertDiscoveryRunParams) (sqlcgen.DiscoveryRun, error)
 	updateFn    func(ctx context.Context, arg sqlcgen.UpdateDiscoveryRunParams) (sqlcgen.DiscoveryRun, error)
 	getLatestFn func(ctx context.Context) (sqlcgen.DiscoveryRun, error)
 	getFn       func(ctx context.Context, id string) (sqlcgen.DiscoveryRun, error)
 	insertLogFn func(ctx context.Context, arg sqlcgen.InsertDiscoveryRunLogParams) error
+	listRunsFn  func(ctx context.Context, arg sqlcgen.ListDiscoveryRunsParams) ([]sqlcgen.DiscoveryRun, error)
+	listLogFn   func(ctx context.Context, arg sqlcgen.ListDiscoveryRunLogsParams) ([]sqlcgen.DiscoveryRunLog, error)
 }
 
 func (f fakeDiscoveryQueries) InsertDiscoveryRun(ctx context.Context, arg sqlcgen.InsertDiscoveryRunParams) (sqlcgen.DiscoveryRun, error) {
@@ -95,6 +113,20 @@ func (f fakeDiscoveryQueries) InsertDiscoveryRunLog(ctx context.Context, arg sql
 		return nil
 	}
 	return f.insertLogFn(ctx, arg)
+}
+
+func (f fakeDiscoveryQueries) ListDiscoveryRuns(ctx context.Context, arg sqlcgen.ListDiscoveryRunsParams) ([]sqlcgen.DiscoveryRun, error) {
+	if f.listRunsFn == nil {
+		return nil, nil
+	}
+	return f.listRunsFn(ctx, arg)
+}
+
+func (f fakeDiscoveryQueries) ListDiscoveryRunLogs(ctx context.Context, arg sqlcgen.ListDiscoveryRunLogsParams) ([]sqlcgen.DiscoveryRunLog, error) {
+	if f.listLogFn == nil {
+		return nil, nil
+	}
+	return f.listLogFn(ctx, arg)
 }
 
 func decodeBody(t *testing.T, rr *httptest.ResponseRecorder) map[string]any {
@@ -589,5 +621,159 @@ func TestDiscovery_Status_ReturnsLatestRun(t *testing.T) {
 	}
 	if latest["id"] != "run-99" {
 		t.Fatalf("expected latest_run.id run-99, got %v", latest["id"])
+	}
+}
+
+func TestDevices_Changes_ReturnsCursor(t *testing.T) {
+	h := NewHandler(NewLogger("debug"), nil)
+	now := time.Now().UTC()
+	h.devices = fakeDeviceQueries{
+		listChangeEventsFn: func(ctx context.Context, arg sqlcgen.ListDeviceChangeEventsParams) ([]sqlcgen.DeviceChangeEvent, error) {
+			return []sqlcgen.DeviceChangeEvent{
+				{EventID: "evt-2", DeviceID: "dev-1", EventAt: now, Kind: "ip_observation", Summary: "10.0.0.1", Details: map[string]any{"ip": "10.0.0.1"}},
+				{EventID: "evt-1", DeviceID: "dev-1", EventAt: now.Add(-time.Minute), Kind: "mac_observation", Summary: "aa:bb", Details: map[string]any{"mac": "aa:bb"}},
+			}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/changes?limit=1", nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp deviceChangeEventsResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(resp.Events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(resp.Events))
+	}
+	if resp.Cursor == nil || *resp.Cursor == "" {
+		t.Fatalf("expected cursor to be present")
+	}
+}
+
+func TestDevices_History_NotFound(t *testing.T) {
+	h := NewHandler(NewLogger("debug"), nil)
+	h.devices = fakeDeviceQueries{
+		getFn: func(ctx context.Context, id string) (sqlcgen.Device, error) {
+			return sqlcgen.Device{}, pgx.ErrNoRows
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/00000000-0000-0000-0000-000000000100/history", nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rr.Code)
+	}
+
+	body := decodeBody(t, rr)
+	errObj := body["error"].(map[string]any)
+	if errObj["code"] != "not_found" {
+		t.Fatalf("expected not_found error code, got %v", errObj["code"])
+	}
+}
+
+func TestDevices_History_Paginates(t *testing.T) {
+	h := NewHandler(NewLogger("debug"), nil)
+	now := time.Now().UTC()
+	h.devices = fakeDeviceQueries{
+		getFn: func(ctx context.Context, id string) (sqlcgen.Device, error) {
+			return sqlcgen.Device{ID: id}, nil
+		},
+		listHistoryFn: func(ctx context.Context, arg sqlcgen.ListDeviceChangeEventsForDeviceParams) ([]sqlcgen.DeviceChangeEvent, error) {
+			return []sqlcgen.DeviceChangeEvent{
+				{EventID: "evt-a", DeviceID: arg.DeviceID, EventAt: now, Kind: "metadata", Summary: "updated", Details: map[string]any{"owner": "alice"}},
+				{EventID: "evt-b", DeviceID: arg.DeviceID, EventAt: now.Add(-time.Minute), Kind: "ip", Summary: "10.0.0.2"},
+			}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/00000000-0000-0000-0000-000000000100/history?limit=1", nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	var resp deviceChangeEventsResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(resp.Events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(resp.Events))
+	}
+	if resp.Cursor == nil || *resp.Cursor == "" {
+		t.Fatalf("expected cursor to be present")
+	}
+}
+
+func TestDiscovery_Runs_Pagination(t *testing.T) {
+	h := NewHandler(NewLogger("debug"), nil)
+	now := time.Now().UTC()
+	h.discovery = fakeDiscoveryQueries{
+		listRunsFn: func(ctx context.Context, arg sqlcgen.ListDiscoveryRunsParams) ([]sqlcgen.DiscoveryRun, error) {
+			return []sqlcgen.DiscoveryRun{
+				{ID: "run-1", Status: "succeeded", StartedAt: now, Stats: map[string]any{}},
+				{ID: "run-0", Status: "failed", StartedAt: now.Add(-time.Minute), Stats: map[string]any{}},
+			}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/discovery/runs?limit=1", nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	var resp discoveryRunPage
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if len(resp.Runs) != 1 {
+		t.Fatalf("expected 1 run, got %d", len(resp.Runs))
+	}
+	if resp.Cursor == nil || *resp.Cursor == "" {
+		t.Fatalf("expected cursor")
+	}
+}
+
+func TestDiscovery_RunLogs_Pagination(t *testing.T) {
+	h := NewHandler(NewLogger("debug"), nil)
+	now := time.Now().UTC()
+	h.discovery = fakeDiscoveryQueries{
+		getFn: func(ctx context.Context, id string) (sqlcgen.DiscoveryRun, error) {
+			return sqlcgen.DiscoveryRun{ID: id}, nil
+		},
+		listLogFn: func(ctx context.Context, arg sqlcgen.ListDiscoveryRunLogsParams) ([]sqlcgen.DiscoveryRunLog, error) {
+			return []sqlcgen.DiscoveryRunLog{
+				{ID: 2, RunID: arg.RunID, Level: "info", Message: "first", CreatedAt: now},
+				{ID: 1, RunID: arg.RunID, Level: "error", Message: "second", CreatedAt: now.Add(-time.Minute)},
+			}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/discovery/runs/run-42/logs?limit=1", nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	var resp discoveryRunLogPage
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if len(resp.Logs) != 1 {
+		t.Fatalf("expected 1 log, got %d", len(resp.Logs))
+	}
+	if resp.Cursor == nil {
+		t.Fatalf("expected cursor")
 	}
 }

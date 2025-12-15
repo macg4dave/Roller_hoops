@@ -39,9 +39,12 @@ type Queries interface {
 	SetDeviceDisplayNameIfUnset(ctx context.Context, arg sqlcgen.SetDeviceDisplayNameIfUnsetParams) (int64, error)
 	UpsertDeviceSNMP(ctx context.Context, arg sqlcgen.UpsertDeviceSNMPParams) error
 	UpsertInterfaceFromSNMP(ctx context.Context, arg sqlcgen.UpsertInterfaceFromSNMPParams) (string, error)
+	UpsertInterfaceByName(ctx context.Context, arg sqlcgen.UpsertInterfaceByNameParams) (string, error)
 	UpsertInterfaceMAC(ctx context.Context, arg sqlcgen.UpsertInterfaceMACParams) error
 	LinkDeviceMACToInterface(ctx context.Context, arg sqlcgen.LinkDeviceMACToInterfaceParams) (int64, error)
 	UpsertInterfaceVLAN(ctx context.Context, arg sqlcgen.UpsertInterfaceVLANParams) error
+	UpsertLink(ctx context.Context, arg sqlcgen.UpsertLinkParams) error
+	UpsertServiceFromScan(ctx context.Context, arg sqlcgen.UpsertServiceFromScanParams) error
 }
 
 type Worker struct {
@@ -63,6 +66,15 @@ type Worker struct {
 	snmpTimeout           time.Duration
 	snmpRetries           int
 	snmpPort              uint16
+	topologyLLDPEnabled   bool
+	topologyCDPEnabled    bool
+	topologyAllowlist     []netip.Prefix
+	portScanEnabled       bool
+	portScanAllowlist     []netip.Prefix
+	portScanPorts         []int
+	portScanWorkers       int
+	portScanTimeout       time.Duration
+	portScanMaxTargets    int
 }
 
 type Options struct {
@@ -82,6 +94,15 @@ type Options struct {
 	SNMPTimeout           time.Duration
 	SNMPRetries           int
 	SNMPPort              uint16
+	TopologyLLDPEnabled   bool
+	TopologyCDPEnabled    bool
+	TopologyAllowlist     []netip.Prefix
+	PortScanEnabled       bool
+	PortScanAllowlist     []netip.Prefix
+	PortScanPorts         []int
+	PortScanWorkers       int
+	PortScanTimeout       time.Duration
+	PortScanMaxTargets    int
 }
 
 func New(log zerolog.Logger, q Queries, opts Options) *Worker {
@@ -144,6 +165,19 @@ func New(log zerolog.Logger, q Queries, opts Options) *Worker {
 		snmpPort = 161
 	}
 
+	portScanWorkers := opts.PortScanWorkers
+	if portScanWorkers <= 0 {
+		portScanWorkers = 4
+	}
+	portScanTimeout := opts.PortScanTimeout
+	if portScanTimeout <= 0 {
+		portScanTimeout = 3 * time.Second
+	}
+	portScanMaxTargets := opts.PortScanMaxTargets
+	if portScanMaxTargets <= 0 {
+		portScanMaxTargets = 24
+	}
+
 	return &Worker{
 		log:                   log,
 		q:                     q,
@@ -163,6 +197,15 @@ func New(log zerolog.Logger, q Queries, opts Options) *Worker {
 		snmpTimeout:           snmpTimeout,
 		snmpRetries:           snmpRetries,
 		snmpPort:              snmpPort,
+		topologyLLDPEnabled:   opts.TopologyLLDPEnabled,
+		topologyCDPEnabled:    opts.TopologyCDPEnabled,
+		topologyAllowlist:     opts.TopologyAllowlist,
+		portScanEnabled:       opts.PortScanEnabled,
+		portScanAllowlist:     opts.PortScanAllowlist,
+		portScanPorts:         opts.PortScanPorts,
+		portScanWorkers:       portScanWorkers,
+		portScanTimeout:       portScanTimeout,
+		portScanMaxTargets:    portScanMaxTargets,
 	}
 }
 
@@ -338,7 +381,16 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 		_ = w.q.InsertDiscoveryRunLog(execCtx, sqlcgen.InsertDiscoveryRunLogParams{
 			RunID:   run.ID,
 			Level:   "info",
-			Message: fmt.Sprintf("enrichment: targets=%v snmp_ok=%v names=%v vlans=%v", enrichmentStats["targets"], enrichmentStats["snmp_ok"], enrichmentStats["names_written"], enrichmentStats["vlans_written"]),
+			Message: fmt.Sprintf("enrichment: targets=%v snmp_ok=%v names=%v vlans=%v links=%v", enrichmentStats["targets"], enrichmentStats["snmp_ok"], enrichmentStats["names_written"], enrichmentStats["vlans_written"], enrichmentStats["links_written"]),
+		})
+	}
+
+	portScanStats := w.runPortScan(execCtx, result.Targets)
+	if msg := w.portScanLogMessage(portScanStats); msg != "" {
+		_ = w.q.InsertDiscoveryRunLog(execCtx, sqlcgen.InsertDiscoveryRunLogParams{
+			RunID:   run.ID,
+			Level:   "info",
+			Message: msg,
 		})
 	}
 
@@ -359,6 +411,9 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 	}
 	if enrichmentStats != nil {
 		stats["enrichment"] = enrichmentStats
+	}
+	if portScanStats != nil {
+		stats["port_scan"] = portScanStats
 	}
 	if _, err := w.q.UpdateDiscoveryRun(execCtx, sqlcgen.UpdateDiscoveryRunParams{
 		ID:          run.ID,

@@ -44,3 +44,20 @@ WHERE id = $1;
 -- name: InsertDiscoveryRunLog :exec
 INSERT INTO discovery_run_logs (run_id, level, message)
 VALUES ($1, $2, $3);
+
+-- name: ListDiscoveryRuns :many
+SELECT id, status, scope, stats, started_at, completed_at, last_error
+FROM discovery_runs
+WHERE
+    ($1 IS NULL OR (started_at < $1 OR (started_at = $1 AND id < $2)))
+ORDER BY started_at DESC, id DESC
+LIMIT $3;
+
+-- name: ListDiscoveryRunLogs :many
+SELECT id, run_id, level, message, created_at
+FROM discovery_run_logs
+WHERE
+    run_id = $1
+    AND ($2 IS NULL OR (created_at < $2 OR (created_at = $2 AND id < $3)))
+ORDER BY created_at DESC, id DESC
+LIMIT $4;

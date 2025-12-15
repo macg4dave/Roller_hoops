@@ -1,6 +1,6 @@
 # Roadmap
 
-Here’s a **clean, realistic roadmap** that explicitly **reuses existing, proven components**, runs fully in **Docker**, and keeps Go and Node doing what they’re best at. No reinventing wheels.
+<!-- markdownlint-disable MD024 -->
 
 ---
 
@@ -99,7 +99,7 @@ GET /healthz
 These “API surface” milestones are already described later in this roadmap (keep OpenAPI canonical; prefer adding endpoints/params over UI-side reconstruction):
 
 ```text
-Phase 9 — historical/diffing
+Phase 9 — historical/diffing (implemented)
 GET    /api/v1/devices/changes?since=RFC3339&limit=N
 GET    /api/v1/devices/{id}/history?limit=N&cursor=...
 GET    /api/v1/discovery/runs
@@ -131,33 +131,84 @@ GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone&focusId=...
 * **Auth boundary is not enforced yet (security)**: auth is not implemented, but the browser → Go API bypass is mitigated by keeping `core-go` private and only exposing the UI via Traefik.
 * **Discovery inside Docker needs a deployment decision**: ARP/ICMP/SNMP fidelity depends on container networking and capabilities (e.g., `CAP_NET_RAW`, host networking, or a dedicated scanner container deployed on the target network).
 * **Production secret injection needs a runbook**: decide and document where `POSTGRES_PASSWORD` and future app secrets live (env, docker secrets, external secret manager), and how they’re rotated.
-* **Historical model not implemented yet**: observations/diffing (Phases 9+) will change query/index requirements; schema choices made in Phase 8 should assume high write volume and retention controls.
+* **Historical model implemented**: observations, change feed, and run/log APIs now exist; next focus is documenting retention and monitoring query cost.
 
 ---
+
+## Roadmap at a glance
+
+| Phase | Status | Summary |
+| --- | --- | --- |
+| 0 | Done | Stack decisions (Postgres, Traefik, REST) |
+| 1 | Done | `core-go` API + persistence baseline |
+| 2 | Done | Minimal relational schema + migrations |
+| 3 | Done | `ui-node` MVP (CRUD + discovery panel) |
+| 4 | Done | Traefik routing; `core-go` kept private |
+| 5 | Done | Compose profiles, volumes, health checks |
+| 6 | Done | UI polling for “live” feel |
+| 7 | Done | Enrichment integrations (mDNS/NetBIOS/ports/IPAM) |
+| 8 | Done | Discovery engine v1 (runs/logs + worker + observations) |
+| 9 | Done | Historical/diffing APIs (changes feed, history, runs/logs) |
+| 10 | Planned | Operator workflows + timeline UX |
+| 11 | Planned | Auth + sessions + roles |
+| 12 | Planned | Metrics + runbooks + CI confidence |
+| 13 | Planned | Map shell + interaction contract |
+| 14 | Planned | Projection API + map data model (L3 first) |
+| 15 | Planned | Physical/L2/L3 layers |
+| 16 | Planned | Services/Security layers + modes |
 
 ## Phases
 
 ## Phase 0 — Foundations
 
-* Pick DB: **PostgreSQL**
-* Pick reverse proxy: **Traefik**
-* Pick API style: **REST over HTTP**
+**Status:** Done
+
+### Goal
+
+Lock the boring defaults early so later phases don’t re-litigate fundamentals.
+
+### Tasks
+
+* [x] Pick DB: **PostgreSQL**
+* [x] Pick reverse proxy: **Traefik**
+* [x] Pick API style: **REST over HTTP**
+
+### Blockers
+
+* None
+
+### Deliverables
+
+* A single “default stack” decision set referenced by later phases.
 
 ---
 
 ## Phase 1 — Go core service (headless) (closed)
 
-**Status:** Closed
+**Status:** Done (closed)
 
-### Constraint (still true): core-go stays headless
+### Goal
 
-### Responsibilities
+Ship a headless `core-go` service that owns persistence + API + discovery orchestration.
 
-* Normalisation
-* Persistence
-* API
+### Constraints
 
-### Components (existing, proven)
+* `core-go` stays headless (no UI, no auth UX).
+* The browser must not call `core-go` directly in v1 (UI is the BFF/proxy).
+
+### Tasks
+
+* [x] Stand up HTTP server (`net/http` + `chi`) with strict JSON decoding.
+* [x] Make OpenAPI canonical (`api/openapi.yaml`) and gate drift with a Go contract test.
+* [x] Add Postgres access (`sqlc` + `pgx`) and migrations (`golang-migrate`).
+* [x] Add structured logging (`zerolog`) and request ID propagation.
+* [x] Add service health endpoints (`/healthz`, `/readyz`).
+
+### Blockers
+
+* None (implementation complete); follow-on risk is enforced auth boundary (Phase 11).
+
+### Notes (implementation choices)
 
 * HTTP server: Go stdlib (`net/http`) + `chi` router
 * API contract: OpenAPI is canonical (a Go contract test gates drift against the chi router)
@@ -172,27 +223,31 @@ Operational defaults (v1):
 * Health endpoints: `/healthz` and `/readyz`
 * Request ID propagation end-to-end (UI → Traefik → Go)
 
-### API (v1, implemented)
-
-```text
-GET    /api/v1/devices
-POST   /api/v1/devices
-GET    /api/v1/devices/{id}
-PUT    /api/v1/devices/{id}
-GET    /api/v1/devices/{id}/name-candidates
-
-GET    /api/v1/devices/export
-POST   /api/v1/devices/import
-
-POST   /api/v1/discovery/run
-GET    /api/v1/discovery/status
-```
+API: see “Implemented APIs (current)” in the progress snapshot at the top of this document.
 
 ---
 
 ## Phase 2 — Database schema (minimal but future-proof) (closed)
 
-**Status:** Closed
+**Status:** Done (closed)
+
+### Goal
+
+Use a boring relational schema that supports both “current state” and later historical/diffing work.
+
+### Tasks
+
+* [x] Create core tables and migrations (devices, interfaces, IPs, MACs, services, user-editable metadata).
+* [x] Keep schema relational (avoid JSON blobs as the default).
+* [x] Ensure schema direction supports later append-only observations + retention controls (Phase 9).
+
+### Blockers
+
+* Historical model/indexing is a dependency for Phase 9 (not a blocker for this phase, but affects future migrations).
+
+### Deliverables
+
+* DB survives container restarts and migrations are repeatable.
 
 Use **existing relational DBs**, no custom storage.
 
@@ -219,7 +274,7 @@ Deliverable:
 
 ## Phase 3 — Node.js UI service
 
-**Status:** Complete (MVP UI, metadata editing, and discovery panel live; auth and advanced workflows tracked in later phases)
+**Status:** Done (MVP UI + metadata editing + discovery panel; auth/workflows tracked later)
 
 ### Constraint: Node does not do discovery/scanning
 
@@ -265,11 +320,37 @@ Implementation detail (already in place):
   * Browser calls `/api/...` on the UI.
   * UI proxies to `core-go` on the private Docker network.
 
+### Tasks
+
+* [x] Implement Devices UI (list/detail/edit metadata) backed by Go API.
+* [x] Implement Discovery panel (trigger run + status view) backed by Go API.
+* [x] Implement UI-as-BFF proxy route to keep `core-go` private.
+* [ ] Add auth + sessions (Phase 11).
+* [ ] Add richer operator workflows (Phase 10).
+
+### Blockers
+
+* Auth is not implemented yet (Phase 11); mitigate by keeping `core-go` private and routing via UI only.
+
 ---
 
 ## Phase 4 — Reverse proxy & routing
 
-**Status:** Complete (UI exposed; API kept private until auth)
+**Status:** Done (UI exposed; API kept private until auth)
+
+### Goal
+
+Expose a single entrypoint while keeping `core-go` off the public network until auth is real.
+
+### Tasks
+
+* [x] Route `/` → UI, `/api` → Go via Traefik.
+* [x] Keep `core-go` internal-only on the Docker network.
+* [x] Provide TLS wiring for production (dev runs HTTP).
+
+### Blockers
+
+* Public exposure of `core-go` is blocked on Phase 11 (auth/session hardening).
 
 Use **existing battle-tested infra**
 
@@ -289,7 +370,22 @@ Deliverable:
 
 ## Phase 5 — Docker polish
 
-**Status:** Closed
+**Status:** Done (closed)
+
+### Goal
+
+Make the stack reproducible and boring to run locally and in production via compose profiles.
+
+### Tasks
+
+* [x] Enforce container rules (one process per container, config via env, DB is the only shared state).
+* [x] Add health checks and named Postgres volume.
+* [x] Add dev profile seeding (`docker/dev/dev-seed.sql`) for fast local testing.
+* [x] Add prod readiness smoke service (`prod-readiness`) to wait on `/healthz` + `/readyz`.
+
+### Blockers
+
+* Production secret injection still needs a runbook (Phase 12).
 
 ### Docker rules
 
@@ -327,7 +423,20 @@ Deliverable:
 
 ## Phase 6 — Live updates (optional)
 
-**Status:** Closed
+**Status:** Done (closed)
+
+### Goal
+
+Keep the UI feeling live without adding tight coupling (WebSockets can come later if needed).
+
+### Tasks
+
+* [x] Poll `/api/v1/devices` and `/api/v1/discovery/status` only when relevant UI pages are visible.
+* [x] Keep polling lightweight and resilient to temporary failures.
+
+### Blockers
+
+* None
 
 The UI now polls the Go API (`/api/v1/devices` and `/api/v1/discovery/status`) whenever the devices dashboard or discovery panel is visible. This keeps the operator experience live without coupling the services more tightly, so the last-known state, discovery progress, and device metadata stay up to date with a lightweight polling loop.
 
@@ -335,25 +444,34 @@ The UI now polls the Go API (`/api/v1/devices` and `/api/v1/discovery/status`) w
 
 ## Phase 7 — Nice-to-have integrations
 
-**Status:** In-progress (snapshot + SNMP/VLAN/name-candidates shipped; mDNS/NetBIOS + service scanning + external inventory import planned)
+**Status:** Done (snapshot + SNMP/VLAN/name-candidates + LLDP/CDP links + service scanning + external inventory import)
 
 Only after core is stable. The intent is to enrich discovered devices by **reusing existing protocols/tools** (SNMP, mDNS, nmap, IPAM APIs), not by building bespoke scanners.
 
-Implemented (current):
+### Tasks
 
-* SNMP enrichment baseline (best-effort; behind enable flags): `device_snmp`, interface facts, VLAN PVIDs (`interface_vlans`)
-* Friendly-name candidates (reverse DNS + SNMP `sysName` today) via `GET /api/v1/devices/{id}/name-candidates`
-* Import/export JSON (Go endpoints + UI snapshot workflow live)
+Implemented:
 
-Planned next (API/tool-first):
+* [x] SNMP enrichment baseline (best-effort; behind enable flags).
+* [x] Friendly-name candidates (reverse DNS, mDNS, NetBIOS, SNMP `sysName`) via `GET /api/v1/devices/{id}/name-candidates`.
+* [x] Import/export JSON endpoints + UI snapshot workflow.
+* [x] LLDP/CDP adjacency via SNMP MIBs (optional; best-effort) → writes to `links` with `source=lldp|cdp`.
+* [x] Service/port discovery via `nmap` XML parsing (optional; behind explicit enable flags + allowlists) → writes to `services`.
+* [x] External inventory/IPAM import (NetBox/Nautobot) via wrapped payload endpoints.
 
-* mDNS/Bonjour name candidates (prefer `zeroconf`)
-* NetBIOS name candidates (prefer an existing library/tool; best-effort)
-* Physical adjacency (LLDP/CDP) via SNMP LLDP-MIB / CISCO-CDP-MIB (optionally `gosmi` to avoid hardcoded OIDs)
-* Service/port discovery (prefer `nmap` with XML parsing; optional `masscan` for broad “is port open” sweeps), behind explicit enable flags/allowlists
-* External inventory/IPAM sync import (prefer NetBox or Nautobot APIs) instead of rebuilding IPAM workflows
+### Blockers
 
-> Snapshot tooling is available via `/api/v1/devices/export` and `/api/v1/devices/import`, and the devices UI now offers download/upload controls.
+* **mDNS / NetBIOS resolution** depends on multicast visibility: containers running on bridge networks often cannot join multicast without `CAP_NET_RAW` or host/bridge networking. The workbench needs documentation about how to expose the scanner to the target broadcast domain before enabling this feature.
+* **LLDP/CDP adjacency (enrichment)** requires SNMP credentials and device-level support; not all switches expose the right MIBs, so we need allowlists, retry/backoff, and failure isolation so the discovery worker stays healthy even if switches reject requests.
+* **Service/port discovery** is an active scan, so we need operator opt-in, clear scope (CIDR/vlan), rate-limits, and allowlists to avoid triggering IDS/IPS responses. Scans should run in a configurable window, obey allowed ports, and provide a cancel path to avoid blocking the worker.
+* **External inventory / IPAM syncs** require API tokens, field mapping, conflict resolution, and rate-limit handling for each provider (NetBox, Nautobot, etc.). Without a documented provisioning story (where the tokens live, what fields map to our schema), automation will stall.
+* All enrichment paths need **secure secrets** (SNMP community strings, API tokens, port-scan credentials) and proper gates so they remain opt-in (cannot run by default). The team needs a runbook describing where secrets live (`.env`, Docker secrets, or secret manager) and how to rotate them.
+* Additional enrichment writes increase DB load (new `device_name_candidates`, `interface_vlans`, `device_snmp`). We need retention/cleanup policies and indexes so the tables stay performant as observations accumulate.
+
+### Notes
+
+* Snapshot tooling is available via `/api/v1/devices/export` and `/api/v1/devices/import`, and the devices UI offers download/upload controls.
+* Name candidates now include reverse DNS, mDNS, and NetBIOS results so operators see richer choices in the device detail view.
 
 API surfaced by this phase (implemented):
 
@@ -361,15 +479,19 @@ API surfaced by this phase (implemented):
 GET  /api/v1/devices/export
 POST /api/v1/devices/import
 GET  /api/v1/devices/{id}/name-candidates
+POST /api/v1/inventory/netbox/import
+POST /api/v1/inventory/nautobot/import
 ```
-
-
 
 ---
 
 ## Phase 8 — Discovery engine v1 (network scanning)
 
-**Status:** Complete
+**Status:** 
+
+### Goal
+
+Ship a v1 discovery loop that can be triggered manually, persists runs/logs, and reliably updates “current state” from observations.
 
 Goals:
 
@@ -379,6 +501,19 @@ Goals:
 * Observations table (append-only) to store IP/MAC/service findings per run; dedupe by stable keys when folding into current state.
 * Wire `/api/v1/discovery/run` to enqueue and return a run id; `/api/v1/discovery/status` returns latest run, progress, and last error.
 
+### Tasks
+
+* [x] Persist discovery runs and logs (`discovery_runs`, `discovery_run_logs`).
+* [x] Implement a Go worker loop that claims queued runs and reports progress/errors.
+* [x] Perform ARP scrape + best-effort ICMP sweep (where available) to generate observations/current state.
+* [x] Add optional enrichment (reverse DNS + SNMP) behind enable flags.
+* [x] Expose `POST /api/v1/discovery/run` + `GET /api/v1/discovery/status`.
+
+### Blockers
+
+* Deployment choice affects fidelity (Docker networking + required caps vs host networking vs a dedicated scanner container).
+* ICMP/SNMP behavior varies by environment; requires explicit runbooks and safe defaults for production.
+
 Deliverable:
 
 * Go service runs alone in Docker, performs a subnet sweep, populates devices/interfaces with timestamps, and returns real discovery status.
@@ -387,24 +522,150 @@ Deliverable:
 
 ## Phase 9 — Historical state + diffing
 
-* Append-only observation log keyed by run id (`device_observations`, `interface_observations`, `service_observations`) with `observed_at`.
-* Derived "current" tables/views updated from latest observation; keep previous snapshot addressable.
-* State transitions captured (`online`, `offline`, `changed`) with an events table and run id references.
-* Retention knobs: keep raw observations for N days; keep rollups forever; indexes to keep queries fast.
-* API: list devices changed since a timestamp; fetch the history for a device; expose last run status and error.
+**Status:** Done
 
-API milestones (prefer server-side diffing over UI-side reconstruction):
+### Goal
 
-* M9.1 — Device change feed
-  * `GET /api/v1/devices/changes?since=RFC3339&limit=N`
-    * returns a stable, append-only-ish list of change events (or “changed device summaries”) suitable for polling.
-* M9.2 — Device history
-  * `GET /api/v1/devices/{id}/history?limit=N&cursor=...`
-    * returns a time-ordered history derived from observation snapshots/events.
-* M9.3 — Discovery run access (for debugging and timelines)
-  * `GET /api/v1/discovery/runs`
-  * `GET /api/v1/discovery/runs/{id}`
-  * `GET /api/v1/discovery/runs/{id}/logs`
+Make time a first-class feature: every fact can be diffed across runs, and “what changed?” is cheap to query.
+
+### Design constraints (non-negotiable)
+
+* **OpenAPI is canonical** (`api/openapi.yaml`). The code follows the spec, not the other way around.
+* **No UI-side diff reconstruction**. Diffs/history must be server-side and cheap to query.
+* **Deterministic output** (stable sorting, stable IDs) so polling + UI diffs don’t churn.
+* **Build on what exists**: `ip_observations` and `mac_observations` already exist (Phase 8). Phase 9 extends this model; it doesn’t replace it.
+
+### Shared tasks for Phase 9 (applies to all milestones)
+
+* [x] Pin the v1 **event model**: what constitutes a “change” and how it’s represented (device-level change events vs fact-level changes).
+* [x] Decide a **retention strategy** (how long to keep observations/events) and document it.
+* [x] Add/verify **indexes** for “since time” queries (high-write, low-latency reads).
+* [x] Keep responses **cursor-friendly** (no unbounded lists; enforce limits).
+* [x] Add integration tests against Postgres for query correctness and paging stability.
+
+### Blockers
+
+* Schema/index decisions here affect write amplification and query cost; retention/index strategy is now documented and monitored as ingestion grows.
+* UI timelines and “changed” overlays depend on these APIs (Phase 10 and Phase 16).
+
+### Milestones (Phase 9)
+
+#### M9.1 — Device change feed (pollable)
+
+**API:** `GET /api/v1/devices/changes?since=RFC3339&limit=N`
+
+Intent: a stable feed that answers “what changed since $t$?” without the UI doing joins.
+
+Tasks:
+
+* Contract
+  * [x] Add endpoint + schemas to `api/openapi.yaml`.
+  * [x] Define response semantics for `since` (strictly `>` vs `>=`) and document it.
+  * [x] Define a stable event payload (recommended fields): `event_id`, `device_id`, `event_at`, `kind`, `summary`.
+* Persistence / queries
+  * [x] Decide whether change feed is:
+    * derived on the fly from observations, **or**
+    * persisted as a dedicated events table (recommended for cheap reads and stable paging).
+  * [x] Add required migrations (if adding an events table).
+  * [x] Add indexes to support `(event_at, event_id)`-style paging.
+* Core-go implementation
+  * [x] Implement handler and query with hard caps on `limit`.
+  * [x] Ensure deterministic ordering when timestamps tie (secondary sort by stable id).
+  * [x] Ensure errors follow `docs/api-contract.md` envelope.
+* Tests
+  * [x] Add Postgres integration tests for:
+    * empty feed
+    * `since` boundary correctness
+    * stable ordering
+    * `limit` clamping
+* Docs
+  * [x] Update “Planned APIs (next)” snapshot if needed.
+  * [x] Add a short note about recommended polling cadence + idempotency.
+
+Implementation: `GET /api/v1/devices/changes` now returns cursor-friendly, deterministic events aggregated from observations, metadata, and service scans.
+
+Implementation: `GET /api/v1/devices/changes` now returns cursor-friendly, deterministic events aggregated from observations, metadata, and service scans.
+
+Blockers:
+
+* Requires an agreed “change” definition (device metadata change vs discovered fact changes vs both).
+* Needs a paging strategy that remains stable under concurrent discovery writes.
+
+Acceptance criteria:
+
+* Polling the endpoint repeatedly with the same `since` returns a stable, deterministic list.
+* Feed is cheap to query (index-backed) and bounded by `limit`.
+
+#### M9.2 — Device history (timeline)
+
+**API:** `GET /api/v1/devices/{id}/history?limit=N&cursor=...`
+
+Intent: a focused timeline suitable for a device detail page.
+
+Tasks:
+
+* Contract
+  * [x] Add endpoint + schemas to `api/openapi.yaml`.
+  * [x] Define cursor format (opaque string recommended) and ordering (newest-first recommended).
+* Persistence / queries
+  * [x] Decide history sources:
+    * discovery-run events,
+    * observation-derived diffs,
+    * metadata edits (if/when metadata auditing exists).
+  * [x] Add any missing observation tables needed to tell the story (e.g., interface/service observations) without breaking current v1.
+* Core-go implementation
+  * [x] Implement handler + query that enforces `limit` and supports cursors.
+  * [x] Keep payload intentionally small (summary-first; details can be added later).
+* Tests
+  * [x] Integration tests for cursor paging stability and ordering.
+  * [x] 404 behavior for unknown device id.
+* Docs
+  * [x] Document how history relates to discovery runs (link to M9.3 endpoints).
+
+Implementation: `GET /api/v1/devices/{id}/history` surfaces the same change events for a single device with cursor-based pagination and stable ordering.
+
+Blockers:
+
+* Depends on M9.1 event model decisions (reusing the same event shape is strongly preferred).
+* Needs clear stance on whether manual metadata edits appear in the timeline (and when).
+
+Acceptance criteria:
+
+* A device with multiple runs produces a deterministic, paginated timeline.
+* The UI can render a useful “what happened” narrative without extra API calls.
+
+#### M9.3 — Discovery run access (timelines + debugging)
+
+**APIs:**
+
+* `GET /api/v1/discovery/runs`
+* `GET /api/v1/discovery/runs/{id}`
+* `GET /api/v1/discovery/runs/{id}/logs`
+
+Intent: operators can inspect runs and correlate changes to a run id without reading database tables.
+
+Tasks:
+
+* Contract
+  * [x] Add endpoints + schemas to `api/openapi.yaml`.
+  * [x] Define paging for runs list (`limit`, `cursor`), and for logs (`limit`, `cursor` or `since`).
+* Core-go implementation
+  * [x] Implement list/get/logs handlers.
+  * [x] Ensure log output is bounded and sorted.
+* Tests
+  * [x] Integration tests for paging and for “run not found”.
+* Docs
+  * [x] Document how run ids relate to Phase 9 history and change feed.
+
+Implementation: `/api/v1/discovery/runs` with `/runs/{id}` and `/runs/{id}/logs` return paginated runs/log entries with stable cursors.
+
+Blockers:
+
+* Need agreement on log retention and “how much is too much” for API payload sizes.
+
+Acceptance criteria:
+
+* Runs and logs can be inspected entirely via API with stable paging.
 
 Deliverable:
 
@@ -414,11 +675,24 @@ Deliverable:
 
 ## Phase 10 — UI workflows for operators
 
-* Device list: filters (online/offline/changed), search by display name/IP/MAC, sort by last seen.
-* Device detail: IPs, MACs, interfaces, services, metadata, change timeline; deep linkable.
-* Metadata editing: inline forms with optimistic UI and rollback on failure; uses typed client (+ planned generated client/types from OpenAPI).
-* Discovery UX: trigger a run, show queued/running/done with progress and errors; reuse polling/WebSocket choice from Phase 6.
-* Error and resilience: empty states, loading states, and friendly failure surfaces in UI.
+**Status:** Planned
+
+### Goal
+
+Make day-to-day operation possible without curl: discovery, triage, and metadata updates are fast and safe.
+
+### Tasks
+
+* [ ] Add device list UX: filters (online/offline/changed), search, sorting, pagination.
+* [ ] Add device detail UX: IPs/MACs/interfaces/services + metadata + change timeline.
+* [ ] Improve metadata editing UX: inline forms with resilient error handling.
+* [ ] Improve discovery UX: queued/running/done views with progress and errors.
+* [ ] Add “operator-grade” UI polish: loading/empty/error states throughout.
+
+### Blockers
+
+* Timeline/change-feed UX depends on Phase 9 APIs.
+* “Real auth” gating depends on Phase 11 (and affects what actions can ship).
 
 Deliverable:
 
@@ -437,12 +711,24 @@ API preference for Phase 10 UX:
 
 ## Phase 11 — Auth + session hardening
 
-* Auth stays in the UI layer: local users stored in a dedicated schema/table owned by the UI service (still separate from core data access).
-* Passwords hashed (argon2id or bcrypt), session cookies signed/encrypted, CSRF protection on form posts.
-* Roles: admin vs read-only; authorization enforced in the UI layer before calling the Go API.
-* Account lifecycle: change password flow and a manual admin reset/one-time token flow for recovery.
-* Audit: minimal audit log of user actions stored via the Go API so the UI never writes to core tables directly.
-* If we don’t want to hand-roll session plumbing, prefer Auth.js/NextAuth for cookie/session handling (credentials-based auth still fits the “UI-owned auth” rule).
+**Status:** Planned
+
+### Goal
+
+Make authentication and authorization real, so the system can be exposed safely beyond a dev network.
+
+### Tasks
+
+* [ ] Implement local users (UI-owned) with secure password hashing (argon2id or bcrypt).
+* [ ] Implement secure session cookies + CSRF protection.
+* [ ] Add roles (admin vs read-only) and enforce authorization in the UI before calling Go.
+* [ ] Add account lifecycle (password change, admin reset/recovery flow).
+* [ ] Add minimal audit logging via Go API (UI never writes core tables directly).
+* [ ] Decide whether to use Auth.js/NextAuth vs a minimal custom session implementation.
+
+### Blockers
+
+* Public exposure of `core-go` (and broader adoption) is blocked on shipping this phase.
 
 Deliverable:
 
@@ -456,6 +742,25 @@ API note:
 ---
 
 ## Phase 12 — Observability & operations
+
+**Status:** Planned
+
+### Goal
+
+Make the stack operable by someone who didn’t write it: metrics, runbooks, backups, and CI confidence.
+
+### Tasks
+
+* [ ] Add metrics (`GET /metrics`) and decide on internal scrape/routing posture.
+* [ ] Add runbooks: backup/restore (`pg_dump`), migrations, secret rotation, seeding.
+* [ ] Add CI coverage: Go unit/integration (Postgres), UI smoke against real API, OpenAPI contract drift gate.
+* [ ] Add basic SLO monitoring approach (health endpoints + uptime alert stubs).
+
+### Blockers
+
+* Requires agreement on production secret injection and rotation (ties back to “Blockers & risks (current)”).
+
+### Notes
 
 * Metrics: Prometheus endpoints from Go (HTTP + DB latency, discovery duration) and Traefik access logs/metrics.
 * Tracing/logging: request IDs end-to-end; structured logs on stdout; optional OpenTelemetry spans for discovery runs.
@@ -478,7 +783,9 @@ API/telemetry endpoints (planned):
 
 **Status:** Planned
 
-Goal: land the **stable layout + interaction contract** from the mocks, without committing to any one “global topology” view.
+### Goal
+
+Land the stable layout + interaction contract from the mocks, without committing to a “global topology” view.
 
 ### Mock-driven UI contract (what the screenshots actually imply)
 
@@ -503,26 +810,81 @@ Non-negotiables (from `docs/network_map/network_map_ideas.md` + mocks):
 * Object-first: nothing renders by default; user selects a layer and a focus object/scope
 * “Stacked regions”, not wire soup (e.g., subnets as rounded regions; labels on hover)
 
+### Milestones (Phase 13)
+
+#### M13.1 — Route + layout (shell)
+
 Tasks:
 
-* Add a `/map` route in the UI with the 3-pane shell and empty-state hint text.
-* Implement selection state (focused object, hover, breadcrumbs) and an always-on Inspector.
-* Add “View in {Layer}” cross-navigation stubs in the Inspector (no data coupling yet).
-* Add a map settings panel (toggles for labels, relationships, and a future timeline).
+* UI routing
+  * [ ] Add `/map` route (SSR-friendly, no client-only dependencies required to show the shell).
+  * [ ] Render the constant 3-pane layout (Layer panel / Canvas / Inspector).
+* Empty-state contract
+  * [ ] No focus ⇒ empty canvas + instructional hint text (match mock philosophy).
+* DX + maintainability
+  * [ ] Keep state local to the route (avoid cross-app global state early).
 
-Milestones (incremental, shippable):
+Blockers:
 
-* M13.1 — Route + layout
-  * `/map` exists, SSR-friendly, loads fast, and renders with an empty canvas.
-* M13.2 — Layer switching contract
-  * Switching layers clears the canvas and rehydrates state for that layer only.
-  * Layer choice is encoded in the URL (`/map?layer=l3`) so deep links work.
-* M13.3 — Focus contract (object-first)
-  * Focus is encoded in the URL (`focusType`, `focusId`).
-  * No focus ⇒ empty graph + instructional hint.
-* M13.4 — Inspector contract
-  * Inspector always shows “Identity”, “Status”, and “Relationships” sections.
-  * Relationship actions exist (even if they are stubs initially).
+* None (mock data is explicitly allowed here).
+
+Acceptance criteria:
+
+* Visiting `/map` renders the 3-pane layout instantly and shows an empty-state hint.
+
+#### M13.2 — Layer switching contract (URL-driven)
+
+Tasks:
+
+* URL contract
+  * [ ] Encode layer in the URL (e.g., `/map?layer=l3`).
+  * [ ] Validate unknown layers (fall back to empty-state or a friendly error).
+* Rendering
+  * [ ] Switching layers clears canvas state; each layer owns its own projection/render config.
+
+Blockers:
+
+* Needs a stable list of layer names that matches `docs/api-contract.md`.
+
+Acceptance criteria:
+
+* Deep-linking to `/map?layer=l3` selects L3 and reloading preserves it.
+
+#### M13.3 — Focus contract (object-first)
+
+Tasks:
+
+* URL contract
+  * [ ] Encode focus in URL (`focusType`, `focusId`).
+  * [ ] Define “no focus” behavior as valid, not an error.
+* UI affordances
+  * [ ] Provide a minimal focus picker entry point (can be a stub/search box for now).
+
+Blockers:
+
+* Focus types must align with Phase 14 query params (so UI doesn’t drift).
+
+Acceptance criteria:
+
+* `/map?layer=l3&focusType=device&focusId=...` is a stable deep link.
+
+#### M13.4 — Inspector contract (always-on)
+
+Tasks:
+
+* Inspector structure
+  * [ ] Implement sections: Identity / Status / Relationships.
+  * [ ] Relationship actions exist as stubs (e.g., “View in L3”, “View in Physical”).
+* Cross-layer navigation
+  * [ ] “View in …” actions update URL (layer + focus) without losing focus if possible.
+
+Blockers:
+
+* Relationship action targets must match the Phase 13/14 URL contract.
+
+Acceptance criteria:
+
+* Inspector remains visible and stays in sync with the focused object.
 
 Acceptance criteria:
 
@@ -541,7 +903,9 @@ Deliverable:
 
 **Status:** Planned
 
-Goal: make the map a **projection of structured objects**, not a hand-drawn diagram.
+### Goal
+
+Make the map a projection of structured objects, not a hand-drawn diagram.
 
 ### Data model (incremental, minimal v1)
 
@@ -569,25 +933,106 @@ Rules:
 * Default response for no focus: empty graph + guidance message.
 * OpenAPI is canonical; add contract tests for projections (shape + required fields).
 
+### Blockers
+
+* Requires the Phase 13 URL/state contract (layer + focus) to be stable so the UI and API match.
+* Subnet/VLAN derivation needs predictable rules (CIDR source of truth, membership from observed IPs, and stable IDs).
+* Requires careful output stability (sorted nodes/edges, stable IDs) so UI diffs don’t churn.
+
 Deliverable:
 
 * Selecting a focus object in the UI produces a real (small) graph for L3 from live data.
 
-Milestones (L3-first, smallest useful slice):
+### Milestones (Phase 14)
 
-* M14.1 — Projection schema pinned (OpenAPI-first)
-  * Define a `MapProjection` response shape in `api/openapi.yaml` (canonical).
-  * Generate TS types/clients from OpenAPI (prefer `openapi-typescript` + `openapi-fetch`, or `orval`) and validate projections in UI (prefer `zod`).
-  * Add Go contract coverage so server/router cannot drift.
-* M14.2 — L3 projection (device focus)
-  * `GET /api/v1/map/l3?focusType=device&focusId=...` returns:
-    * Regions = subnets derived from the device’s IPs (and optionally neighbors).
-    * Nodes = device + peer devices that share those subnets.
-    * Edges = membership/attachment only (no arbitrary mesh).
-* M14.3 — L3 projection (subnet focus)
-  * `focusType=subnet` returns devices observed in that subnet with a predictable layout payload.
-* M14.4 — Inspector payload
-  * Projection returns an `inspector` block that UI can render without extra round trips.
+#### M14.1 — Projection schema pinned (OpenAPI-first)
+
+Tasks:
+
+* Contract
+  * [ ] Define a `MapProjection` schema in `api/openapi.yaml` (canonical).
+  * [ ] Define shared types: `Region`, `Node`, `Edge`, `Inspector`.
+  * [ ] Define error behavior for invalid layer/focus (per `docs/api-contract.md`).
+* Stability rules
+  * [ ] Document sorting rules (e.g., sort regions/nodes/edges by stable id).
+  * [ ] Document “no focus” behavior: return an empty projection + guidance (200 OK).
+* Tests
+  * [ ] Add contract coverage so router cannot drift (keep the existing drift-gate philosophy).
+* UI wiring (scaffolding)
+  * [ ] Ensure UI types are generated from OpenAPI (no hand-written DTOs).
+
+Blockers:
+
+* Requires agreement on stable IDs for non-device focus types (subnet/vlan/zone identifiers).
+
+Acceptance criteria:
+
+* The projection response shape is pinned and can be consumed by UI without guessing.
+
+#### M14.2 — L3 projection (device focus) from live data
+
+**API:** `GET /api/v1/map/l3?focusType=device&focusId=...`
+
+Tasks:
+
+* Projection rules
+  * [ ] Regions = subnets derived from the focused device’s IP facts.
+  * [ ] Nodes = focused device + peers in those subnets.
+  * [ ] Edges = region membership and a small number of intentional connectors (no mesh).
+* Core-go implementation
+  * [ ] Implement handler + SQL for IP→subnet grouping and peer selection.
+  * [ ] Enforce hard limits (node/edge caps) to prevent pathological graphs.
+  * [ ] Ensure deterministic ordering.
+* Tests
+  * [ ] Integration tests using seeded data (subnet grouping + deterministic output).
+
+Blockers:
+
+* Needs predictable subnet derivation rules (CIDR boundaries and identifier choice).
+
+Acceptance criteria:
+
+* One focused device yields a small, readable L3 projection with stable output.
+
+#### M14.3 — L3 projection (subnet focus)
+
+**API:** `GET /api/v1/map/l3?focusType=subnet&focusId=...`
+
+Tasks:
+
+* Contract
+  * [ ] Define `subnet` focus identifier format (recommend: CIDR string unless/until a `subnets` table exists).
+* Core-go implementation
+  * [ ] Return devices observed in that subnet, bounded and deterministic.
+* Tests
+  * [ ] Validate 400 for invalid CIDR and 404 vs empty semantics (choose and document).
+
+Blockers:
+
+* If we later introduce a `subnets` table, we must preserve backwards compatibility or version the focus id.
+
+Acceptance criteria:
+
+* Subnet focus deep link renders a consistent region with member devices.
+
+#### M14.4 — Inspector payload (no extra round trips)
+
+Tasks:
+
+* Contract
+  * [ ] Define an `inspector` block that is render-ready (identity/status/relationships).
+* Core-go implementation
+  * [ ] Populate inspector from existing tables in the same request.
+* UI
+  * [ ] Render inspector from the projection response only (no additional fetches for v1).
+
+Blockers:
+
+* Requires agreement on what is “must-have” vs “nice-to-have” in inspector.
+
+Acceptance criteria:
+
+* UI can render the inspector reliably from `MapProjection.inspector` alone.
 
 Acceptance criteria:
 
@@ -601,7 +1046,9 @@ Acceptance criteria:
 
 **Status:** Planned
 
-Goal: ship the first three layers that map directly to discovered data, matching the mock mental model.
+### Goal
+
+Ship the first three layers that map directly to discovered data, matching the mock mental model.
 
 Layers:
 
@@ -609,11 +1056,16 @@ Layers:
 * **L2 (VLANs)**: VLAN regions + device/interface membership (start with PVID; add trunk/tagged later).
 * **L3 (Subnets)**: subnet regions + device membership based on IPs; show routing devices as “connectors”.
 
-UI tasks:
+### Tasks
 
 * Canvas renderer with “stacked regions” (soft rounded containers) and node placement per region.
 * Minimal, deterministic layout rules first (avoid force-graph chaos); semantic zoom deferred.
 * Inspector shows identity/status/relationships and “View in …” links between layers.
+
+### Blockers
+
+* Physical adjacency is manual-first unless LLDP/CDP enrichment is enabled (Phase 7).
+* L2 accuracy depends on VLAN enrichment coverage (PVID exists today; trunks/tagged may require more data).
 
 Deliverable:
 
@@ -621,17 +1073,77 @@ Deliverable:
 
 Milestones (match mock intent before “smart” layout):
 
-* M15.1 — L3 “stacked regions” renderer
-  * Rounded region boxes per subnet (accent color per region), nodes placed inside.
-  * Labels on hover; minimal always-on labels.
-* M15.2 — Physical v1 projection + renderer
-  * Physical is not “every cable”; it’s a small, readable adjacency/tree.
-  * Start with manual `links` for adjacency; show a simple hierarchical layout similar to the Physical mock.
-* M15.3 — L2 v1 projection + renderer
-  * VLAN “tint regions” and membership.
-  * Start with PVID-only membership (since that’s what enrichment reliably provides today).
-* M15.4 — Cross-layer navigation
-  * Inspector links (“View L3”, “View in Physical”) preserve focus where possible.
+#### M15.1 — L3 “stacked regions” renderer (UI)
+
+Tasks:
+
+* Rendering
+  * [ ] Render region containers (subnets) as rounded “stacked regions”.
+  * [ ] Place nodes deterministically within regions (avoid force graphs in v1).
+* Interaction
+  * [ ] Hover highlights and labels-on-hover.
+  * [ ] Click selects focus and updates Inspector.
+
+Blockers:
+
+* Depends on Phase 14 L3 projection being stable enough to render.
+
+Acceptance criteria:
+
+* L3 view resembles the mock philosophy: regions first, minimal connectors, readable.
+
+#### M15.2 — Physical v1 projection + renderer
+
+Tasks:
+
+* Data model
+  * [ ] Add `links` table via migration if/when Build mode editing begins (manual-first).
+* API
+  * [ ] Add `GET /api/v1/map/physical` projection (read-only first).
+* UI
+  * [ ] Render a small adjacency/tree view (no “everything at once”).
+
+Blockers:
+
+* Physical adjacency is manual-first unless LLDP/CDP enrichment lands.
+
+Acceptance criteria:
+
+* A curated set of links produces a stable, readable physical view.
+
+#### M15.3 — L2 v1 projection + renderer
+
+Tasks:
+
+* API
+  * [ ] Add `GET /api/v1/map/l2` projection.
+  * [ ] Use PVID-only membership from `interface_vlans` first.
+* UI
+  * [ ] Render VLAN regions with membership.
+
+Blockers:
+
+* L2 accuracy depends on VLAN enrichment coverage.
+
+Acceptance criteria:
+
+* L2 view shows VLAN groupings without implying trunks/tagged membership yet.
+
+#### M15.4 — Cross-layer navigation (Inspector)
+
+Tasks:
+
+* UI
+  * [ ] Preserve focus when switching layers where possible.
+  * [ ] Define fallbacks when a focus type does not exist in the target layer.
+
+Blockers:
+
+* Requires consistent focus identifiers across layers.
+
+Acceptance criteria:
+
+* “View in …” actions feel predictable and don’t strand the user.
 
 Acceptance criteria:
 
@@ -646,7 +1158,9 @@ Acceptance criteria:
 
 **Status:** Planned
 
-Goal: add the two “meaning” layers and the product modes from the spec without mixing layers.
+### Goal
+
+Add the two “meaning” layers and the product modes from the spec without mixing layers.
 
 Layers:
 
@@ -664,19 +1178,86 @@ Deliverable:
 
 * Services and Security layers exist with a clean inspector-driven workflow, plus initial mode gating.
 
+### Blockers
+
+* Operate overlays depend on Phase 9/10 history + change feed being available.
+* Services dependencies and security policies start manual-first; needs clear data model + UX so operators don’t create inconsistent truth.
+
 Milestones:
 
-* M16.1 — Modes UI
-  * Top bar with Explore / Build / Secure / Operate.
-  * Modes gate actions and rendering density; they do not blend layers.
-* M16.2 — Services v1
-  * Service nodes grouped by host; source is existing `services` table.
-  * Dependencies are manual-first (optional) and must be modeled as explicit edges.
-* M16.3 — Security v1
-  * Zones are manual groupings to start; projection shows zones as regions.
-  * Policies/flows are manual-first; projection shows only zone-to-zone edges.
-* M16.4 — Operate overlays
-  * “Last seen” and “changed” overlays sourced from discovery history/diffing (Phase 9).
+#### M16.1 — Modes UI (Explore / Build / Secure / Operate)
+
+Tasks:
+
+* UI
+  * [ ] Add a top bar mode selector.
+  * [ ] Define what each mode changes (actions enabled + rendering density).
+* Safety
+  * [ ] Ensure mode does not bypass layer separation (no blending layers).
+
+Blockers:
+
+* Build and Operate modes depend on Phase 11 auth/roles to be safe by default.
+
+Acceptance criteria:
+
+* Mode switching is instant, URL-deep-linkable (recommended), and deterministic.
+
+#### M16.2 — Services v1 (projection + renderer)
+
+Tasks:
+
+* API
+  * [ ] Add `GET /api/v1/map/services` projection using existing `services` facts.
+* UI
+  * [ ] Render services grouped by host/device.
+* Data model (optional, later)
+  * [ ] If adding dependencies, model as explicit edges (manual-first) and gate writes behind Build mode.
+
+Blockers:
+
+* Active port discovery (Phase 7) changes the completeness of this layer; keep it best-effort and clearly labeled.
+
+Acceptance criteria:
+
+* Services view remains readable and bounded; no attempt at “full dependency graph” in v1.
+
+#### M16.3 — Security v1 (zones + policies)
+
+Tasks:
+
+* Data model
+  * [ ] Add `zones` (+ membership) migrations when Build mode editing begins.
+* API
+  * [ ] Add `GET /api/v1/map/security` projection.
+* UI
+  * [ ] Render zones as regions; show only zone-level edges.
+
+Blockers:
+
+* Needs a clear UX contract so operators don’t create inconsistent truth.
+
+Acceptance criteria:
+
+* Security layer is zone-first and intentionally simplified.
+
+#### M16.4 — Operate overlays (history-aware)
+
+Tasks:
+
+* Data
+  * [ ] Use Phase 9 APIs to power “last seen” and “changed” overlays.
+* UI
+  * [ ] Add overlays without turning the map into a monitoring dashboard.
+  * [ ] Provide a clear legend and allow toggling overlays.
+
+Blockers:
+
+* Depends on Phase 9 history/change feed being implemented and performant.
+
+Acceptance criteria:
+
+* Operate mode can show change/recency without visual noise.
 
 Acceptance criteria:
 
@@ -687,7 +1268,7 @@ Acceptance criteria:
 
 ---
 
-## Open decisions before Phase 13 (network map)
+## Open decisions (network map)
 
 * **Renderer**: SVG (simple, accessible) vs Canvas/WebGL (performance) vs React Flow (speed of delivery).
 * **Layout strategy**: deterministic region layout (recommended for v1) vs force-directed.
@@ -733,32 +1314,21 @@ Preferred off-the-shelf picks (so we don’t build our own plumbing):
 
 If you want next:
 
-* Lock the OpenAPI spec (devices, discovery runs, observations) and regenerate the Go/TS clients from it.
-* Add migrations + sqlc queries for `discovery_runs` and observations (Phase 8 prep) with a happy-path handler test.
-* Add a docker-compose dev profile with seeded data and CI health checks (lint + tests + migrate).
-* Ship the first UI smoke (create/list device) hitting the Go API to guard regressions.
+* Push time/history into the product (Phase 9), then wire the operator UX on top (Phase 10).
+* Ship auth hardening (Phase 11) before exposing anything beyond a trusted network.
+* Start the map track with the UI shell contract (Phase 13), then pin the projection schema (M14.1) and ship L3 first (M14.2).
 
-## Open decisions before Phase 8
+## Next milestone checklist
 
-* Default discovery scope order (ARP + ICMP first; SNMP once stable; mDNS/NetBIOS optional).
-* Run cadence and max runtime budget per subnet.
-* Retention window for raw observations vs rollups; defaults for trimming old runs.
-
----
-
-## Updated trackers (next milestones)
-
-Use this as the “what’s next” checklist; the detailed feature inventory stays in `docs/feature-matrix.md`.
-
-* [x] **Protect `/api` before shipping auth**: implemented UI-as-BFF; `core-go` is private and Traefik only routes to the UI.
-* [x] **Add an OpenAPI drift gate**: added a Go contract test that compares `api/openapi.yaml` to registered chi routes.
-* [x] **Discovery deployment plan**: documented Docker networking/capabilities + safe scope targeting (`docs/discovery-deployment.md`).
-* [x] **Discovery worker v1**: implements queued→running→(succeeded|failed) with a bounded ICMP sweep (best-effort) + ARP scrape that writes observations/current state.
-* [x] **Production DB posture**: removed dev `trust` auth; Postgres password is provided via env/secret injection.
-* [ ] **Network map v1 shell**: add `/map` route with 3-pane layout + inspector + layer switcher.
-* [ ] **Map projection API (L3 first)**: add `GET /api/v1/map/l3` that returns regions/nodes/edges for a focused device/subnet.
-* [ ] **Physical/L2/L3 layers**: implement the three projections + UI renderers matching the mocks (no “full graph” view).
-* [ ] **Services/Security layers + modes**: implement two more layers plus Explore/Build/Secure/Operate gating.
+* [ ] M9.1 — `GET /api/v1/devices/changes` (change feed)
+* [ ] M9.2 — `GET /api/v1/devices/{id}/history` (device timeline)
+* [ ] M9.3 — discovery run listing + logs (`/api/v1/discovery/runs...`)
+* [ ] Phase 10 — filters/search/pagination + device timeline UX
+* [ ] Phase 11 — auth + sessions + roles
+* [ ] Phase 12 — metrics + runbooks + CI smoke
+* [ ] M13.1 — `/map` route + 3-pane shell (mock data OK)
+* [ ] M14.1 — `MapProjection` schema pinned in `api/openapi.yaml`
+* [ ] M14.2 — L3 projection (device focus) from live data
 
 ## Definition of done for discovery (Phases 8-10)
 

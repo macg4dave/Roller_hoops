@@ -65,4 +65,9 @@ The system propagates `X-Request-ID` end-to-end (UI → API). If a request id is
   - `POST /api/v1/discovery/run` returns a real run id and persists into `discovery_runs` + logs
   - `GET /api/v1/discovery/status` surfaces the latest run status (UI shows it and can trigger runs)
 
+- External inventory import (optional):
+
+  - `POST /api/v1/inventory/netbox/import`
+  - `POST /api/v1/inventory/nautobot/import`
+
 The canonical API contract is in `api/openapi.yaml`.

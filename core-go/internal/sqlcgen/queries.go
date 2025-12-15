@@ -152,6 +152,33 @@ func (q *Queries) UpsertDeviceMetadata(ctx context.Context, arg UpsertDeviceMeta
 	return i, err
 }
 
+const upsertDeviceMetadataFillBlank = `-- name: UpsertDeviceMetadataFillBlank :one
+INSERT INTO device_metadata (device_id, owner, location, notes)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (device_id) DO UPDATE
+SET owner = CASE
+              WHEN device_metadata.owner IS NULL OR btrim(device_metadata.owner) = '' THEN EXCLUDED.owner
+              ELSE device_metadata.owner
+            END,
+    location = CASE
+                 WHEN device_metadata.location IS NULL OR btrim(device_metadata.location) = '' THEN EXCLUDED.location
+                 ELSE device_metadata.location
+               END,
+    notes = CASE
+              WHEN device_metadata.notes IS NULL OR btrim(device_metadata.notes) = '' THEN EXCLUDED.notes
+              ELSE device_metadata.notes
+            END,
+    updated_at = now()
+RETURNING device_id, owner, location, notes
+`
+
+func (q *Queries) UpsertDeviceMetadataFillBlank(ctx context.Context, arg UpsertDeviceMetadataParams) (DeviceMetadata, error) {
+	row := q.db.QueryRow(ctx, upsertDeviceMetadataFillBlank, arg.DeviceID, arg.Owner, arg.Location, arg.Notes)
+	var i DeviceMetadata
+	err := row.Scan(&i.DeviceID, &i.Owner, &i.Location, &i.Notes)
+	return i, err
+}
+
 const insertDeviceNameCandidate = `-- name: InsertDeviceNameCandidate :exec
 INSERT INTO device_name_candidates (device_id, name, source, address)
 VALUES ($1::uuid, $2, $3, $4::inet)
@@ -653,4 +680,346 @@ type InsertMACObservationParams struct {
 func (q *Queries) InsertMACObservation(ctx context.Context, arg InsertMACObservationParams) error {
 	_, err := q.db.Exec(ctx, insertMACObservation, arg.RunID, arg.DeviceID, arg.MAC)
 	return err
+}
+
+const upsertLink = `-- name: UpsertLink :exec
+INSERT INTO links (
+  link_key,
+  a_device_id,
+  a_interface_id,
+  b_device_id,
+  b_interface_id,
+  link_type,
+  source,
+  observed_at
+)
+VALUES ($1, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8)
+ON CONFLICT (link_key) DO UPDATE
+SET a_device_id = EXCLUDED.a_device_id,
+    a_interface_id = EXCLUDED.a_interface_id,
+    b_device_id = EXCLUDED.b_device_id,
+    b_interface_id = EXCLUDED.b_interface_id,
+    link_type = EXCLUDED.link_type,
+    source = EXCLUDED.source,
+    observed_at = EXCLUDED.observed_at,
+    updated_at = now()
+`
+
+type UpsertLinkParams struct {
+	LinkKey      string
+	ADeviceID    string
+	AInterfaceID *string
+	BDeviceID    string
+	BInterfaceID *string
+	LinkType     *string
+	Source       string
+	ObservedAt   *time.Time
+}
+
+func (q *Queries) UpsertLink(ctx context.Context, arg UpsertLinkParams) error {
+	_, err := q.db.Exec(ctx, upsertLink, arg.LinkKey, arg.ADeviceID, arg.AInterfaceID, arg.BDeviceID, arg.BInterfaceID, arg.LinkType, arg.Source, arg.ObservedAt)
+	return err
+}
+
+const upsertInterfaceByName = `-- name: UpsertInterfaceByName :one
+INSERT INTO interfaces (device_id, name)
+VALUES ($1::uuid, $2)
+ON CONFLICT (device_id, name) WHERE name IS NOT NULL
+DO UPDATE SET updated_at = now()
+RETURNING id
+`
+
+type UpsertInterfaceByNameParams struct {
+	DeviceID string
+	Name     string
+}
+
+func (q *Queries) UpsertInterfaceByName(ctx context.Context, arg UpsertInterfaceByNameParams) (string, error) {
+	row := q.db.QueryRow(ctx, upsertInterfaceByName, arg.DeviceID, arg.Name)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
+const upsertServiceFromScan = `-- name: UpsertServiceFromScan :exec
+INSERT INTO services (
+  device_id,
+  protocol,
+  port,
+  name,
+  state,
+  source,
+  observed_at
+)
+VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (device_id, protocol, port) WHERE protocol IS NOT NULL AND port IS NOT NULL
+DO UPDATE
+SET name = EXCLUDED.name,
+    state = EXCLUDED.state,
+    source = EXCLUDED.source,
+    observed_at = EXCLUDED.observed_at,
+    updated_at = now()
+`
+
+type UpsertServiceFromScanParams struct {
+	DeviceID   string
+	Protocol   string
+	Port       int32
+	Name       *string
+	State      *string
+	Source     *string
+	ObservedAt time.Time
+}
+
+func (q *Queries) UpsertServiceFromScan(ctx context.Context, arg UpsertServiceFromScanParams) error {
+	_, err := q.db.Exec(ctx, upsertServiceFromScan, arg.DeviceID, arg.Protocol, arg.Port, arg.Name, arg.State, arg.Source, arg.ObservedAt)
+	return err
+}
+
+const listDeviceChangeEvents = `-- name: ListDeviceChangeEvents :many
+WITH events AS (
+	SELECT
+		'ip_observation:' || id::text AS event_id,
+		device_id,
+		observed_at AS event_at,
+		'ip_observation' AS kind,
+		ip::text AS summary,
+		jsonb_build_object('run_id', run_id, 'ip', ip::text) AS details
+	FROM ip_observations
+	UNION ALL
+	SELECT
+		'mac_observation:' || id::text AS event_id,
+		device_id,
+		observed_at AS event_at,
+		'mac_observation' AS kind,
+		mac::text AS summary,
+		jsonb_build_object('run_id', run_id, 'mac', mac::text) AS details
+	FROM mac_observations
+	UNION ALL
+	SELECT
+		'metadata:' || id::text AS event_id,
+		device_id,
+		updated_at AS event_at,
+		'metadata' AS kind,
+		COALESCE(owner, location, notes, 'metadata updated') AS summary,
+		jsonb_build_object('owner', owner, 'location', location, 'notes', notes) AS details
+	FROM device_metadata
+	UNION ALL
+	SELECT
+		'device_display_name:' || id::text AS event_id,
+		id AS device_id,
+		updated_at AS event_at,
+		'display_name' AS kind,
+		COALESCE(display_name, 'device updated') AS summary,
+		jsonb_build_object('display_name', display_name) AS details
+	FROM devices
+	UNION ALL
+	SELECT
+		'service:' || id::text AS event_id,
+		device_id,
+		observed_at AS event_at,
+		'service' AS kind,
+		COALESCE(name, CONCAT(COALESCE(protocol, 'unknown'), '/', COALESCE(port::text, '0'))) AS summary,
+		jsonb_build_object(
+			'port', port,
+			'protocol', protocol,
+			'state', state,
+			'source', source,
+			'name', name
+		) AS details
+	FROM services
+)
+SELECT
+	event_id,
+	device_id,
+	event_at,
+	kind,
+	summary,
+	details
+FROM events
+WHERE
+	($1 IS NULL OR (event_at < $1 OR (event_at = $1 AND event_id < $2)))
+	AND ($3 IS NULL OR event_at >= $3)
+ORDER BY event_at DESC, event_id DESC
+LIMIT $4
+`
+
+func (q *Queries) ListDeviceChangeEvents(ctx context.Context, arg ListDeviceChangeEventsParams) ([]DeviceChangeEvent, error) {
+	rows, err := q.db.Query(ctx, listDeviceChangeEvents, arg.BeforeEventAt, arg.BeforeEventID, arg.SinceEventAt, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DeviceChangeEvent
+	for rows.Next() {
+		var i DeviceChangeEvent
+		if err := rows.Scan(&i.EventID, &i.DeviceID, &i.EventAt, &i.Kind, &i.Summary, &i.Details); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDeviceChangeEventsForDevice = `-- name: ListDeviceChangeEventsForDevice :many
+WITH events AS (
+	SELECT
+		'ip_observation:' || id::text AS event_id,
+		device_id,
+		observed_at AS event_at,
+		'ip_observation' AS kind,
+		ip::text AS summary,
+		jsonb_build_object('run_id', run_id, 'ip', ip::text) AS details
+	FROM ip_observations
+	UNION ALL
+	SELECT
+		'mac_observation:' || id::text AS event_id,
+		device_id,
+		observed_at AS event_at,
+		'mac_observation' AS kind,
+		mac::text AS summary,
+		jsonb_build_object('run_id', run_id, 'mac', mac::text) AS details
+	FROM mac_observations
+	UNION ALL
+	SELECT
+		'metadata:' || id::text AS event_id,
+		device_id,
+		updated_at AS event_at,
+		'metadata' AS kind,
+		COALESCE(owner, location, notes, 'metadata updated') AS summary,
+		jsonb_build_object('owner', owner, 'location', location, 'notes', notes) AS details
+	FROM device_metadata
+	UNION ALL
+	SELECT
+		'device_display_name:' || id::text AS event_id,
+		id AS device_id,
+		updated_at AS event_at,
+		'display_name' AS kind,
+		COALESCE(display_name, 'device updated') AS summary,
+		jsonb_build_object('display_name', display_name) AS details
+	FROM devices
+	UNION ALL
+	SELECT
+		'service:' || id::text AS event_id,
+		device_id,
+		observed_at AS event_at,
+		'service' AS kind,
+		COALESCE(name, CONCAT(COALESCE(protocol, 'unknown'), '/', COALESCE(port::text, '0'))) AS summary,
+		jsonb_build_object(
+			'port', port,
+			'protocol', protocol,
+			'state', state,
+			'source', source,
+			'name', name
+		) AS details
+	FROM services
+)
+SELECT
+	event_id,
+	device_id,
+	event_at,
+	kind,
+	summary,
+	details
+FROM events
+WHERE
+	device_id = $1
+	AND ($2 IS NULL OR (event_at < $2 OR (event_at = $2 AND event_id < $3)))
+ORDER BY event_at DESC, event_id DESC
+LIMIT $4
+`
+
+func (q *Queries) ListDeviceChangeEventsForDevice(ctx context.Context, arg ListDeviceChangeEventsForDeviceParams) ([]DeviceChangeEvent, error) {
+	rows, err := q.db.Query(ctx, listDeviceChangeEventsForDevice, arg.DeviceID, arg.BeforeEventAt, arg.BeforeEventID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DeviceChangeEvent
+	for rows.Next() {
+		var i DeviceChangeEvent
+		if err := rows.Scan(&i.EventID, &i.DeviceID, &i.EventAt, &i.Kind, &i.Summary, &i.Details); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDiscoveryRuns = `-- name: ListDiscoveryRuns :many
+SELECT id, status, scope, stats, started_at, completed_at, last_error
+FROM discovery_runs
+WHERE
+	($1 IS NULL OR (started_at < $1 OR (started_at = $1 AND id < $2)))
+ORDER BY started_at DESC, id DESC
+LIMIT $3
+`
+
+type ListDiscoveryRunsParams struct {
+	BeforeStartedAt *time.Time
+	BeforeID        *string
+	Limit           int32
+}
+
+func (q *Queries) ListDiscoveryRuns(ctx context.Context, arg ListDiscoveryRunsParams) ([]DiscoveryRun, error) {
+	rows, err := q.db.Query(ctx, listDiscoveryRuns, arg.BeforeStartedAt, arg.BeforeID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DiscoveryRun
+	for rows.Next() {
+		var i DiscoveryRun
+		if err := rows.Scan(&i.ID, &i.Status, &i.Scope, &i.Stats, &i.StartedAt, &i.CompletedAt, &i.LastError); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDiscoveryRunLogs = `-- name: ListDiscoveryRunLogs :many
+SELECT id, run_id, level, message, created_at
+FROM discovery_run_logs
+WHERE
+	run_id = $1
+	AND ($2 IS NULL OR (created_at < $2 OR (created_at = $2 AND id < $3)))
+ORDER BY created_at DESC, id DESC
+LIMIT $4
+`
+
+type ListDiscoveryRunLogsParams struct {
+	RunID           string
+	BeforeCreatedAt *time.Time
+	BeforeID        *int64
+	Limit           int32
+}
+
+func (q *Queries) ListDiscoveryRunLogs(ctx context.Context, arg ListDiscoveryRunLogsParams) ([]DiscoveryRunLog, error) {
+	rows, err := q.db.Query(ctx, listDiscoveryRunLogs, arg.RunID, arg.BeforeCreatedAt, arg.BeforeID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DiscoveryRunLog
+	for rows.Next() {
+		var i DiscoveryRunLog
+		if err := rows.Scan(&i.ID, &i.RunID, &i.Level, &i.Message, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

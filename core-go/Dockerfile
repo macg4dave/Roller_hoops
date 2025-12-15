@@ -9,7 +9,7 @@ COPY . ./
 RUN CGO_ENABLED=0 go build -o /out/core-go ./cmd/core-go
 
 FROM alpine:3.20
-RUN apk add --no-cache iputils libcap && \
+RUN apk add --no-cache iputils libcap nmap && \
     (setcap cap_net_raw+ep /bin/ping || true)
 RUN adduser -D -H -s /sbin/nologin app
 USER app

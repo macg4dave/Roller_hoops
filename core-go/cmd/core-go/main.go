@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"net/netip"
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -53,6 +55,15 @@ func main() {
 			SNMPTimeout:           envOrDuration("DISCOVERY_SNMP_TIMEOUT", 900*time.Millisecond),
 			SNMPRetries:           envOrInt("DISCOVERY_SNMP_RETRIES", 0),
 			SNMPPort:              uint16(envOrInt("DISCOVERY_SNMP_PORT", 161)),
+			TopologyLLDPEnabled:   envOrBool("DISCOVERY_TOPOLOGY_LLDP_ENABLED", false),
+			TopologyCDPEnabled:    envOrBool("DISCOVERY_TOPOLOGY_CDP_ENABLED", false),
+			TopologyAllowlist:     envOrPrefixList("DISCOVERY_TOPOLOGY_ALLOWLIST"),
+			PortScanEnabled:       envOrBool("DISCOVERY_PORT_SCAN_ENABLED", false),
+			PortScanAllowlist:     envOrPrefixList("DISCOVERY_PORT_SCAN_ALLOWLIST"),
+			PortScanPorts:         envOrPortList("DISCOVERY_PORT_SCAN_PORTS", []int{22, 80, 443}),
+			PortScanWorkers:       envOrInt("DISCOVERY_PORT_SCAN_WORKERS", 4),
+			PortScanTimeout:       envOrDuration("DISCOVERY_PORT_SCAN_TIMEOUT", 3*time.Second),
+			PortScanMaxTargets:    envOrInt("DISCOVERY_PORT_SCAN_MAX_TARGETS", 24),
 		}
 		worker := discoveryworker.New(logger, pool.Queries(), opts)
 		go worker.Run(ctx)
@@ -125,4 +136,55 @@ func envOrBool(key string, fallback bool) bool {
 	default:
 		return fallback
 	}
+}
+
+func envOrPrefixList(key string) []netip.Prefix {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]netip.Prefix, 0, len(parts))
+	for _, p := range parts {
+		s := strings.TrimSpace(p)
+		if s == "" {
+			continue
+		}
+		pfx, err := netip.ParsePrefix(s)
+		if err != nil {
+			continue
+		}
+		out = append(out, pfx.Masked())
+	}
+	return out
+}
+
+func envOrPortList(key string, fallback []int) []int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	parts := strings.Split(raw, ",")
+	seen := map[int]struct{}{}
+	out := make([]int, 0, len(parts))
+	for _, p := range parts {
+		s := strings.TrimSpace(p)
+		if s == "" {
+			continue
+		}
+		n, err := strconv.Atoi(s)
+		if err != nil || n < 1 || n > 65535 {
+			continue
+		}
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		out = append(out, n)
+	}
+	sort.Ints(out)
+	if len(out) == 0 {
+		return fallback
+	}
+	return out
 }

@@ -71,6 +71,8 @@ Initial endpoints (from `docs/roadmap.md`):
   - `GET /api/v1/devices`
   - `GET /api/v1/devices/{id}`
   - `GET /api/v1/devices/{id}/name-candidates`
+  - `GET /api/v1/devices/changes`
+  - `GET /api/v1/devices/{id}/history`
   - `POST /api/v1/devices`
   - `PUT /api/v1/devices/{id}`
   - `GET /api/v1/devices/export`
@@ -79,6 +81,9 @@ Initial endpoints (from `docs/roadmap.md`):
 - Discovery
   - `POST /api/v1/discovery/run`
   - `GET /api/v1/discovery/status`
+  - `GET /api/v1/discovery/runs`
+  - `GET /api/v1/discovery/runs/{id}`
+  - `GET /api/v1/discovery/runs/{id}/logs`
 
 - Network map (planned)
   - `GET /api/v1/map/{layer}` (layer-aware projections; no global graph)
@@ -89,6 +94,23 @@ Initial endpoints (from `docs/roadmap.md`):
 - `POST /api/v1/discovery/run` accepts an optional `scope` hint; it returns a `DiscoveryRun` with a real run id (queued).
 - `GET /api/v1/discovery/status` returns `{status: string, latest_run?: DiscoveryRun}`. Status is `idle` when no runs exist; otherwise it mirrors the latest run’s status.
 - Discovery runs are persisted in Postgres (`discovery_runs`, `discovery_run_logs`). The current implementation stubs the worker but wires the API, status, and request id propagation.
+
+### Change feed & device history (v1)
+
+- `GET /api/v1/devices/changes` returns a read-only feed of change events (`event_id`, `device_id`, `event_at`, `kind`, `summary`, `details`) ordered newest-first.
+  - Query params: `since` (RFC3339 timestamp, inclusive) and `limit` (defaults to 50, max 100) gate the timeframe; `cursor` encodes `event_at|event_id` for pagination.
+  - Response includes `events[]` and optional `cursor` for the next page. Events are deterministic (stable secondary sort on `event_id`).
+- `GET /api/v1/devices/{id}/history` scopes the same event feed to a single device. It accepts `limit` (default 50) and `cursor` for paging, and returns 404 when the device ID is unknown.
+
+Both endpoints emit change events derived from observations, metadata edits, display-name updates, and service discoveries so the UI can render a stable timeline without manual joins.
+
+### Discovery run APIs (v1)
+
+- `GET /api/v1/discovery/runs` lists discovery runs sorted by `started_at DESC`. Supports `limit` (default 20, max 200) and `cursor` (`started_at|id`) for paging.
+- `GET /api/v1/discovery/runs/{id}` returns one run with its status, scope, stats, and timing.
+- `GET /api/v1/discovery/runs/{id}/logs` returns paginated logs (`level`, `message`, `created_at`) for the run; supports `limit` (default 100) and `cursor` (`created_at|log_id`).
+
+Logs are bounded (default 100 entries) and use deterministic cursoring so UI consumers can traverse backward without churn.
 
 ## Authentication
 

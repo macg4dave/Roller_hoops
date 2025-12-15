@@ -33,8 +33,11 @@ This file is a working checklist for implementing the Phase 7 (“nice-to-have i
 
 - [x] Decide approach: start with Go's `net`/`net/mdns` exploration; scaffolding lives in `core-go/internal/enrichment/mdns` to surface resolved candidate names.
 - [x] Store “friendly name” candidates and a chosen display name strategy (schema + UI integration to follow once names settle).
+- [x] Resolve names via reverse DNS, mDNS reverse lookups, and NetBIOS node-status so operators see richer name candidates before picking a display name.
 
   > Implemented: `device_name_candidates` stores candidates (reverse DNS + SNMP sysName today) and the worker auto-sets `devices.display_name` only if unset.
+
+  > Implemented: discovery worker now also captures mDNS and NetBIOS candidates before falling back to SNMP in `core-go/internal/enrichment/mdns`.
 
   > Implemented: UI shows candidates in the device detail pane and can apply one as the display name (`ui-node/app/devices/DeviceNameCandidatesPanel.tsx`).
 
@@ -52,3 +55,25 @@ This file is a working checklist for implementing the Phase 7 (“nice-to-have i
 - [x] Define export format (versioned) and document it; current JSON round-trips existing `Device` resources.
 - [x] Add core-go endpoints to export/import (and UI download/upload controls) — done, tracked via `core-go/httpapi` and `ui-node/app/devices/ImportExportPanel.tsx`.
 - [x] UI download/upload workflow.
+
+### Step 8 — LLDP/CDP adjacency (SNMP; best-effort)
+
+- [x] Add `links` table to store physical adjacency with `source=lldp|cdp`.
+- [x] Collect neighbors via SNMP LLDP-MIB / CISCO-CDP-MIB (best-effort; behind allowlists) and upsert into `links`.
+
+### Step 9 — Service/port discovery (active scan; opt-in)
+
+- [x] Add optional `nmap`-driven scan stage (connect scan + XML parsing) behind explicit enable flags and CIDR allowlists.
+- [x] Upsert open ports into `services` with `source=nmap` and `observed_at`.
+
+### Step 10 — External inventory import (IPAM/inventory feeds)
+
+- [x] Add wrapped payload import endpoints for NetBox/Nautobot and map into `devices`, `device_metadata`, and `ip_addresses`.
+
+## Phase 9 — Historical/diffing APIs
+
+- [x] Aggregate `ip_observations`, `mac_observations`, metadata edits, and services into a stable `events` feed.
+- [x] Expose `GET /api/v1/devices/changes` and `GET /api/v1/devices/{id}/history` with cursoring and limits.
+- [x] Surface `GET /api/v1/discovery/runs`, `/runs/{id}`, and `/runs/{id}/logs` so operators can inspect runs + logs via API.
+  
+Implemented: change feed + history now power the device detail timeline, while the run/log endpoints support run inspection without CLI access.

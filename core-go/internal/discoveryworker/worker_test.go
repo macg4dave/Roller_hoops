@@ -28,9 +28,12 @@ type fakeQueries struct {
 	setDisplayNameFn      func(ctx context.Context, arg sqlcgen.SetDeviceDisplayNameIfUnsetParams) (int64, error)
 	upsertSNMPFn          func(ctx context.Context, arg sqlcgen.UpsertDeviceSNMPParams) error
 	upsertInterfaceFn     func(ctx context.Context, arg sqlcgen.UpsertInterfaceFromSNMPParams) (string, error)
+	upsertIfaceByNameFn   func(ctx context.Context, arg sqlcgen.UpsertInterfaceByNameParams) (string, error)
 	upsertInterfaceMacFn  func(ctx context.Context, arg sqlcgen.UpsertInterfaceMACParams) error
 	linkMacFn             func(ctx context.Context, arg sqlcgen.LinkDeviceMACToInterfaceParams) (int64, error)
 	upsertVlanFn          func(ctx context.Context, arg sqlcgen.UpsertInterfaceVLANParams) error
+	upsertLinkFn          func(ctx context.Context, arg sqlcgen.UpsertLinkParams) error
+	upsertServiceFn       func(ctx context.Context, arg sqlcgen.UpsertServiceFromScanParams) error
 }
 
 func (f *fakeQueries) ClaimNextDiscoveryRun(ctx context.Context, stats map[string]any) (sqlcgen.DiscoveryRun, error) {
@@ -122,6 +125,13 @@ func (f *fakeQueries) UpsertInterfaceFromSNMP(ctx context.Context, arg sqlcgen.U
 	return f.upsertInterfaceFn(ctx, arg)
 }
 
+func (f *fakeQueries) UpsertInterfaceByName(ctx context.Context, arg sqlcgen.UpsertInterfaceByNameParams) (string, error) {
+	if f.upsertIfaceByNameFn == nil {
+		return "", nil
+	}
+	return f.upsertIfaceByNameFn(ctx, arg)
+}
+
 func (f *fakeQueries) UpsertInterfaceMAC(ctx context.Context, arg sqlcgen.UpsertInterfaceMACParams) error {
 	if f.upsertInterfaceMacFn == nil {
 		return nil
@@ -141,6 +151,20 @@ func (f *fakeQueries) UpsertInterfaceVLAN(ctx context.Context, arg sqlcgen.Upser
 		return nil
 	}
 	return f.upsertVlanFn(ctx, arg)
+}
+
+func (f *fakeQueries) UpsertLink(ctx context.Context, arg sqlcgen.UpsertLinkParams) error {
+	if f.upsertLinkFn == nil {
+		return nil
+	}
+	return f.upsertLinkFn(ctx, arg)
+}
+
+func (f *fakeQueries) UpsertServiceFromScan(ctx context.Context, arg sqlcgen.UpsertServiceFromScanParams) error {
+	if f.upsertServiceFn == nil {
+		return nil
+	}
+	return f.upsertServiceFn(ctx, arg)
 }
 
 func writeTempARPFile(t *testing.T, content string) string {

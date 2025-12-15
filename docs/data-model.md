@@ -100,6 +100,9 @@ Minimum columns (v1):
 - `protocol` (text, nullable; when present: `tcp` or `udp`)
 - `port` (integer, nullable; when present: 1–65535)
 - `name` (text, nullable)
+- `state` (text, nullable; when present: `open` or `closed`)
+- `source` (text, nullable; e.g. `nmap`)
+- `observed_at` (timestamptz, not null)
 
 ### `device_metadata`
 
@@ -192,7 +195,7 @@ This section documents **planned** entities needed for the Layered Network Explo
 
 Important:
 
-- These tables do **not** exist unless and until a migration lands in `core-go/migrations/`.
+- These tables do **not** exist unless and until a migration lands in `core-go/migrations/` (exception: `links` exists as of Phase 7).
 - The UI must never access Postgres directly; all reads/writes happen through `core-go` APIs.
 - Prefer projections derived from existing facts first; persist curated/manual truth only when necessary.
 
@@ -222,13 +225,14 @@ Proposed `vlans` (optional) columns:
 - `notes` (text, nullable)
 - `created_at` (timestamptz)
 
-### `links` (manual physical adjacency)
+### `links` (physical adjacency)
 
 Purpose: represent curated physical adjacency for the Physical layer (manual-first; later enrichment may write with `source=lldp|cdp`).
 
-Proposed columns:
+Columns:
 
 - `id` (uuid)
+- `link_key` (text, unique; computed canonical key to dedupe `(a,b)` vs `(b,a)`)
 - `a_device_id` (uuid, foreign key → `devices.id`)
 - `a_interface_id` (uuid, foreign key → `interfaces.id`, nullable)
 - `b_device_id` (uuid, foreign key → `devices.id`)
@@ -237,10 +241,11 @@ Proposed columns:
 - `source` (text; `manual` | `lldp` | `cdp`)
 - `observed_at` (timestamptz, nullable)
 - `created_at` (timestamptz)
+- `updated_at` (timestamptz)
 
 Constraints:
 
-- Enforce a canonical ordering so `(a,b)` and `(b,a)` are not duplicates (implementation detail; can be done in app logic or via a computed key).
+- Enforce a canonical ordering so `(a,b)` and `(b,a)` are not duplicates (implemented via `link_key`).
 
 ### `zones` + membership (security grouping)
 
