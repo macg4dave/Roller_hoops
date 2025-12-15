@@ -19,15 +19,57 @@ paths:
     get:
       tags: [Devices]
       summary: List devices
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Optional search query (matches id, display name, metadata, IPs, MACs, and SNMP fields).
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [online, offline, changed]
+          description: Optional status filter.
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [created_desc, last_seen_desc, last_change_desc]
+            default: created_desc
+          description: Sort order (cursor uses this sort key).
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Cursor returning `sort_ts|device_id` from the prior page.
+        - name: seen_within_seconds
+          in: query
+          schema:
+            type: integer
+            default: 3600
+            maximum: 2592000
+          description: Lookback window for online/offline filtering (defaults to 1 hour).
+        - name: changed_within_seconds
+          in: query
+          schema:
+            type: integer
+            default: 86400
+            maximum: 2592000
+          description: Lookback window for changed filtering (defaults to 24 hours).
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Device'
+                $ref: '#/components/schemas/DevicePage'
     post:
       tags: [Devices]
       summary: Create a device
@@ -130,6 +172,38 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/DeviceNameCandidate'
+        '400':
+          description: Invalid ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/devices/{id}/facts:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Devices]
+      summary: Get current device facts
+      description: |
+        Returns current discovery/enrichment facts for a device (IPs, MACs, interfaces, services, SNMP snapshot, and adjacency links).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceFacts'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '400':
           description: Invalid ID
           content:
@@ -513,8 +587,239 @@ components:
         display_name:
           type: string
           description: Optional human-friendly name.
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Latest observation timestamp across known facts (best-effort).
+        last_change_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Latest structural change timestamp across known facts (best-effort).
         metadata:
           $ref: '#/components/schemas/DeviceMetadata'
+    DevicePage:
+      type: object
+      required: [devices]
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/Device'
+        cursor:
+          type: string
+          description: Cursor for fetching the next page (opaque).
+    DeviceFacts:
+      type: object
+      required: [device_id, ips, macs, interfaces, services, links]
+      properties:
+        device_id:
+          type: string
+          format: uuid
+        ips:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceIP'
+        macs:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceMAC'
+        interfaces:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceInterface'
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceService'
+        snmp:
+          nullable: true
+          $ref: '#/components/schemas/DeviceSNMP'
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceLink'
+    DeviceIP:
+      type: object
+      required: [ip, created_at, updated_at]
+      properties:
+        ip:
+          type: string
+        interface_id:
+          type: string
+          format: uuid
+          nullable: true
+        interface_name:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    DeviceMAC:
+      type: object
+      required: [mac, created_at, updated_at]
+      properties:
+        mac:
+          type: string
+        interface_id:
+          type: string
+          format: uuid
+          nullable: true
+        interface_name:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    DeviceInterface:
+      type: object
+      required: [id, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        ifindex:
+          type: integer
+          nullable: true
+        descr:
+          type: string
+          nullable: true
+        alias:
+          type: string
+          nullable: true
+        mac:
+          type: string
+          nullable: true
+        admin_status:
+          type: integer
+          nullable: true
+        oper_status:
+          type: integer
+          nullable: true
+        mtu:
+          type: integer
+          nullable: true
+        speed_bps:
+          type: integer
+          format: int64
+          nullable: true
+        pvid:
+          type: integer
+          nullable: true
+        pvid_observed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    DeviceService:
+      type: object
+      required: [observed_at, created_at, updated_at]
+      properties:
+        protocol:
+          type: string
+          nullable: true
+          enum: [tcp, udp]
+        port:
+          type: integer
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+          enum: [open, closed]
+        source:
+          type: string
+          nullable: true
+        observed_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    DeviceSNMP:
+      type: object
+      required: [updated_at]
+      properties:
+        address:
+          type: string
+          nullable: true
+        sys_name:
+          type: string
+          nullable: true
+        sys_descr:
+          type: string
+          nullable: true
+        sys_object_id:
+          type: string
+          nullable: true
+        sys_contact:
+          type: string
+          nullable: true
+        sys_location:
+          type: string
+          nullable: true
+        last_success_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+    DeviceLink:
+      type: object
+      required: [id, link_key, peer_device_id, source, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        link_key:
+          type: string
+        peer_device_id:
+          type: string
+          format: uuid
+        local_interface_id:
+          type: string
+          format: uuid
+          nullable: true
+        peer_interface_id:
+          type: string
+          format: uuid
+          nullable: true
+        link_type:
+          type: string
+          nullable: true
+        source:
+          type: string
+        observed_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
     DeviceCreate:
       type: object
       description: |

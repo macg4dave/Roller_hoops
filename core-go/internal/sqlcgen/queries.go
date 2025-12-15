@@ -124,6 +124,207 @@ func (q *Queries) ListDevices(ctx context.Context) ([]Device, error) {
 	return items, nil
 }
 
+const listDevicesPage = `-- name: ListDevicesPage :many
+WITH computed AS (
+	SELECT
+		d.id,
+		d.display_name,
+		m.owner,
+		m.location,
+		m.notes,
+		d.created_at,
+		d.updated_at,
+		(
+			SELECT MAX(ts)
+			FROM (
+				VALUES
+					(
+						(
+							SELECT MAX(ia.updated_at)
+							FROM ip_addresses ia
+							LEFT JOIN interfaces i ON i.id = ia.interface_id
+							WHERE ia.device_id = d.id OR i.device_id = d.id
+						)
+					),
+					(
+						(
+							SELECT MAX(ma.updated_at)
+							FROM mac_addresses ma
+							LEFT JOIN interfaces i ON i.id = ma.interface_id
+							WHERE ma.device_id = d.id OR i.device_id = d.id
+						)
+					),
+					((SELECT MAX(s.observed_at) FROM services s WHERE s.device_id = d.id)),
+					((SELECT MAX(ds.last_success_at) FROM device_snmp ds WHERE ds.device_id = d.id))
+			) v(ts)
+		) AS last_seen_at,
+		(
+			SELECT MAX(ts)
+			FROM (
+				VALUES
+					(d.updated_at),
+					((SELECT MAX(dm.updated_at) FROM device_metadata dm WHERE dm.device_id = d.id)),
+					(
+						(
+							SELECT MAX(ia.created_at)
+							FROM ip_addresses ia
+							LEFT JOIN interfaces i ON i.id = ia.interface_id
+							WHERE ia.device_id = d.id OR i.device_id = d.id
+						)
+					),
+					(
+						(
+							SELECT MAX(ma.created_at)
+							FROM mac_addresses ma
+							LEFT JOIN interfaces i ON i.id = ma.interface_id
+							WHERE ma.device_id = d.id OR i.device_id = d.id
+						)
+					),
+					((SELECT MAX(s.created_at) FROM services s WHERE s.device_id = d.id)),
+					((SELECT MAX(ds.updated_at) FROM device_snmp ds WHERE ds.device_id = d.id)),
+					(
+						(
+							SELECT MAX(iv.observed_at)
+							FROM interface_vlans iv
+							JOIN interfaces i ON i.id = iv.interface_id
+							WHERE i.device_id = d.id
+						)
+					),
+					(
+						(
+							SELECT MAX(COALESCE(l.observed_at, l.updated_at))
+							FROM links l
+							WHERE l.a_device_id = d.id OR l.b_device_id = d.id
+						)
+					)
+			) v(ts)
+		) AS last_change_at
+	FROM devices d
+	LEFT JOIN device_metadata m ON m.device_id = d.id
+)
+SELECT
+	q.id,
+	q.display_name,
+	q.owner,
+	q.location,
+	q.notes,
+	q.created_at,
+	q.updated_at,
+	q.last_seen_at,
+	q.last_change_at,
+	q.sort_ts
+FROM (
+	SELECT
+		c.*,
+		CASE
+			WHEN $3 = 'last_seen_desc' THEN COALESCE(c.last_seen_at, '1970-01-01T00:00:00Z'::timestamptz)
+			WHEN $3 = 'last_change_desc' THEN COALESCE(c.last_change_at, '1970-01-01T00:00:00Z'::timestamptz)
+			ELSE c.created_at
+		END AS sort_ts
+	FROM computed c
+	WHERE
+		(
+			$1 IS NULL
+			OR (
+				c.id::text ILIKE $1
+				OR COALESCE(c.display_name, '') ILIKE $1
+				OR COALESCE(c.owner, '') ILIKE $1
+				OR COALESCE(c.location, '') ILIKE $1
+				OR COALESCE(c.notes, '') ILIKE $1
+				OR EXISTS (
+					SELECT 1
+					FROM ip_addresses ia
+					LEFT JOIN interfaces i ON i.id = ia.interface_id
+					WHERE (ia.device_id = c.id OR i.device_id = c.id)
+					  AND ia.ip::text ILIKE $1
+				)
+				OR EXISTS (
+					SELECT 1
+					FROM mac_addresses ma
+					LEFT JOIN interfaces i ON i.id = ma.interface_id
+					WHERE (ma.device_id = c.id OR i.device_id = c.id)
+					  AND ma.mac::text ILIKE $1
+				)
+				OR EXISTS (
+					SELECT 1
+					FROM device_snmp ds
+					WHERE ds.device_id = c.id AND (
+						COALESCE(ds.sys_name, '') ILIKE $1
+						OR COALESCE(ds.sys_descr, '') ILIKE $1
+						OR COALESCE(ds.sys_location, '') ILIKE $1
+						OR COALESCE(ds.sys_contact, '') ILIKE $1
+					)
+				)
+			)
+		)
+		AND (
+			$2 IS NULL
+			OR $2 = ''
+			OR ($2 = 'online' AND c.last_seen_at IS NOT NULL AND c.last_seen_at >= $4)
+			OR ($2 = 'offline' AND (c.last_seen_at IS NULL OR c.last_seen_at < $4))
+			OR ($2 = 'changed' AND c.last_change_at >= $5)
+		)
+) q
+WHERE
+	($6 IS NULL OR (q.sort_ts < $6 OR (q.sort_ts = $6 AND q.id < $7)))
+ORDER BY q.sort_ts DESC, q.id DESC
+LIMIT $8
+`
+
+type ListDevicesPageParams struct {
+	Query        *string
+	Status       *string
+	Sort         string
+	SeenAfter    time.Time
+	ChangedAfter time.Time
+	BeforeSortTs *time.Time
+	BeforeID     *string
+	Limit        int32
+}
+
+func (q *Queries) ListDevicesPage(ctx context.Context, arg ListDevicesPageParams) ([]DeviceListItem, error) {
+	rows, err := q.db.Query(
+		ctx,
+		listDevicesPage,
+		arg.Query,
+		arg.Status,
+		arg.Sort,
+		arg.SeenAfter,
+		arg.ChangedAfter,
+		arg.BeforeSortTs,
+		arg.BeforeID,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []DeviceListItem
+	for rows.Next() {
+		var i DeviceListItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.DisplayName,
+			&i.Owner,
+			&i.Location,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.LastSeenAt,
+			&i.LastChangeAt,
+			&i.SortTs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateDevice = `-- name: UpdateDevice :one
 WITH updated AS (
   UPDATE devices
@@ -246,6 +447,243 @@ func (q *Queries) ListDeviceNameCandidates(ctx context.Context, deviceID string)
 	for rows.Next() {
 		var i DeviceNameCandidate
 		if err := rows.Scan(&i.DeviceID, &i.Name, &i.Source, &i.Address, &i.ObservedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDeviceIPs = `-- name: ListDeviceIPs :many
+SELECT ia.ip::text,
+       ia.interface_id::text,
+       i.name AS interface_name,
+       ia.created_at,
+       ia.updated_at
+FROM ip_addresses ia
+LEFT JOIN interfaces i ON i.id = ia.interface_id
+WHERE ia.device_id = $1::uuid OR i.device_id = $1::uuid
+ORDER BY ia.updated_at DESC, ia.ip::text ASC
+`
+
+func (q *Queries) ListDeviceIPs(ctx context.Context, deviceID string) ([]DeviceIP, error) {
+	rows, err := q.db.Query(ctx, listDeviceIPs, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []DeviceIP
+	for rows.Next() {
+		var i DeviceIP
+		if err := rows.Scan(&i.IP, &i.InterfaceID, &i.InterfaceName, &i.CreatedAt, &i.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDeviceMACs = `-- name: ListDeviceMACs :many
+SELECT ma.mac::text,
+       ma.interface_id::text,
+       i.name AS interface_name,
+       ma.created_at,
+       ma.updated_at
+FROM mac_addresses ma
+LEFT JOIN interfaces i ON i.id = ma.interface_id
+WHERE ma.device_id = $1::uuid OR i.device_id = $1::uuid
+ORDER BY ma.updated_at DESC, ma.mac::text ASC
+`
+
+func (q *Queries) ListDeviceMACs(ctx context.Context, deviceID string) ([]DeviceMAC, error) {
+	rows, err := q.db.Query(ctx, listDeviceMACs, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []DeviceMAC
+	for rows.Next() {
+		var i DeviceMAC
+		if err := rows.Scan(&i.MAC, &i.InterfaceID, &i.InterfaceName, &i.CreatedAt, &i.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDeviceInterfaces = `-- name: ListDeviceInterfaces :many
+SELECT i.id,
+       i.name,
+       i.ifindex,
+       i.descr,
+       i.alias,
+       i.mac::text,
+       i.admin_status,
+       i.oper_status,
+       i.mtu,
+       i.speed_bps,
+       iv.vlan_id AS pvid,
+       iv.observed_at AS pvid_observed_at,
+       i.created_at,
+       i.updated_at
+FROM interfaces i
+LEFT JOIN interface_vlans iv ON iv.interface_id = i.id AND iv.role = 'pvid'
+WHERE i.device_id = $1::uuid
+ORDER BY i.name IS NULL, i.name ASC, i.ifindex IS NULL, i.ifindex ASC, i.id ASC
+`
+
+func (q *Queries) ListDeviceInterfaces(ctx context.Context, deviceID string) ([]DeviceInterface, error) {
+	rows, err := q.db.Query(ctx, listDeviceInterfaces, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []DeviceInterface
+	for rows.Next() {
+		var i DeviceInterface
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Ifindex,
+			&i.Descr,
+			&i.Alias,
+			&i.MAC,
+			&i.AdminStatus,
+			&i.OperStatus,
+			&i.MTU,
+			&i.SpeedBps,
+			&i.PVID,
+			&i.PVIDObservedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDeviceServices = `-- name: ListDeviceServices :many
+SELECT protocol,
+       port,
+       name,
+       state,
+       source,
+       observed_at,
+       created_at,
+       updated_at
+FROM services
+WHERE device_id = $1::uuid
+ORDER BY observed_at DESC, protocol ASC NULLS LAST, port ASC NULLS LAST, name ASC NULLS LAST
+`
+
+func (q *Queries) ListDeviceServices(ctx context.Context, deviceID string) ([]DeviceService, error) {
+	rows, err := q.db.Query(ctx, listDeviceServices, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []DeviceService
+	for rows.Next() {
+		var i DeviceService
+		if err := rows.Scan(&i.Protocol, &i.Port, &i.Name, &i.State, &i.Source, &i.ObservedAt, &i.CreatedAt, &i.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getDeviceSNMP = `-- name: GetDeviceSNMP :one
+SELECT device_id,
+       address::text,
+       sys_name,
+       sys_descr,
+       sys_object_id,
+       sys_contact,
+       sys_location,
+       last_success_at,
+       last_error,
+       updated_at
+FROM device_snmp
+WHERE device_id = $1::uuid
+`
+
+func (q *Queries) GetDeviceSNMP(ctx context.Context, deviceID string) (DeviceSNMP, error) {
+	row := q.db.QueryRow(ctx, getDeviceSNMP, deviceID)
+	var i DeviceSNMP
+	err := row.Scan(
+		&i.DeviceID,
+		&i.Address,
+		&i.SysName,
+		&i.SysDescr,
+		&i.SysObjectID,
+		&i.SysContact,
+		&i.SysLocation,
+		&i.LastSuccessAt,
+		&i.LastError,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listDeviceLinks = `-- name: ListDeviceLinks :many
+SELECT l.id,
+       l.link_key,
+       CASE WHEN l.a_device_id = $1::uuid THEN l.b_device_id::text ELSE l.a_device_id::text END AS peer_device_id,
+       CASE WHEN l.a_device_id = $1::uuid THEN l.a_interface_id::text ELSE l.b_interface_id::text END AS local_interface_id,
+       CASE WHEN l.a_device_id = $1::uuid THEN l.b_interface_id::text ELSE l.a_interface_id::text END AS peer_interface_id,
+       l.link_type,
+       l.source,
+       l.observed_at,
+       l.updated_at
+FROM links l
+WHERE l.a_device_id = $1::uuid OR l.b_device_id = $1::uuid
+ORDER BY COALESCE(l.observed_at, l.updated_at) DESC, l.id DESC
+`
+
+func (q *Queries) ListDeviceLinks(ctx context.Context, deviceID string) ([]DeviceLink, error) {
+	rows, err := q.db.Query(ctx, listDeviceLinks, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []DeviceLink
+	for rows.Next() {
+		var i DeviceLink
+		if err := rows.Scan(
+			&i.ID,
+			&i.LinkKey,
+			&i.PeerDeviceID,
+			&i.LocalInterfaceID,
+			&i.PeerInterfaceID,
+			&i.LinkType,
+			&i.Source,
+			&i.ObservedAt,
+			&i.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

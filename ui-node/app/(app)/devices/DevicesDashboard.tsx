@@ -1,16 +1,18 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 
 import { CreateDeviceForm } from './CreateDeviceForm';
 import { DeviceNameCandidatesPanel } from './DeviceNameCandidatesPanel';
 import { DeviceMetadataEditor } from './DeviceMetadataEditor';
 import { DiscoveryPanel } from './DiscoveryPanel';
 import { ImportExportPanel } from './ImportExportPanel';
-import { LogoutButton } from './LogoutButton';
 import type { Device, DiscoveryStatus } from './types';
-import type { SessionUser } from '../../lib/auth/session';
+
+type SessionUser = {
+  username: string;
+  role: string;
+};
 
 const FILTER_OPTIONS = [
   { id: 'all', label: 'All devices' },
@@ -89,30 +91,6 @@ export function DevicesDashboard({ devices, discoveryStatus, currentUser }: Prop
 
   return (
     <section style={{ display: 'grid', gap: 16, marginTop: 16 }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 12
-        }}
-      >
-          <div style={{ display: 'grid', gap: 4 }}>
-            <div style={{ fontSize: 14, color: '#111827' }}>Signed in as {currentUser.username}</div>
-            <div style={{ fontSize: 12, color: '#4b5563' }}>Role: {currentUser.role}</div>
-          </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <Link href="/auth/account" style={{ color: '#111827', fontWeight: 600 }}>
-            Account
-          </Link>
-          <LogoutButton />
-        </div>
-      </div>
-      {isReadOnly ? (
-        <div style={{ color: '#92400e', fontSize: 13, marginTop: 4 }}>
-          Read-only role: mutation controls have been disabled. Contact your admin to change this role.
-        </div>
-      ) : null}
       <div
         style={{
           display: 'grid',

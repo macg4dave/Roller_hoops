@@ -17,17 +17,54 @@ import (
 
 type fakeDeviceQueries struct {
 	listFn               func(ctx context.Context) ([]sqlcgen.Device, error)
+	listPageFn           func(ctx context.Context, arg sqlcgen.ListDevicesPageParams) ([]sqlcgen.DeviceListItem, error)
 	getFn                func(ctx context.Context, id string) (sqlcgen.Device, error)
 	createFn             func(ctx context.Context, displayName *string) (sqlcgen.Device, error)
 	updateFn             func(ctx context.Context, arg sqlcgen.UpdateDeviceParams) (sqlcgen.Device, error)
 	upsertFn             func(ctx context.Context, arg sqlcgen.UpsertDeviceMetadataParams) (sqlcgen.DeviceMetadata, error)
 	listNameCandidatesFn func(ctx context.Context, deviceID string) ([]sqlcgen.DeviceNameCandidate, error)
+	listIPsFn            func(ctx context.Context, deviceID string) ([]sqlcgen.DeviceIP, error)
+	listMACsFn           func(ctx context.Context, deviceID string) ([]sqlcgen.DeviceMAC, error)
+	listInterfacesFn     func(ctx context.Context, deviceID string) ([]sqlcgen.DeviceInterface, error)
+	listServicesFn       func(ctx context.Context, deviceID string) ([]sqlcgen.DeviceService, error)
+	getSNMPFn            func(ctx context.Context, deviceID string) (sqlcgen.DeviceSNMP, error)
+	listLinksFn          func(ctx context.Context, deviceID string) ([]sqlcgen.DeviceLink, error)
 	listChangeEventsFn   func(ctx context.Context, arg sqlcgen.ListDeviceChangeEventsParams) ([]sqlcgen.DeviceChangeEvent, error)
 	listHistoryFn        func(ctx context.Context, arg sqlcgen.ListDeviceChangeEventsForDeviceParams) ([]sqlcgen.DeviceChangeEvent, error)
 }
 
 func (f fakeDeviceQueries) ListDevices(ctx context.Context) ([]sqlcgen.Device, error) {
 	return f.listFn(ctx)
+}
+
+func (f fakeDeviceQueries) ListDevicesPage(ctx context.Context, arg sqlcgen.ListDevicesPageParams) ([]sqlcgen.DeviceListItem, error) {
+	if f.listPageFn != nil {
+		return f.listPageFn(ctx, arg)
+	}
+	if f.listFn == nil {
+		return nil, nil
+	}
+	rows, err := f.listFn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	out := make([]sqlcgen.DeviceListItem, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, sqlcgen.DeviceListItem{
+			ID:           row.ID,
+			DisplayName:  row.DisplayName,
+			Owner:        row.Owner,
+			Location:     row.Location,
+			Notes:        row.Notes,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+			LastSeenAt:   nil,
+			LastChangeAt: now,
+			SortTs:       now,
+		})
+	}
+	return out, nil
 }
 
 func (f fakeDeviceQueries) GetDevice(ctx context.Context, id string) (sqlcgen.Device, error) {
@@ -54,6 +91,48 @@ func (f fakeDeviceQueries) ListDeviceNameCandidates(ctx context.Context, deviceI
 		return nil, nil
 	}
 	return f.listNameCandidatesFn(ctx, deviceID)
+}
+
+func (f fakeDeviceQueries) ListDeviceIPs(ctx context.Context, deviceID string) ([]sqlcgen.DeviceIP, error) {
+	if f.listIPsFn == nil {
+		return nil, nil
+	}
+	return f.listIPsFn(ctx, deviceID)
+}
+
+func (f fakeDeviceQueries) ListDeviceMACs(ctx context.Context, deviceID string) ([]sqlcgen.DeviceMAC, error) {
+	if f.listMACsFn == nil {
+		return nil, nil
+	}
+	return f.listMACsFn(ctx, deviceID)
+}
+
+func (f fakeDeviceQueries) ListDeviceInterfaces(ctx context.Context, deviceID string) ([]sqlcgen.DeviceInterface, error) {
+	if f.listInterfacesFn == nil {
+		return nil, nil
+	}
+	return f.listInterfacesFn(ctx, deviceID)
+}
+
+func (f fakeDeviceQueries) ListDeviceServices(ctx context.Context, deviceID string) ([]sqlcgen.DeviceService, error) {
+	if f.listServicesFn == nil {
+		return nil, nil
+	}
+	return f.listServicesFn(ctx, deviceID)
+}
+
+func (f fakeDeviceQueries) GetDeviceSNMP(ctx context.Context, deviceID string) (sqlcgen.DeviceSNMP, error) {
+	if f.getSNMPFn == nil {
+		return sqlcgen.DeviceSNMP{}, pgx.ErrNoRows
+	}
+	return f.getSNMPFn(ctx, deviceID)
+}
+
+func (f fakeDeviceQueries) ListDeviceLinks(ctx context.Context, deviceID string) ([]sqlcgen.DeviceLink, error) {
+	if f.listLinksFn == nil {
+		return nil, nil
+	}
+	return f.listLinksFn(ctx, deviceID)
 }
 
 func (f fakeDeviceQueries) ListDeviceChangeEvents(ctx context.Context, arg sqlcgen.ListDeviceChangeEventsParams) ([]sqlcgen.DeviceChangeEvent, error) {

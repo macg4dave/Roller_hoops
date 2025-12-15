@@ -18,15 +18,7 @@ export function LogoutButton() {
       type="button"
       onClick={handleLogout}
       disabled={isPending}
-      style={{
-        borderRadius: 8,
-        padding: '6px 12px',
-        border: '1px solid #d1d5db',
-        background: '#fff',
-        color: '#111827',
-        fontWeight: 600,
-        cursor: 'pointer'
-      }}
+      className="btn"
     >
       {isPending ? 'Signing out…' : 'Sign out'}
     </button>

@@ -1,4 +1,5 @@
 import { Providers } from './providers';
+import './globals.css';
 
 export const metadata = {
   title: 'Roller_hoops',
@@ -12,7 +13,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body style={{ fontFamily: 'system-ui, sans-serif', margin: 24 }}>
+      <body>
         <Providers>{children}</Providers>
       </body>
     </html>

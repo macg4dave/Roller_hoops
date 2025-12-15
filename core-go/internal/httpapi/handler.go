@@ -36,11 +36,18 @@ type Handler struct {
 
 type deviceQueries interface {
 	ListDevices(ctx context.Context) ([]sqlcgen.Device, error)
+	ListDevicesPage(ctx context.Context, arg sqlcgen.ListDevicesPageParams) ([]sqlcgen.DeviceListItem, error)
 	GetDevice(ctx context.Context, id string) (sqlcgen.Device, error)
 	CreateDevice(ctx context.Context, displayName *string) (sqlcgen.Device, error)
 	UpdateDevice(ctx context.Context, arg sqlcgen.UpdateDeviceParams) (sqlcgen.Device, error)
 	UpsertDeviceMetadata(ctx context.Context, arg sqlcgen.UpsertDeviceMetadataParams) (sqlcgen.DeviceMetadata, error)
 	ListDeviceNameCandidates(ctx context.Context, deviceID string) ([]sqlcgen.DeviceNameCandidate, error)
+	ListDeviceIPs(ctx context.Context, deviceID string) ([]sqlcgen.DeviceIP, error)
+	ListDeviceMACs(ctx context.Context, deviceID string) ([]sqlcgen.DeviceMAC, error)
+	ListDeviceInterfaces(ctx context.Context, deviceID string) ([]sqlcgen.DeviceInterface, error)
+	ListDeviceServices(ctx context.Context, deviceID string) ([]sqlcgen.DeviceService, error)
+	GetDeviceSNMP(ctx context.Context, deviceID string) (sqlcgen.DeviceSNMP, error)
+	ListDeviceLinks(ctx context.Context, deviceID string) ([]sqlcgen.DeviceLink, error)
 	ListDeviceChangeEvents(ctx context.Context, arg sqlcgen.ListDeviceChangeEventsParams) ([]sqlcgen.DeviceChangeEvent, error)
 	ListDeviceChangeEventsForDevice(ctx context.Context, arg sqlcgen.ListDeviceChangeEventsForDeviceParams) ([]sqlcgen.DeviceChangeEvent, error)
 }
@@ -119,6 +126,7 @@ func (h *Handler) Router() http.Handler {
 				r.Post("/import", h.handleImportDevices)
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", h.handleGetDevice)
+					r.Get("/facts", h.handleGetDeviceFacts)
 					r.Get("/name-candidates", h.handleListDeviceNameCandidates)
 					r.Get("/history", h.handleDeviceHistory)
 					r.Put("/", h.handleUpdateDevice)
@@ -272,6 +280,8 @@ type device struct {
 	ID          string          `json:"id"`
 	DisplayName *string         `json:"display_name,omitempty"`
 	Metadata    *deviceMetadata `json:"metadata,omitempty"`
+	LastSeenAt  *time.Time      `json:"last_seen_at,omitempty"`
+	LastChangeAt *time.Time     `json:"last_change_at,omitempty"`
 }
 
 type deviceNameCandidate struct {
@@ -293,6 +303,11 @@ type deviceChangeEventResponse struct {
 type deviceChangeEventsResponse struct {
 	Events []deviceChangeEventResponse `json:"events"`
 	Cursor *string                     `json:"cursor,omitempty"`
+}
+
+type devicePage struct {
+	Devices []device `json:"devices"`
+	Cursor  *string  `json:"cursor,omitempty"`
 }
 
 type discoveryRunPage struct {
@@ -322,6 +337,84 @@ type deviceMetadataBody struct {
 	Owner    *string `json:"owner,omitempty"`
 	Location *string `json:"location,omitempty"`
 	Notes    *string `json:"notes,omitempty"`
+}
+
+type deviceIPFact struct {
+	IP            string     `json:"ip"`
+	InterfaceID   *string    `json:"interface_id,omitempty"`
+	InterfaceName *string    `json:"interface_name,omitempty"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
+type deviceMACFact struct {
+	MAC           string     `json:"mac"`
+	InterfaceID   *string    `json:"interface_id,omitempty"`
+	InterfaceName *string    `json:"interface_name,omitempty"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
+type deviceInterfaceFact struct {
+	ID             string     `json:"id"`
+	Name           *string    `json:"name,omitempty"`
+	Ifindex        *int32     `json:"ifindex,omitempty"`
+	Descr          *string    `json:"descr,omitempty"`
+	Alias          *string    `json:"alias,omitempty"`
+	MAC            *string    `json:"mac,omitempty"`
+	AdminStatus    *int32     `json:"admin_status,omitempty"`
+	OperStatus     *int32     `json:"oper_status,omitempty"`
+	MTU            *int32     `json:"mtu,omitempty"`
+	SpeedBps       *int64     `json:"speed_bps,omitempty"`
+	PVID           *int32     `json:"pvid,omitempty"`
+	PVIDObservedAt *time.Time `json:"pvid_observed_at,omitempty"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
+type deviceServiceFact struct {
+	Protocol   *string    `json:"protocol,omitempty"`
+	Port       *int32     `json:"port,omitempty"`
+	Name       *string    `json:"name,omitempty"`
+	State      *string    `json:"state,omitempty"`
+	Source     *string    `json:"source,omitempty"`
+	ObservedAt time.Time  `json:"observed_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+}
+
+type deviceSNMPFact struct {
+	Address       *string    `json:"address,omitempty"`
+	SysName       *string    `json:"sys_name,omitempty"`
+	SysDescr      *string    `json:"sys_descr,omitempty"`
+	SysObjectID   *string    `json:"sys_object_id,omitempty"`
+	SysContact    *string    `json:"sys_contact,omitempty"`
+	SysLocation   *string    `json:"sys_location,omitempty"`
+	LastSuccessAt *time.Time `json:"last_success_at,omitempty"`
+	LastError     *string    `json:"last_error,omitempty"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+}
+
+type deviceLinkFact struct {
+	ID               string     `json:"id"`
+	LinkKey          string     `json:"link_key"`
+	PeerDeviceID     string     `json:"peer_device_id"`
+	LocalInterfaceID *string    `json:"local_interface_id,omitempty"`
+	PeerInterfaceID  *string    `json:"peer_interface_id,omitempty"`
+	LinkType         *string    `json:"link_type,omitempty"`
+	Source           string     `json:"source"`
+	ObservedAt       *time.Time `json:"observed_at,omitempty"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+type deviceFacts struct {
+	DeviceID   string              `json:"device_id"`
+	IPs        []deviceIPFact      `json:"ips"`
+	MACs       []deviceMACFact     `json:"macs"`
+	Interfaces []deviceInterfaceFact `json:"interfaces"`
+	Services   []deviceServiceFact `json:"services"`
+	SNMP       *deviceSNMPFact     `json:"snmp,omitempty"`
+	Links      []deviceLinkFact    `json:"links"`
 }
 
 type deviceCreate struct {
@@ -408,6 +501,25 @@ func toDevice(d sqlcgen.Device) device {
 		ID:          d.ID,
 		DisplayName: d.DisplayName,
 		Metadata:    meta,
+	}
+}
+
+func toDeviceListItem(d sqlcgen.DeviceListItem) device {
+	var meta *deviceMetadata
+	if d.Owner != nil || d.Location != nil || d.Notes != nil {
+		meta = &deviceMetadata{
+			Owner:    d.Owner,
+			Location: d.Location,
+			Notes:    d.Notes,
+		}
+	}
+	lastChangeAt := d.LastChangeAt
+	return device{
+		ID:           d.ID,
+		DisplayName:  d.DisplayName,
+		Metadata:     meta,
+		LastSeenAt:   d.LastSeenAt,
+		LastChangeAt: &lastChangeAt,
 	}
 }
 
@@ -597,6 +709,23 @@ func parseLimitParam(value string, defaultVal, max int) (int, error) {
 	return limit, nil
 }
 
+func parsePositiveIntParam(value string, defaultVal, max int) (int, error) {
+	if value == "" {
+		return defaultVal, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid value")
+	}
+	if parsed <= 0 {
+		return 0, fmt.Errorf("must be positive")
+	}
+	if parsed > max {
+		parsed = max
+	}
+	return parsed, nil
+}
+
 func parseSinceParam(value string) (*time.Time, error) {
 	if strings.TrimSpace(value) == "" {
 		return nil, nil
@@ -633,14 +762,97 @@ func (h *Handler) handleListDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.listDevicesPayload(r.Context())
+	queryParam := strings.TrimSpace(r.URL.Query().Get("q"))
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	sort := strings.TrimSpace(r.URL.Query().Get("sort"))
+	if sort == "" {
+		sort = "created_desc"
+	}
+	switch sort {
+	case "created_desc", "last_seen_desc", "last_change_desc":
+	default:
+		h.writeError(w, http.StatusBadRequest, "validation_failed", "invalid sort value", map[string]any{"sort": sort})
+		return
+	}
+	if status != "" {
+		switch status {
+		case "online", "offline", "changed":
+		default:
+			h.writeError(w, http.StatusBadRequest, "validation_failed", "invalid status value", map[string]any{"status": status})
+			return
+		}
+	}
+
+	limit, err := parseLimitParam(r.URL.Query().Get("limit"), 50, 200)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "validation_failed", "invalid limit", map[string]any{"error": err.Error()})
+		return
+	}
+
+	seenWithinSeconds, err := parsePositiveIntParam(r.URL.Query().Get("seen_within_seconds"), 3600, 30*24*3600)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "validation_failed", "invalid seen_within_seconds", map[string]any{"error": err.Error()})
+		return
+	}
+	changedWithinSeconds, err := parsePositiveIntParam(r.URL.Query().Get("changed_within_seconds"), 86400, 30*24*3600)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "validation_failed", "invalid changed_within_seconds", map[string]any{"error": err.Error()})
+		return
+	}
+	now := time.Now().UTC()
+	seenAfter := now.Add(-time.Duration(seenWithinSeconds) * time.Second)
+	changedAfter := now.Add(-time.Duration(changedWithinSeconds) * time.Second)
+
+	var beforeSortTs *time.Time
+	var beforeID *string
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		ts, id, err := decodeCursor(cursor)
+		if err != nil {
+			h.writeError(w, http.StatusBadRequest, "validation_failed", "invalid cursor", map[string]any{"error": err.Error()})
+			return
+		}
+		beforeSortTs = &ts
+		beforeID = &id
+	}
+
+	var queryLike *string
+	if queryParam != "" {
+		pat := "%" + queryParam + "%"
+		queryLike = &pat
+	}
+	var statusPtr *string
+	if status != "" {
+		statusPtr = &status
+	}
+
+	rows, err := h.devices.ListDevicesPage(r.Context(), sqlcgen.ListDevicesPageParams{
+		Query:        queryLike,
+		Status:       statusPtr,
+		Sort:         sort,
+		SeenAfter:    seenAfter,
+		ChangedAfter: changedAfter,
+		BeforeSortTs: beforeSortTs,
+		BeforeID:     beforeID,
+		Limit:        int32(limit + 1),
+	})
 	if err != nil {
 		h.log.Error().Err(err).Msg("list devices failed")
 		h.writeError(w, http.StatusInternalServerError, "db_error", "failed to list devices", nil)
 		return
 	}
 
-	h.writeJSON(w, http.StatusOK, resp)
+	cursorOut := (*string)(nil)
+	if len(rows) > limit {
+		last := rows[limit-1]
+		next := encodeCursor(last.SortTs, last.ID)
+		cursorOut = &next
+		rows = rows[:limit]
+	}
+	resp := make([]device, 0, len(rows))
+	for _, row := range rows {
+		resp = append(resp, toDeviceListItem(row))
+	}
+	h.writeJSON(w, http.StatusOK, devicePage{Devices: resp, Cursor: cursorOut})
 }
 
 func (h *Handler) handleExportDevices(w http.ResponseWriter, r *http.Request) {
@@ -1033,6 +1245,184 @@ func (h *Handler) handleGetDevice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.writeJSON(w, http.StatusOK, toDevice(row))
+}
+
+func (h *Handler) handleGetDeviceFacts(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if !h.ensureDeviceQueries(w) {
+		return
+	}
+
+	ctx := r.Context()
+	if _, err := h.devices.GetDevice(ctx, id); err != nil {
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			h.writeError(w, http.StatusNotFound, "not_found", "device not found", map[string]any{"id": id})
+		case isInvalidUUID(err):
+			h.writeError(w, http.StatusBadRequest, "invalid_id", "device id is not a valid uuid", map[string]any{"id": id})
+		default:
+			h.log.Error().Err(err).Str("id", id).Msg("fetch device before facts failed")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to fetch device facts", nil)
+		}
+		return
+	}
+
+	ips, err := h.devices.ListDeviceIPs(ctx, id)
+	if err != nil {
+		switch {
+		case isInvalidUUID(err):
+			h.writeError(w, http.StatusBadRequest, "invalid_id", "device id is not a valid uuid", map[string]any{"id": id})
+		default:
+			h.log.Error().Err(err).Str("id", id).Msg("list device ips failed")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to list device ips", nil)
+		}
+		return
+	}
+	macs, err := h.devices.ListDeviceMACs(ctx, id)
+	if err != nil {
+		switch {
+		case isInvalidUUID(err):
+			h.writeError(w, http.StatusBadRequest, "invalid_id", "device id is not a valid uuid", map[string]any{"id": id})
+		default:
+			h.log.Error().Err(err).Str("id", id).Msg("list device macs failed")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to list device macs", nil)
+		}
+		return
+	}
+	ifaces, err := h.devices.ListDeviceInterfaces(ctx, id)
+	if err != nil {
+		switch {
+		case isInvalidUUID(err):
+			h.writeError(w, http.StatusBadRequest, "invalid_id", "device id is not a valid uuid", map[string]any{"id": id})
+		default:
+			h.log.Error().Err(err).Str("id", id).Msg("list device interfaces failed")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to list device interfaces", nil)
+		}
+		return
+	}
+	services, err := h.devices.ListDeviceServices(ctx, id)
+	if err != nil {
+		switch {
+		case isInvalidUUID(err):
+			h.writeError(w, http.StatusBadRequest, "invalid_id", "device id is not a valid uuid", map[string]any{"id": id})
+		default:
+			h.log.Error().Err(err).Str("id", id).Msg("list device services failed")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to list device services", nil)
+		}
+		return
+	}
+	links, err := h.devices.ListDeviceLinks(ctx, id)
+	if err != nil {
+		switch {
+		case isInvalidUUID(err):
+			h.writeError(w, http.StatusBadRequest, "invalid_id", "device id is not a valid uuid", map[string]any{"id": id})
+		default:
+			h.log.Error().Err(err).Str("id", id).Msg("list device links failed")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to list device links", nil)
+		}
+		return
+	}
+
+	var snmpOut *deviceSNMPFact
+	if snmpRow, err := h.devices.GetDeviceSNMP(ctx, id); err == nil {
+		snmpOut = &deviceSNMPFact{
+			Address:       snmpRow.Address,
+			SysName:       snmpRow.SysName,
+			SysDescr:      snmpRow.SysDescr,
+			SysObjectID:   snmpRow.SysObjectID,
+			SysContact:    snmpRow.SysContact,
+			SysLocation:   snmpRow.SysLocation,
+			LastSuccessAt: snmpRow.LastSuccessAt,
+			LastError:     snmpRow.LastError,
+			UpdatedAt:     snmpRow.UpdatedAt,
+		}
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		switch {
+		case isInvalidUUID(err):
+			h.writeError(w, http.StatusBadRequest, "invalid_id", "device id is not a valid uuid", map[string]any{"id": id})
+		default:
+			h.log.Error().Err(err).Str("id", id).Msg("get device snmp failed")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to fetch device snmp facts", nil)
+		}
+		return
+	}
+
+	ipFacts := make([]deviceIPFact, 0, len(ips))
+	for _, row := range ips {
+		ipFacts = append(ipFacts, deviceIPFact{
+			IP:            row.IP,
+			InterfaceID:   row.InterfaceID,
+			InterfaceName: row.InterfaceName,
+			CreatedAt:     row.CreatedAt,
+			UpdatedAt:     row.UpdatedAt,
+		})
+	}
+	macFacts := make([]deviceMACFact, 0, len(macs))
+	for _, row := range macs {
+		macFacts = append(macFacts, deviceMACFact{
+			MAC:           row.MAC,
+			InterfaceID:   row.InterfaceID,
+			InterfaceName: row.InterfaceName,
+			CreatedAt:     row.CreatedAt,
+			UpdatedAt:     row.UpdatedAt,
+		})
+	}
+	ifaceFacts := make([]deviceInterfaceFact, 0, len(ifaces))
+	for _, row := range ifaces {
+		ifaceFacts = append(ifaceFacts, deviceInterfaceFact{
+			ID:             row.ID,
+			Name:           row.Name,
+			Ifindex:        row.Ifindex,
+			Descr:          row.Descr,
+			Alias:          row.Alias,
+			MAC:            row.MAC,
+			AdminStatus:    row.AdminStatus,
+			OperStatus:     row.OperStatus,
+			MTU:            row.MTU,
+			SpeedBps:       row.SpeedBps,
+			PVID:           row.PVID,
+			PVIDObservedAt: row.PVIDObservedAt,
+			CreatedAt:      row.CreatedAt,
+			UpdatedAt:      row.UpdatedAt,
+		})
+	}
+	serviceFacts := make([]deviceServiceFact, 0, len(services))
+	for _, row := range services {
+		serviceFacts = append(serviceFacts, deviceServiceFact{
+			Protocol:   row.Protocol,
+			Port:       row.Port,
+			Name:       row.Name,
+			State:      row.State,
+			Source:     row.Source,
+			ObservedAt: row.ObservedAt,
+			CreatedAt:  row.CreatedAt,
+			UpdatedAt:  row.UpdatedAt,
+		})
+	}
+	linkFacts := make([]deviceLinkFact, 0, len(links))
+	for _, row := range links {
+		linkFacts = append(linkFacts, deviceLinkFact{
+			ID:               row.ID,
+			LinkKey:          row.LinkKey,
+			PeerDeviceID:     row.PeerDeviceID,
+			LocalInterfaceID: row.LocalInterfaceID,
+			PeerInterfaceID:  row.PeerInterfaceID,
+			LinkType:         row.LinkType,
+			Source:           row.Source,
+			ObservedAt:       row.ObservedAt,
+			UpdatedAt:        row.UpdatedAt,
+		})
+	}
+
+	h.writeJSON(w, http.StatusOK, deviceFacts{
+		DeviceID:   id,
+		IPs:        ipFacts,
+		MACs:       macFacts,
+		Interfaces: ifaceFacts,
+		Services:   serviceFacts,
+		SNMP:       snmpOut,
+		Links:      linkFacts,
+	})
 }
 
 func (h *Handler) handleListDeviceNameCandidates(w http.ResponseWriter, r *http.Request) {

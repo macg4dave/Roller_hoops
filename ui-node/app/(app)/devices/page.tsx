@@ -3,7 +3,9 @@ import type { Device, DiscoveryStatus } from './types';
 import { headers } from 'next/headers';
 import { randomUUID } from 'crypto';
 import { redirect } from 'next/navigation';
-import { getSessionUser } from '../../lib/auth/session';
+import { getSessionUser } from '../../../lib/auth/session';
+
+type DevicePage = { devices: Device[]; cursor?: string | null };
 
 async function fetchDevices(): Promise<Device[]> {
   const base = process.env.CORE_GO_BASE_URL ?? 'http://localhost:8081';
@@ -18,7 +20,8 @@ async function fetchDevices(): Promise<Device[]> {
     throw new Error(`Failed to load devices: ${res.status}`);
   }
 
-  return (await res.json()) as Device[];
+  const page = (await res.json()) as DevicePage;
+  return page.devices ?? [];
 }
 
 async function fetchDiscoveryStatus(): Promise<DiscoveryStatus> {
@@ -45,13 +48,13 @@ export default async function DevicesPage() {
   const [devices, discoveryStatus] = await Promise.all([fetchDevices(), fetchDiscoveryStatus()]);
 
   return (
-    <main>
-      <h1 style={{ fontSize: 28, marginBottom: 8 }}>Devices</h1>
-      <p style={{ color: '#444' }}>
-        CRUD backed by the Go API. The UI only talks to the API; no database access.
-      </p>
+    <section className="stack">
+      <header>
+        <h1 className="pageTitle">Devices</h1>
+        <p className="pageSubTitle">Triage devices, inspect facts, and edit metadata.</p>
+      </header>
 
       <DevicesDashboard devices={devices} discoveryStatus={discoveryStatus} currentUser={currentUser} />
-    </main>
+    </section>
   );
 }

@@ -180,12 +180,12 @@ func TestHandler_Postgres_DeviceCRUD(t *testing.T) {
 		t.Fatalf("list expected 200, got %d: %s", rrList.Code, rrList.Body.String())
 	}
 
-	var devices []device
-	if err := json.NewDecoder(rrList.Body).Decode(&devices); err != nil {
+	var page devicePage
+	if err := json.NewDecoder(rrList.Body).Decode(&page); err != nil {
 		t.Fatalf("decode list response: %v", err)
 	}
 	found := false
-	for _, d := range devices {
+	for _, d := range page.Devices {
 		if d.ID == created.ID {
 			found = true
 			if d.DisplayName == nil || *d.DisplayName != "integration-router" {
@@ -200,4 +200,3 @@ func TestHandler_Postgres_DeviceCRUD(t *testing.T) {
 		t.Fatalf("expected created device %s to appear in list", created.ID)
 	}
 }
-
