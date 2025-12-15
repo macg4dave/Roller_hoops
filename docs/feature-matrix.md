@@ -40,7 +40,7 @@ Status values: `planned` | `in-progress` | `complete` | `deprecated`
 | CI pipeline | GitHub Actions runs Go tests (with Postgres), UI build/typegen drift gate, and a docker-compose smoke test (auth-aware). | (repo) | (N/A) | none | complete |
 | UI foundation (Phase 12) | Consistent app shell + small internal UI primitives (buttons/inputs/badges/cards/alerts/skeletons) + global empty/loading/error patterns | ui-node | (calls Go API) | none | complete |
 | UI device list v2 (Phase 12) | Operator-grade device table: server-backed search, filters, stable sorting, cursor paging, shareable URL state, and row actions (open/copy ID/copy IP) | ui-node | (calls Go API) | none | complete |
-| UI device detail v2 (Phase 12) | Device detail with facts (IPs/MACs/interfaces/services), metadata editing, and history timeline UX powered by Phase 9 endpoints | ui-node | (calls Go API) | none | planned |
+| UI device detail v2 (Phase 12) | Device detail with facts (IPs/MACs/interfaces/services), metadata editing, and history timeline UX powered by Phase 9 endpoints | ui-node | (calls Go API) | none | complete |
 | UI discovery runs explorer (Phase 12) | Discovery run list + run detail + logs, with actionable failure UX (no DB access) | ui-node | (calls Go API) | none | planned |
 | UI polish & accessibility (Phase 12) | Keyboard navigation, focus styles, contrast, reduced motion, and resilient polling/loading states across the UI | ui-node | (calls Go API) | none | planned |
 | Network map UI shell | `/map` route with constant 3-pane layout (Layer panel / Canvas / Inspector), empty-by-default canvas, deep-linkable layer + focus in URL, and inspector-driven cross-layer navigation stubs. | ui-node | (calls Go API later) | none | planned |

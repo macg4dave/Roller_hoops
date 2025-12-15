@@ -794,9 +794,10 @@ Acceptance criteria:
 
 Tasks:
 
-* [ ] Sections (tabs or cards): Overview, Facts (IPs/MACs/interfaces/services), Metadata, History.
-* [ ] History/timeline UX built directly on Phase 9 endpoints (no UI-side diff reconstruction).
-* [ ] Clear “last seen / last changed” indicators.
+* [x] Sections (tabs or cards): Overview, Facts (IPs/MACs/interfaces/services), Metadata, History.
+* [x] History/timeline UX built directly on Phase 9 endpoints (no UI-side diff reconstruction).
+* [x] Clear “last seen / last changed” indicators.
+* [x] Write tests for new UI flows.
 
 Acceptance criteria:
 
@@ -809,6 +810,20 @@ Tasks:
 * [ ] One obvious “Run discovery” action with clear status feedback.
 * [ ] Add a discovery runs list and a run detail page (including logs) using existing APIs.
 * [ ] Make failures actionable (surface last error + link to logs).
+* [ ] All pages use real APIs (no stubs).
+* [ ] Write tests for new UI flows.
+* [ ] Polish polling UX for live updates during discovery.
+* [ ] Ensure read-only role cannot trigger discovery.
+* [ ] Add “discovery in progress” indicators across the UI (e.g., banner on devices list).
+* [ ] Add confirmation modals for destructive actions (if any).
+* [ ] Add rate-limiting feedback if discovery is triggered too often.
+* [ ] Ensure discovery scope is clear (e.g., subnet being scanned).
+* [ ] Add time estimates or progress bars if possible.
+* [ ] Handle cancellation gracefully (if supported by API).
+* [ ] Ensure accessibility basics (keyboard nav, focus states).
+* [ ] Add tooltips or help text for complex concepts (e.g., what “discovery” entails).
+* [ ] Optimize for performance (avoid jank during polling updates).
+* [ ] Ensure responsiveness (works well on various screen sizes).
 
 Acceptance criteria:
 
