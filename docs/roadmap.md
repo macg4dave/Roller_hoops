@@ -151,7 +151,7 @@ GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone&focusId=...
 | 8 | Done | Discovery engine v1 (runs/logs + worker + observations) |
 | 9 | Done | Historical/diffing APIs (changes feed, history, runs/logs) |
 | 10 | Done | Auth + session hardening (roles + audit hooks) |
-| 11 | In-progress | Observability & operations (metrics/runbooks/CI) |
+| 11 | Done | Observability & operations (metrics/runbooks/CI) |
 | 12 | Planned | UI workflows for operators |
 | 13 | Planned | Map shell + interaction contract |
 | 14 | Planned | Projection API + map data model (L3 first) |
@@ -711,7 +711,7 @@ Implementation notes:
 
 ## Phase 11 — Observability & operations
 
-**Status:** In-progress
+**Status:** Done
 
 ### Goal
 
@@ -721,12 +721,12 @@ Make the stack operable by someone who didn’t write it: metrics, runbooks, bac
 
 * [x] Add metrics (`GET /metrics`) and decide on internal scrape/routing posture.
 * [x] Add runbooks: backup/restore (`pg_dump`), migrations, secret rotation, seeding, and document them in `docs/runbooks.md`.
-* [ ] Add CI coverage: Go unit/integration (Postgres), UI smoke against real API, OpenAPI contract drift gate.
-* [ ] Add basic SLO monitoring approach (health endpoints + uptime alert stubs).
+* [x] Add CI coverage: Go unit/integration (Postgres), UI smoke against real API, OpenAPI contract drift gate.
+* [x] Add basic SLO monitoring approach (health endpoints + uptime alert stubs).
 
 ### Blockers
 
-* Requires agreement on production secret injection and rotation (ties back to “Blockers & risks (current)”).
+* None (runbooks document secret injection and rotation expectations).
 
 ### Notes
 
@@ -772,7 +772,7 @@ Deliverable:
 
 * An operator can sign in, launch discovery, watch progress, inspect a device, and edit metadata without using curl.
 
-API preference for Phase 10 UX:
+API preference for Phase 12 UX:
 
 * Prefer optional query params on `GET /api/v1/devices` (or small dedicated endpoints) for:
   * server-side filtering (`status=online|offline|changed`)

@@ -1,9 +1,9 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
-  "/api/auth/admin/reset-password/route": "app/api/auth/admin/reset-password/route.js",
   "/api/[...path]/route": "app/api/[...path]/route.js",
+  "/api/auth/admin/reset-password/route": "app/api/auth/admin/reset-password/route.js",
   "/api/auth/change-password/route": "app/api/auth/change-password/route.js",
   "/api/auth/login/route": "app/api/auth/login/route.js",
+  "/_not-found/page": "app/_not-found/page.js",
   "/api/auth/logout/route": "app/api/auth/logout/route.js",
   "/api/devices/[id]/name-candidates/route": "app/api/devices/[id]/name-candidates/route.js",
   "/api/devices/export/route": "app/api/devices/export/route.js",

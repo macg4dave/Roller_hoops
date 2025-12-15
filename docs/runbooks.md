@@ -15,16 +15,18 @@ This directory-level guide collects the day-to-day operations runbook that lives
 
 ## Backups & restores
 
-- **Backup**: `docker compose exec core-go pg_dump $DATABASE_URL > /tmp/roller-backup.sql`
-- **Restore**: `cat /tmp/roller-backup.sql | docker compose exec -T core-go psql $DATABASE_URL`
+- **Backup** (recommended via Postgres container):
+  - `docker compose exec -T db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -U postgres -d roller_hoops' > /tmp/roller-backup.sql`
+- **Restore**:
+  - `cat /tmp/roller-backup.sql | docker compose exec -T db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U postgres -d roller_hoops'`
   - Always stop writes (or run in maintenance window) when restoring to avoid conflicts.
   - For large dumps, stream directly from a mounted volume or object store.
 
 ## Migrations
 
-1. Build the Go CLI: `docker compose exec core-go go run ./cmd/core-go migrate` (if you add a migrate subcommand) or run `golang-migrate` inside the container.
-2. Apply new migrations with `docker compose exec core-go migrate -path migrations -database $DATABASE_URL up`.
-3. Track the `schema_migrations` table and add a note in this doc when new ones land.
+- Apply latest migrations: `docker compose run --rm migrate`
+- Check applied versions:
+  - `docker compose exec -T db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U postgres -d roller_hoops -c \"select * from schema_migrations order by version;\"'`
 
 ## Secrets rotation
 
@@ -34,8 +36,10 @@ This directory-level guide collects the day-to-day operations runbook that lives
 
 ## Seeds & dev fixtures
 
-- Local dev seed: `docker compose -f docker-compose.yml -f docker/dev/docker-compose.yml run --rm core-go bash -c "psql $DATABASE_URL < /docker/dev/dev-seed.sql"`
-- The UI can still import `docs/devices_snapshot.json` (if you add one) through `/api/v1/devices/import`.
+- Local dev seed (profile): `docker compose --profile dev up --build`
+  - This runs the `dev-seed` service once the DB is healthy.
+- Manual re-seed (dev only): `docker compose --profile dev run --rm dev-seed`
+- The UI can import snapshots through `/api/v1/devices/import`.
 
 ## Discovery run checklist
 
@@ -49,3 +53,19 @@ This directory-level guide collects the day-to-day operations runbook that lives
 - Ensure `/metrics` returns `200 OK` and Prom metrics scrape successfully.
 - Confirm `docker compose logs --tail 50 core-go` show structured logs with request IDs.
 - Run `go test ./...` locally before shipping to keep the contract gate healthy.
+
+## Monitoring / SLO stubs
+
+Minimum checks (start here before adding heavier tooling):
+
+- **Uptime**: probe `ui-node` `GET /healthz` and `core-go` `GET /readyz` every 30–60s.
+- **Latency**: alert if `roller_http_request_duration_seconds` p95 grows beyond your local baseline.
+- **Discovery health**: alert if discovery runs fail repeatedly (watch `roller_discovery_runs_total` growth + `discovery_runs.last_error` via logs/API).
+
+Example ad-hoc check (no dependencies):
+
+- `curl -fsS http://localhost/healthz && curl -fsS http://localhost:8081/readyz`
+
+Script stub:
+
+- `UI_URL=http://localhost/healthz CORE_READY_URL=http://localhost:8081/readyz ./docker/ops/uptime-check.sh`
