@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"roller_hoops/core-go/internal/metrics"
 	"roller_hoops/core-go/internal/sqlcgen"
 )
 
@@ -894,5 +895,40 @@ func TestAudit_Create_OK(t *testing.T) {
 	}
 	if !seen {
 		t.Fatalf("expected InsertAuditEvent to be called")
+	}
+}
+
+func TestMetrics_Endpoint_Exposed_WhenEnabled(t *testing.T) {
+	m := metrics.New()
+	// Prometheus will often omit metric families that have no samples yet.
+	// Touch the counter once so the scrape output is deterministic.
+	m.ObserveHTTPRequest(http.MethodGet, "/healthz", http.StatusOK, 10*time.Millisecond)
+
+	h := NewHandlerWithMetrics(NewLogger("debug"), nil, m)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+
+	h.Router().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); got == "" {
+		t.Fatalf("expected content-type to be set")
+	}
+	if !strings.Contains(rr.Body.String(), "roller_http_requests_total") {
+		t.Fatalf("expected roller_http_requests_total in body")
+	}
+}
+
+func TestMetrics_Endpoint_NotExposed_WhenDisabled(t *testing.T) {
+	h := NewHandler(NewLogger("debug"), nil)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+
+	h.Router().ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rr.Code, rr.Body.String())
 	}
 }

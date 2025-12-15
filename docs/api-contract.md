@@ -128,6 +128,7 @@ Implementation details:
 
 - `GET /auth/login` renders the login form that captures the operator credentials.
 - `POST /api/auth/login` validates `username`/`password` against `AUTH_USERNAME` / `AUTH_PASSWORD` (see `.env.example`) and issues a signed `roller_session` cookie.
+- The stock `.env.example` seeds a single admin user (`admin` / `admin`) so the login call succeeds out of the box for local quickstarts.
 - `POST /api/auth/logout` clears the `roller_session` cookie to force the UI back to the login screen.
 - The `roller_session` cookie is `HttpOnly`, `SameSite=Lax`, and marked `Secure` in production; it is signed with `AUTH_SESSION_SECRET` and expires after 24 hours.
 - The UI checks the `roller_session` cookie before proxying any `/api` requests, ensuring the Go API stays inaccessible until authentication succeeds.

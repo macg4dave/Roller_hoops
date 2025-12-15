@@ -8,6 +8,7 @@ Self-hosted network tracker / mapper (Go + Node.js + PostgreSQL), fully containe
 - Optional: copy `.env.example` to `.env` to override local settings like `POSTGRES_PASSWORD`.
 - Open the UI: <http://localhost/>
 - Sign in: <http://localhost/auth/login> (example users live in `.env.example` via `AUTH_USERS`)
+- Default quickstart credentials: `admin` / `admin` (also configured in `.env.example`).
 - The Go API is **not exposed directly to browsers**; ui-node calls it over the internal Docker network (via Traefik’s internal-only entrypoint).
 
 ## Compose profiles

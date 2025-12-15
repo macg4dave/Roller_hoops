@@ -587,6 +587,10 @@ components:
         display_name:
           type: string
           description: Optional human-friendly name.
+        primary_ip:
+          type: string
+          nullable: true
+          description: Best-effort primary IP for UI convenience (may be null when unknown).
         last_seen_at:
           type: string
           format: date-time

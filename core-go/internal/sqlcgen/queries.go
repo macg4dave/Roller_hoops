@@ -129,6 +129,14 @@ WITH computed AS (
 	SELECT
 		d.id,
 		d.display_name,
+		(
+			SELECT ia.ip::text
+			FROM ip_addresses ia
+			LEFT JOIN interfaces i2 ON i2.id = ia.interface_id
+			WHERE ia.device_id = d.id OR i2.device_id = d.id
+			ORDER BY ia.updated_at DESC, ia.ip::text ASC
+			LIMIT 1
+		) AS primary_ip,
 		m.owner,
 		m.location,
 		m.notes,
@@ -205,6 +213,7 @@ WITH computed AS (
 SELECT
 	q.id,
 	q.display_name,
+	q.primary_ip,
 	q.owner,
 	q.location,
 	q.notes,
@@ -231,6 +240,7 @@ FROM (
 				OR COALESCE(c.owner, '') ILIKE $1
 				OR COALESCE(c.location, '') ILIKE $1
 				OR COALESCE(c.notes, '') ILIKE $1
+				OR COALESCE(c.primary_ip, '') ILIKE $1
 				OR EXISTS (
 					SELECT 1
 					FROM ip_addresses ia
@@ -266,7 +276,7 @@ FROM (
 		)
 ) q
 WHERE
-	($6 IS NULL OR (q.sort_ts < $6 OR (q.sort_ts = $6 AND q.id < $7)))
+	($6::timestamptz IS NULL OR (q.sort_ts < $6::timestamptz OR (q.sort_ts = $6::timestamptz AND q.id < $7::uuid)))
 ORDER BY q.sort_ts DESC, q.id DESC
 LIMIT $8
 `
@@ -306,6 +316,7 @@ func (q *Queries) ListDevicesPage(ctx context.Context, arg ListDevicesPageParams
 		if err := rows.Scan(
 			&i.ID,
 			&i.DisplayName,
+			&i.PrimaryIP,
 			&i.Owner,
 			&i.Location,
 			&i.Notes,

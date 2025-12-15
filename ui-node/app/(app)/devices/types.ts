@@ -7,7 +7,15 @@ export type DeviceMetadata = {
 export type Device = {
   id: string;
   display_name?: string | null;
+  primary_ip?: string | null;
+  last_seen_at?: string | null;
+  last_change_at?: string | null;
   metadata?: DeviceMetadata | null;
+};
+
+export type DevicePage = {
+  devices: Device[];
+  cursor?: string | null;
 };
 
 export type DeviceNameCandidate = {

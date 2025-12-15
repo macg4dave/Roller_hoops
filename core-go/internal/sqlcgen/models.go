@@ -13,6 +13,7 @@ type Device struct {
 type DeviceListItem struct {
 	ID           string
 	DisplayName  *string
+	PrimaryIP    *string
 	Owner        *string
 	Location     *string
 	Notes        *string

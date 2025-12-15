@@ -174,6 +174,37 @@ func TestHandler_Postgres_DeviceCRUD(t *testing.T) {
 		t.Fatalf("expected metadata.owner to persist, got %+v", created.Metadata)
 	}
 
+	// Seed IP observations with deterministic timestamps so we can validate primary_ip selection.
+	seedConn, err := pgx.Connect(ctx, testDBURL)
+	if err != nil {
+		t.Fatalf("connect for seed data: %v", err)
+	}
+	seedOld := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	seedNew := seedOld.Add(1 * time.Hour)
+	if _, err := seedConn.Exec(
+		ctx,
+		`INSERT INTO ip_addresses (device_id, ip, created_at, updated_at) VALUES ($1::uuid, $2::inet, $3::timestamptz, $3::timestamptz)`,
+		created.ID,
+		"192.0.2.10",
+		seedOld,
+	); err != nil {
+		_ = seedConn.Close(ctx)
+		t.Fatalf("insert ip_addresses seed (old): %v", err)
+	}
+	if _, err := seedConn.Exec(
+		ctx,
+		`INSERT INTO ip_addresses (device_id, ip, created_at, updated_at) VALUES ($1::uuid, $2::inet, $3::timestamptz, $3::timestamptz)`,
+		created.ID,
+		"192.0.2.20",
+		seedNew,
+	); err != nil {
+		_ = seedConn.Close(ctx)
+		t.Fatalf("insert ip_addresses seed (new): %v", err)
+	}
+	if err := seedConn.Close(ctx); err != nil {
+		t.Fatalf("close seed connection: %v", err)
+	}
+
 	rrList := httptest.NewRecorder()
 	router.ServeHTTP(rrList, httptest.NewRequest(http.MethodGet, "/api/v1/devices", nil))
 	if rrList.Code != http.StatusOK {
@@ -193,6 +224,9 @@ func TestHandler_Postgres_DeviceCRUD(t *testing.T) {
 			}
 			if d.Metadata == nil || d.Metadata.Location == nil || *d.Metadata.Location != "lab" {
 				t.Fatalf("expected metadata.location lab, got %+v", d.Metadata)
+			}
+			if d.PrimaryIP == nil || *d.PrimaryIP != "192.0.2.20" {
+				t.Fatalf("expected primary_ip 192.0.2.20, got %v", d.PrimaryIP)
 			}
 		}
 	}

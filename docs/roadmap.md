@@ -779,11 +779,11 @@ Acceptance criteria:
 
 Tasks:
 
-* [ ] Filters: online/offline/changed + quick clear/reset.
-* [ ] Search: server-backed search with URL-stored state.
-* [ ] Sorting: stable sort options (explicit, never “magical”).
-* [ ] Pagination: cursor-based paging with deterministic ordering.
-* [ ] Row actions: open device, copy ID/IP, quick metadata affordances.
+* [x] Filters: online/offline/changed + quick clear/reset.
+* [x] Search: server-backed search with URL-stored state.
+* [x] Sorting: stable sort options (explicit, never “magical”).
+* [x] Pagination: cursor-based paging with deterministic ordering.
+* [x] Row actions: open device, copy ID/IP, quick metadata affordances.
 
 Acceptance criteria:
 

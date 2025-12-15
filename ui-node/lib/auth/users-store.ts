@@ -115,7 +115,7 @@ function envUsers(): AuthUser[] {
   }
 
   const username = (process.env.AUTH_USERNAME ?? 'admin').trim();
-  const password = (process.env.AUTH_PASSWORD ?? 'change_me').trim();
+  const password = (process.env.AUTH_PASSWORD ?? 'admin').trim();
   const role = (process.env.AUTH_ROLE ?? 'admin').trim() || 'admin';
   return [{ username, password, role }];
 }

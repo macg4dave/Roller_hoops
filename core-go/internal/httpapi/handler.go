@@ -277,11 +277,12 @@ func (h *Handler) handleReadyZ(w http.ResponseWriter, r *http.Request) {
 }
 
 type device struct {
-	ID          string          `json:"id"`
-	DisplayName *string         `json:"display_name,omitempty"`
-	Metadata    *deviceMetadata `json:"metadata,omitempty"`
-	LastSeenAt  *time.Time      `json:"last_seen_at,omitempty"`
-	LastChangeAt *time.Time     `json:"last_change_at,omitempty"`
+	ID           string          `json:"id"`
+	DisplayName  *string         `json:"display_name,omitempty"`
+	PrimaryIP    *string         `json:"primary_ip,omitempty"`
+	Metadata     *deviceMetadata `json:"metadata,omitempty"`
+	LastSeenAt   *time.Time      `json:"last_seen_at,omitempty"`
+	LastChangeAt *time.Time      `json:"last_change_at,omitempty"`
 }
 
 type deviceNameCandidate struct {
@@ -340,19 +341,19 @@ type deviceMetadataBody struct {
 }
 
 type deviceIPFact struct {
-	IP            string     `json:"ip"`
-	InterfaceID   *string    `json:"interface_id,omitempty"`
-	InterfaceName *string    `json:"interface_name,omitempty"`
-	UpdatedAt     time.Time  `json:"updated_at"`
-	CreatedAt     time.Time  `json:"created_at"`
+	IP            string    `json:"ip"`
+	InterfaceID   *string   `json:"interface_id,omitempty"`
+	InterfaceName *string   `json:"interface_name,omitempty"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type deviceMACFact struct {
-	MAC           string     `json:"mac"`
-	InterfaceID   *string    `json:"interface_id,omitempty"`
-	InterfaceName *string    `json:"interface_name,omitempty"`
-	UpdatedAt     time.Time  `json:"updated_at"`
-	CreatedAt     time.Time  `json:"created_at"`
+	MAC           string    `json:"mac"`
+	InterfaceID   *string   `json:"interface_id,omitempty"`
+	InterfaceName *string   `json:"interface_name,omitempty"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type deviceInterfaceFact struct {
@@ -373,14 +374,14 @@ type deviceInterfaceFact struct {
 }
 
 type deviceServiceFact struct {
-	Protocol   *string    `json:"protocol,omitempty"`
-	Port       *int32     `json:"port,omitempty"`
-	Name       *string    `json:"name,omitempty"`
-	State      *string    `json:"state,omitempty"`
-	Source     *string    `json:"source,omitempty"`
-	ObservedAt time.Time  `json:"observed_at"`
-	UpdatedAt  time.Time  `json:"updated_at"`
-	CreatedAt  time.Time  `json:"created_at"`
+	Protocol   *string   `json:"protocol,omitempty"`
+	Port       *int32    `json:"port,omitempty"`
+	Name       *string   `json:"name,omitempty"`
+	State      *string   `json:"state,omitempty"`
+	Source     *string   `json:"source,omitempty"`
+	ObservedAt time.Time `json:"observed_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type deviceSNMPFact struct {
@@ -408,13 +409,13 @@ type deviceLinkFact struct {
 }
 
 type deviceFacts struct {
-	DeviceID   string              `json:"device_id"`
-	IPs        []deviceIPFact      `json:"ips"`
-	MACs       []deviceMACFact     `json:"macs"`
+	DeviceID   string                `json:"device_id"`
+	IPs        []deviceIPFact        `json:"ips"`
+	MACs       []deviceMACFact       `json:"macs"`
 	Interfaces []deviceInterfaceFact `json:"interfaces"`
-	Services   []deviceServiceFact `json:"services"`
-	SNMP       *deviceSNMPFact     `json:"snmp,omitempty"`
-	Links      []deviceLinkFact    `json:"links"`
+	Services   []deviceServiceFact   `json:"services"`
+	SNMP       *deviceSNMPFact       `json:"snmp,omitempty"`
+	Links      []deviceLinkFact      `json:"links"`
 }
 
 type deviceCreate struct {
@@ -517,6 +518,7 @@ func toDeviceListItem(d sqlcgen.DeviceListItem) device {
 	return device{
 		ID:           d.ID,
 		DisplayName:  d.DisplayName,
+		PrimaryIP:    d.PrimaryIP,
 		Metadata:     meta,
 		LastSeenAt:   d.LastSeenAt,
 		LastChangeAt: &lastChangeAt,

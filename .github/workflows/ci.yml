@@ -72,7 +72,7 @@ jobs:
 
           curl -fsS -c /tmp/roller_cookies.txt \
             -H "Content-Type: application/json" \
-            -d '{"username":"admin","password":"change_me"}' \
+            -d '{"username":"admin","password":"admin"}' \
             http://localhost/api/auth/login >/dev/null
 
           html="$(curl -fsS -b /tmp/roller_cookies.txt http://localhost/devices)"
