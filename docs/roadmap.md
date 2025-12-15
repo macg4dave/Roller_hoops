@@ -153,7 +153,7 @@ GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone&focusId=...
 | 10 | Done | Auth + session hardening (roles + audit hooks) |
 | 11 | Done | Observability & operations (metrics/runbooks/CI) |
 | 12 | Planned | UI workflows for operators |
-| 13 | Planned | Map shell + interaction contract |
+| 13 | In progress | Map shell + interaction contract |
 | 14 | Planned | Projection API + map data model (L3 first) |
 | 15 | Planned | Physical/L2/L3 layers |
 | 16 | Planned | Services/Security layers + modes |
@@ -751,6 +751,8 @@ API/telemetry endpoints (planned):
 
 **Status:** In progress
 
+M13.1 is underway: the shell now renders the constant three-pane layer/canvas/inspector layout even before projections exist.
+
 ### Goal
 
 Make day-to-day operation possible without curl: discovery, triage, and metadata updates are fast and safe.
@@ -864,7 +866,7 @@ API preference for Phase 12 UX:
 
 ## Phase 13 — Network map v1 (Layered Explorer shell)
 
-**Status:** Planned
+**Status:** In progress
 
 ### Goal
 

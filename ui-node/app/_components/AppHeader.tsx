@@ -25,7 +25,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { href: '/devices', label: 'Devices' },
   { href: '/discovery', label: 'Discovery' },
-  { href: '/map', label: 'Map', badge: 'Soon' }
+  { href: '/map', label: 'Map' }
 ];
 
 function isActivePath(pathname: string, href: string) {

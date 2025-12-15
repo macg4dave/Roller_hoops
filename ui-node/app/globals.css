@@ -659,6 +659,184 @@ pre {
   background: var(--panel);
 }
 
+.mapPage {
+  display: grid;
+  gap: 12px;
+}
+
+.mapShell {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 20px;
+  display: grid;
+  grid-template-columns: minmax(220px, 240px) minmax(0, 1fr) minmax(220px, 280px);
+  gap: 16px;
+  min-height: 520px;
+  box-shadow: var(--shadow-sm);
+}
+
+.mapPanel {
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mapPanelHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mapPanelKicker {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.mapPanelTitle {
+  margin: 0;
+  font-size: 18px;
+}
+
+.mapPanelHint {
+  margin: 0;
+  color: var(--muted-2);
+  font-size: 13px;
+}
+
+.mapLayerList {
+  display: grid;
+  gap: 10px;
+}
+
+.mapLayerItem {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  padding: 14px;
+  background: var(--panel);
+  text-align: left;
+  color: var(--text);
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mapLayerItem:hover {
+  border-color: var(--border-strong);
+}
+
+.mapLayerItemActive {
+  border-color: var(--primary);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.15);
+}
+
+.mapLayerItemLabel {
+  font-size: 16px;
+}
+
+.mapLayerItemMeta {
+  color: var(--muted-2);
+  font-size: 13px;
+}
+
+.mapCanvasPanel {
+  background: #0f172a;
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.25);
+}
+
+.mapCanvasHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.mapCanvasIntro {
+  margin: 0;
+  color: rgba(226, 232, 240, 0.8);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+.mapCanvasHint {
+  margin: 0;
+  color: rgba(226, 232, 240, 0.7);
+  font-size: 13px;
+}
+
+.mapCanvasBody {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.mapInspectorPanel {
+  background: var(--panel);
+}
+
+.mapInspectorSection {
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border-strong);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mapInspectorHeading {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.mapInspectorValue {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.mapInspectorHint {
+  margin: 0;
+  color: var(--muted-2);
+  font-size: 13px;
+}
+
+.mapInspectorActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mapInspectorLink {
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+@media (max-width: 1200px) {
+  .mapShell {
+    grid-template-columns: 1fr;
+  }
+}
+
 .runLogEntry p {
   margin: 6px 0 0;
   font-size: 14px;
