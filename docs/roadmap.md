@@ -1320,9 +1320,9 @@ If you want next:
 
 ## Next milestone checklist
 
-* [ ] M9.1 — `GET /api/v1/devices/changes` (change feed)
-* [ ] M9.2 — `GET /api/v1/devices/{id}/history` (device timeline)
-* [ ] M9.3 — discovery run listing + logs (`/api/v1/discovery/runs...`)
+* [x] M9.1 — `GET /api/v1/devices/changes` (change feed)
+* [x] M9.2 — `GET /api/v1/devices/{id}/history` (device timeline)
+* [x] M9.3 — discovery run listing + logs (`/api/v1/discovery/runs...`)
 * [ ] Phase 10 — filters/search/pagination + device timeline UX
 * [ ] Phase 11 — auth + sessions + roles
 * [ ] Phase 12 — metrics + runbooks + CI smoke

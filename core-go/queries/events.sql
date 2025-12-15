@@ -19,6 +19,53 @@ WITH events AS (
   FROM mac_observations
   UNION ALL
   SELECT
+    'interface_vlan:' || iv.id::text AS event_id,
+    i.device_id,
+    iv.observed_at AS event_at,
+    'vlan' AS kind,
+    'vlan ' || iv.vlan_id::text AS summary,
+    jsonb_build_object(
+      'interface_id', iv.interface_id,
+      'vlan_id', iv.vlan_id,
+      'role', iv.role,
+      'source', iv.source
+    ) AS details
+  FROM interface_vlans iv
+  JOIN interfaces i ON i.id = iv.interface_id
+  UNION ALL
+  SELECT
+    'link:' || l.id::text AS event_id,
+    l.a_device_id AS device_id,
+    COALESCE(l.observed_at, l.updated_at) AS event_at,
+    'link' AS kind,
+    'link to ' || l.b_device_id::text AS summary,
+    jsonb_build_object(
+      'a_device_id', l.a_device_id,
+      'a_interface_id', l.a_interface_id,
+      'b_device_id', l.b_device_id,
+      'b_interface_id', l.b_interface_id,
+      'link_type', l.link_type,
+      'source', l.source
+    ) AS details
+  FROM links l
+  UNION ALL
+  SELECT
+    'link:' || l.id::text AS event_id,
+    l.b_device_id AS device_id,
+    COALESCE(l.observed_at, l.updated_at) AS event_at,
+    'link' AS kind,
+    'link to ' || l.a_device_id::text AS summary,
+    jsonb_build_object(
+      'a_device_id', l.a_device_id,
+      'a_interface_id', l.a_interface_id,
+      'b_device_id', l.b_device_id,
+      'b_interface_id', l.b_interface_id,
+      'link_type', l.link_type,
+      'source', l.source
+    ) AS details
+  FROM links l
+  UNION ALL
+  SELECT
     'metadata:' || id::text AS event_id,
     device_id,
     updated_at AS event_at,
@@ -35,6 +82,24 @@ WITH events AS (
     COALESCE(display_name, 'device updated') AS summary,
     jsonb_build_object('display_name', display_name) AS details
   FROM devices
+  UNION ALL
+  SELECT
+    'snmp:' || device_id::text AS event_id,
+    device_id,
+    updated_at AS event_at,
+    'snmp' AS kind,
+    COALESCE(sys_name, 'snmp updated') AS summary,
+    jsonb_build_object(
+      'address', address::text,
+      'sys_name', sys_name,
+      'sys_descr', sys_descr,
+      'sys_object_id', sys_object_id,
+      'sys_contact', sys_contact,
+      'sys_location', sys_location,
+      'last_success_at', last_success_at,
+      'last_error', last_error
+    ) AS details
+  FROM device_snmp
   UNION ALL
   SELECT
     'service:' || id::text AS event_id,
@@ -86,6 +151,53 @@ WITH events AS (
   FROM mac_observations
   UNION ALL
   SELECT
+    'interface_vlan:' || iv.id::text AS event_id,
+    i.device_id,
+    iv.observed_at AS event_at,
+    'vlan' AS kind,
+    'vlan ' || iv.vlan_id::text AS summary,
+    jsonb_build_object(
+      'interface_id', iv.interface_id,
+      'vlan_id', iv.vlan_id,
+      'role', iv.role,
+      'source', iv.source
+    ) AS details
+  FROM interface_vlans iv
+  JOIN interfaces i ON i.id = iv.interface_id
+  UNION ALL
+  SELECT
+    'link:' || l.id::text AS event_id,
+    l.a_device_id AS device_id,
+    COALESCE(l.observed_at, l.updated_at) AS event_at,
+    'link' AS kind,
+    'link to ' || l.b_device_id::text AS summary,
+    jsonb_build_object(
+      'a_device_id', l.a_device_id,
+      'a_interface_id', l.a_interface_id,
+      'b_device_id', l.b_device_id,
+      'b_interface_id', l.b_interface_id,
+      'link_type', l.link_type,
+      'source', l.source
+    ) AS details
+  FROM links l
+  UNION ALL
+  SELECT
+    'link:' || l.id::text AS event_id,
+    l.b_device_id AS device_id,
+    COALESCE(l.observed_at, l.updated_at) AS event_at,
+    'link' AS kind,
+    'link to ' || l.a_device_id::text AS summary,
+    jsonb_build_object(
+      'a_device_id', l.a_device_id,
+      'a_interface_id', l.a_interface_id,
+      'b_device_id', l.b_device_id,
+      'b_interface_id', l.b_interface_id,
+      'link_type', l.link_type,
+      'source', l.source
+    ) AS details
+  FROM links l
+  UNION ALL
+  SELECT
     'metadata:' || id::text AS event_id,
     device_id,
     updated_at AS event_at,
@@ -102,6 +214,24 @@ WITH events AS (
     COALESCE(display_name, 'device updated') AS summary,
     jsonb_build_object('display_name', display_name) AS details
   FROM devices
+  UNION ALL
+  SELECT
+    'snmp:' || device_id::text AS event_id,
+    device_id,
+    updated_at AS event_at,
+    'snmp' AS kind,
+    COALESCE(sys_name, 'snmp updated') AS summary,
+    jsonb_build_object(
+      'address', address::text,
+      'sys_name', sys_name,
+      'sys_descr', sys_descr,
+      'sys_object_id', sys_object_id,
+      'sys_contact', sys_contact,
+      'sys_location', sys_location,
+      'last_success_at', last_success_at,
+      'last_error', last_error
+    ) AS details
+  FROM device_snmp
   UNION ALL
   SELECT
     'service:' || id::text AS event_id,
