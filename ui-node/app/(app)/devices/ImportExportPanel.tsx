@@ -3,6 +3,11 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
+import { Alert } from '@/app/_components/ui/Alert';
+import { Button } from '@/app/_components/ui/Button';
+import { Card, CardBody } from '@/app/_components/ui/Card';
+import { Field, Label, Hint } from '@/app/_components/ui/Field';
+
 type PanelState = {
   status: 'idle' | 'loading' | 'success' | 'error';
   message?: string;
@@ -10,14 +15,11 @@ type PanelState = {
 
 const initialState: PanelState = { status: 'idle' };
 
-function messageStyle(state: PanelState) {
-  if (state.status === 'error') {
-    return { background: '#f9d7da', color: '#b00020' };
-  }
-  if (state.status === 'success') {
-    return { background: '#d1e7dd', color: '#0f5132' };
-  }
-  return { background: '#eef2ff', color: '#1e3a8a' };
+function messageTone(state: PanelState) {
+  if (state.status === 'error') return 'danger' as const;
+  if (state.status === 'success') return 'success' as const;
+  if (state.status === 'loading') return 'info' as const;
+  return 'info' as const;
 }
 
 function digestImportResponse(payload: string) {
@@ -116,82 +118,34 @@ export function ImportExportPanel({ readOnly = false }: Props) {
   };
 
   return (
-    <section
-      style={{
-        border: '1px solid #e0e0e0',
-        borderRadius: 10,
-        padding: 16,
-        marginTop: 16,
-        display: 'grid',
-        gap: 12
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ fontSize: 12, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#4b5563' }}>
-            Snapshots
+    <Card>
+      <CardBody className="stack">
+        <div className="split">
+          <div className="stack" style={{ gap: 6 }}>
+            <p className="kicker">Snapshots</p>
+            <div className="hint">Export or import the current device catalog as JSON for backups or migrations.</div>
           </div>
-          <div style={{ color: '#374151', fontSize: 14 }}>
-            Export or import the current device catalog as JSON for backups or migrations.
-          </div>
+          <Button type="button" onClick={handleExport} disabled={state.status === 'loading'}>
+            Download snapshot
+          </Button>
         </div>
-        <button
-          type="button"
-          onClick={handleExport}
-          style={{
-            background: '#111827',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 8,
-            padding: '10px 16px',
-            fontWeight: 700,
-            cursor: 'pointer'
-          }}
-        >
-          Download snapshot
-        </button>
-      </div>
 
-      <form onSubmit={handleImport} style={{ display: 'grid', gap: 6 }}>
-        <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-          Upload JSON snapshot
-        </label>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input ref={fileInput} type="file" accept="application/json" disabled={readOnly} />
-          <button
-            type="submit"
-            disabled={readOnly}
-            style={{
-              background: readOnly ? '#9ca3af' : '#111827',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 8,
-              padding: '10px 16px',
-              fontWeight: 700,
-              cursor: readOnly ? 'not-allowed' : 'pointer'
-            }}
-          >
-            Import
-          </button>
-        </div>
-      </form>
+        <form onSubmit={handleImport} className="stack" style={{ gap: 8 }}>
+          <Field>
+            <Label>Upload JSON snapshot</Label>
+            <div className="row">
+              <input ref={fileInput} type="file" accept="application/json" disabled={readOnly} className="fileInput" />
+              <Button type="submit" variant="primary" disabled={readOnly || state.status === 'loading'}>
+                Import
+              </Button>
+            </div>
+            <Hint>Import will upsert devices by ID.</Hint>
+          </Field>
+        </form>
 
-      {state.message ? (
-        <p
-          style={{
-            margin: 0,
-            padding: '8px 10px',
-            borderRadius: 6,
-            fontWeight: 600,
-            ...messageStyle(state)
-          }}
-        >
-          {state.message}
-        </p>
-      ) : null}
-      {readOnly ? (
-        <p style={{ color: '#92400e', fontSize: 13, margin: 0 }}>Read-only access only restricts snapshot imports.</p>
-      ) : null}
-    </section>
+        {state.message ? <Alert tone={messageTone(state)}>{state.message}</Alert> : null}
+        {readOnly ? <Alert tone="warning">Read-only access prevents snapshot imports.</Alert> : null}
+      </CardBody>
+    </Card>
   );
 }

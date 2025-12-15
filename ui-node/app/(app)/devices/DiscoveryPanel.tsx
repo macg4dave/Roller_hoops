@@ -8,7 +8,13 @@ import { useQuery } from '@tanstack/react-query';
 import type { DiscoveryStatus } from './types';
 import { initialDiscoveryRunState } from './state';
 import { triggerDiscovery } from './actions';
-import { api } from '../../lib/api-client';
+import { api } from '../../../lib/api-client';
+import { Card, CardBody } from '../../_components/ui/Card';
+import { Field, Hint, Label } from '../../_components/ui/Field';
+import { Input } from '../../_components/ui/Inputs';
+import { Button } from '../../_components/ui/Button';
+import { Badge } from '../../_components/ui/Badge';
+import { Alert } from '../../_components/ui/Alert';
 
 type Props = {
   status: DiscoveryStatus;
@@ -27,15 +33,15 @@ function formatTimestamp(ts?: string | null) {
 function statusBadgeColor(status: string) {
   switch (status) {
     case 'running':
-      return { bg: '#fef3c7', fg: '#92400e' };
+      return 'warning' as const;
     case 'succeeded':
-      return { bg: '#dcfce7', fg: '#166534' };
+      return 'success' as const;
     case 'failed':
-      return { bg: '#fee2e2', fg: '#991b1b' };
+      return 'danger' as const;
     case 'queued':
-      return { bg: '#e0e7ff', fg: '#3730a3' };
+      return 'info' as const;
     default:
-      return { bg: '#e5e7eb', fg: '#374151' };
+      return 'neutral' as const;
   }
 }
 
@@ -75,103 +81,61 @@ export function DiscoveryPanel({ status, readOnly = false }: Props) {
     setLiveStatus(statusQuery.data);
   }, [statusQuery.data]);
 
-  const colors = statusBadgeColor(liveStatus.status);
+  const badgeTone = statusBadgeColor(liveStatus.status);
 
   return (
-    <section
-      style={{
-        border: '1px solid #e0e0e0',
-        borderRadius: 10,
-        padding: 16,
-        marginTop: 16,
-        display: 'grid',
-        gap: 10
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ display: 'grid', gap: 6 }}>
-          <div style={{ fontSize: 12, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#4b5563' }}>
-            Discovery
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span
-              style={{
-                background: colors.bg,
-                color: colors.fg,
-                padding: '4px 10px',
-                borderRadius: 999,
-                fontWeight: 700,
-                fontSize: 13
-              }}
-            >
-              {liveStatus.status}
-            </span>
-            {latest?.scope ? <span style={{ color: '#374151' }}>Scope: {latest.scope}</span> : null}
-          </div>
-          {latest ? (
-            <div style={{ color: '#374151', fontSize: 14 }}>
-              Last run: {formatTimestamp(latest.started_at)}
-              {latest.completed_at ? ` → ${formatTimestamp(latest.completed_at)}` : null}
-              {latest.stats && typeof latest.stats === 'object' && 'stage' in latest.stats
-                ? ` (${String((latest.stats as Record<string, unknown>).stage)})`
-                : null}
+    <Card>
+      <CardBody>
+        <section className="stack">
+          <div className="split">
+            <div className="stack" style={{ gap: 6 }}>
+              <div style={{ fontSize: 12, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--muted-2)' }}>
+                Discovery
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Badge tone={badgeTone}>{liveStatus.status}</Badge>
+                {latest?.scope ? <span className="hint">Scope: {latest.scope}</span> : null}
+              </div>
+
+              {latest ? (
+                <div className="hint">
+                  Last run: {formatTimestamp(latest.started_at)}
+                  {latest.completed_at ? ` → ${formatTimestamp(latest.completed_at)}` : null}
+                  {latest.stats && typeof latest.stats === 'object' && 'stage' in latest.stats
+                    ? ` (${String((latest.stats as Record<string, unknown>).stage)})`
+                    : null}
+                </div>
+              ) : (
+                <div className="hint">No discovery runs yet.</div>
+              )}
+
+              {latest?.last_error ? <Alert tone="danger">Error: {latest.last_error}</Alert> : null}
             </div>
-          ) : (
-            <div style={{ color: '#6b7280', fontSize: 14 }}>No discovery runs yet.</div>
-          )}
-          {latest?.last_error ? (
-            <div style={{ color: '#991b1b', fontWeight: 600, fontSize: 14 }}>Error: {latest.last_error}</div>
+
+            <form action={formAction} className="stack" style={{ gap: 8, justifyItems: 'end' }}>
+              <Field>
+                <Label htmlFor="scope">Scope (optional)</Label>
+                <Input
+                  id="scope"
+                  name="scope"
+                  placeholder="e.g. 10.0.0.0/24"
+                  disabled={readOnly}
+                />
+                <Hint>Leave blank to run with the default scope.</Hint>
+              </Field>
+              <Button type="submit" variant="primary" disabled={readOnly}>
+                Trigger discovery
+              </Button>
+              {readOnly ? <span className="hint">Read-only access cannot trigger discoveries.</span> : null}
+            </form>
+          </div>
+
+          {state.message ? (
+            <Alert tone={state.status === 'error' ? 'danger' : 'success'}>{state.message}</Alert>
           ) : null}
-        </div>
-
-        <form action={formAction} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input
-            name="scope"
-            placeholder="optional scope (e.g. 10.0.0.0/24)"
-            disabled={readOnly}
-            style={{
-              padding: '10px 12px',
-              borderRadius: 8,
-              border: '1px solid #d1d5db',
-              minWidth: 220
-            }}
-          />
-          <button
-            type="submit"
-            disabled={readOnly}
-            style={{
-              background: readOnly ? '#9ca3af' : '#111827',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 8,
-              padding: '10px 14px',
-              fontWeight: 700,
-              cursor: readOnly ? 'not-allowed' : 'pointer'
-            }}
-          >
-            Trigger discovery
-          </button>
-        </form>
-      </div>
-
-      {state.message ? (
-        <p
-          style={{
-            margin: 0,
-            color: state.status === 'error' ? '#b00020' : '#0f5132',
-            background: state.status === 'error' ? '#f9d7da' : '#d1e7dd',
-            borderRadius: 6,
-            padding: '8px 10px',
-            fontWeight: 600
-          }}
-        >
-          {state.message}
-        </p>
-      ) : null}
-
-      {readOnly ? (
-        <p style={{ color: '#92400e', fontSize: 13, margin: 0 }}>Read-only access cannot trigger discoveries.</p>
-      ) : null}
-    </section>
+        </section>
+      </CardBody>
+    </Card>
   );
 }

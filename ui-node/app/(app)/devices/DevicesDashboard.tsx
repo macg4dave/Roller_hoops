@@ -2,6 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { Badge } from '@/app/_components/ui/Badge';
+import { Button } from '@/app/_components/ui/Button';
+import { Card, CardBody } from '@/app/_components/ui/Card';
+import { EmptyState } from '@/app/_components/ui/EmptyState';
+import { Field, Label } from '@/app/_components/ui/Field';
+import { Input } from '@/app/_components/ui/Inputs';
+
 import { CreateDeviceForm } from './CreateDeviceForm';
 import { DeviceNameCandidatesPanel } from './DeviceNameCandidatesPanel';
 import { DeviceMetadataEditor } from './DeviceMetadataEditor';
@@ -90,142 +97,88 @@ export function DevicesDashboard({ devices, discoveryStatus, currentUser }: Prop
   const metadataCount = devices.filter((device) => device.metadata?.owner || device.metadata?.location || device.metadata?.notes).length;
 
   return (
-    <section style={{ display: 'grid', gap: 16, marginTop: 16 }}>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: 16
-        }}
-      >
-          <DiscoveryPanel status={discoveryStatus} readOnly={isReadOnly} />
-          <ImportExportPanel readOnly={isReadOnly} />
+    <section className="devicesDashboard">
+      <div className="devicesDashboardTop">
+        <DiscoveryPanel status={discoveryStatus} readOnly={isReadOnly} />
+        <ImportExportPanel readOnly={isReadOnly} />
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr auto',
-          alignItems: 'center',
-          gap: 12,
-          flexWrap: 'wrap'
-        }}
-      >
-        <div style={{ display: 'grid', gap: 8 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }} htmlFor="device-search">
-            Search devices
-          </label>
-          <input
+      <div className="devicesDashboardControls">
+        <Field>
+          <Label htmlFor="device-search">Search devices</Label>
+          <Input
             id="device-search"
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Filter by name, owner, location, or ID"
-            style={{
-              padding: '10px 12px',
-              borderRadius: 8,
-              border: '1px solid #d1d5db',
-              width: 320
-            }}
+            className="devicesSearch"
           />
-        </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        </Field>
+
+        <div className="devicesDashboardFilterButtons" role="group" aria-label="Device metadata filter">
           {FILTER_OPTIONS.map((option) => {
             const isActive = filterMode === option.id;
+            const activeClass = isActive ? 'btnPillActive' : undefined;
             return (
-              <button
+              <Button
                 key={option.id}
                 type="button"
                 onClick={() => setFilterMode(option.id)}
-                style={{
-                  borderRadius: 999,
-                  padding: '6px 14px',
-                  border: '1px solid #d1d5db',
-                  background: isActive ? '#111827' : '#fff',
-                  color: isActive ? '#fff' : '#374151',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  fontSize: 13
-                }}
+                className={activeClass ? `btnPill ${activeClass}` : 'btnPill'}
+                aria-pressed={isActive}
               >
                 {option.label}
-              </button>
+              </Button>
             );
           })}
         </div>
       </div>
 
-      <div
-        style={{
-          fontSize: 14,
-          color: '#555'
-        }}
-      >
-        Showing {filteredDevices.length} of {devices.length} devices · {metadataCount} with metadata · {devices.length - metadataCount}{' '}
-        without metadata
+      <div className="hint">
+        Showing {filteredDevices.length} of {devices.length} devices · {metadataCount} with metadata · {devices.length - metadataCount} without
+        metadata
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) minmax(320px, 360px)',
-          gap: 16
-        }}
-      >
-        <div
-          style={{
-            display: 'grid',
-            gap: 12
-          }}
-        >
+      <div className="devicesDashboardMain">
+        <div className="devicesList">
           {filteredDevices.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No devices match those filters — try relaxing the search.</p>
+            <EmptyState title="No devices match these filters">
+              Try relaxing the search text or switching the metadata filter.
+            </EmptyState>
           ) : (
             filteredDevices.map((device) => {
               const isSelected = selectedId === device.id;
               const owner = device.metadata?.owner;
               const location = device.metadata?.location;
+              const mutedClass = isSelected ? undefined : 'deviceSelectMuted';
+
               return (
                 <button
                   key={device.id}
                   type="button"
                   onClick={() => setSelectedId(device.id)}
                   aria-pressed={isSelected}
-                  style={{
-                    border: '1px solid #e0e0e0',
-                    borderRadius: 10,
-                    padding: '16px 18px',
-                    textAlign: 'left',
-                    background: isSelected ? '#111827' : '#fff',
-                    color: isSelected ? '#f8fafc' : '#111827',
-                    cursor: 'pointer',
-                    display: 'grid',
-                    gap: 6
-                  }}
+                  className={isSelected ? 'card deviceSelect deviceSelectActive' : 'card deviceSelect'}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
-                    <span style={{ fontSize: 16, fontWeight: 700 }}>{device.display_name ?? '(unnamed device)'}</span>
-                    <span
-                      style={{
-                        fontSize: 12,
-                        letterSpacing: '0.08em',
-                        textTransform: 'uppercase',
-                        color: isSelected ? '#cbd5f5' : '#64748b'
-                      }}
-                    >
-                      {device.id.slice(0, 8)}
-                    </span>
+                  <div className="split" style={{ alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 16, fontWeight: 800 }}>{device.display_name ?? '(unnamed device)'}</span>
+                    <span className={mutedClass ? `deviceId ${mutedClass}` : 'deviceId'}>{device.id.slice(0, 8)}</span>
                   </div>
+
                   {owner || location ? (
                     <div style={{ display: 'grid', gap: 4, fontSize: 14 }}>
                       {owner ? <div>Owner: {owner}</div> : null}
                       {location ? <div>Location: {location}</div> : null}
                     </div>
                   ) : (
-                    <div style={{ color: isSelected ? '#e2e8f0' : '#6b7280', fontSize: 13 }}>No metadata yet.</div>
+                    <div className={mutedClass ? mutedClass : undefined} style={{ fontSize: 13 }}>
+                      No metadata yet.
+                    </div>
                   )}
+
                   {device.metadata?.notes ? (
-                    <div style={{ fontSize: 13, color: isSelected ? '#d1d5ff' : '#475569' }}>
+                    <div className={mutedClass ? mutedClass : undefined} style={{ fontSize: 13 }}>
                       Notes: {device.metadata.notes}
                     </div>
                   ) : null}
@@ -235,51 +188,38 @@ export function DevicesDashboard({ devices, discoveryStatus, currentUser }: Prop
           )}
         </div>
 
-        <div style={{ display: 'grid', gap: 16 }}>
-          <div
-            style={{
-              border: '1px solid #e0e0e0',
-              borderRadius: 10,
-              padding: 16,
-              minHeight: 320
-            }}
-          >
-            {selectedDevice ? (
-              <div style={{ display: 'grid', gap: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                  <div>
-                    <p style={{ margin: 0, fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#4b5563' }}>
-                      Device detail
-                    </p>
-                    <h3 style={{ margin: '6px 0 0', fontSize: 22 }}>{selectedDevice.display_name ?? '(unnamed device)'}</h3>
+        <div className="stack">
+          <Card>
+            <CardBody>
+              {selectedDevice ? (
+                <div className="stack" style={{ gap: 10 }}>
+                  <div className="split" style={{ alignItems: 'center' }}>
+                    <div>
+                      <p className="kicker">Device detail</p>
+                      <h3 style={{ margin: '6px 0 0', fontSize: 22 }}>{selectedDevice.display_name ?? '(unnamed device)'}</h3>
+                    </div>
+                    <Badge tone="info">ID {selectedDevice.id.slice(0, 8)}</Badge>
                   </div>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: '#475569',
-                      background: '#f8fafc',
-                      borderRadius: 999,
-                      padding: '4px 10px'
-                    }}
-                  >
-                    ID {selectedDevice.id.slice(0, 8)}
-                  </span>
-                </div>
 
-                <div style={{ fontSize: 14, color: '#475569', display: 'grid', gap: 6 }}>
-                  {selectedDevice.metadata?.owner ? <div>Owner: {selectedDevice.metadata.owner}</div> : null}
-                  {selectedDevice.metadata?.location ? <div>Location: {selectedDevice.metadata.location}</div> : null}
-                  {selectedDevice.metadata?.notes ? <div>Notes: {selectedDevice.metadata.notes}</div> : null}
-                  {!selectedDevice.metadata && <div>No metadata recorded yet.</div>}
-                </div>
+                  <div style={{ fontSize: 14, color: 'var(--muted)', display: 'grid', gap: 6 }}>
+                    {selectedDevice.metadata?.owner ? <div>Owner: {selectedDevice.metadata.owner}</div> : null}
+                    {selectedDevice.metadata?.location ? <div>Location: {selectedDevice.metadata.location}</div> : null}
+                    {selectedDevice.metadata?.notes ? <div>Notes: {selectedDevice.metadata.notes}</div> : null}
+                    {!selectedDevice.metadata && <div>No metadata recorded yet.</div>}
+                  </div>
 
-                <DeviceNameCandidatesPanel deviceId={selectedDevice.id} currentDisplayName={selectedDevice.display_name ?? null} readOnly={isReadOnly} />
-                <DeviceMetadataEditor device={selectedDevice} readOnly={isReadOnly} />
-              </div>
-            ) : (
-              <div style={{ color: '#6b7280' }}>Select a device to see its details and edit metadata.</div>
-            )}
-          </div>
+                  <DeviceNameCandidatesPanel
+                    deviceId={selectedDevice.id}
+                    currentDisplayName={selectedDevice.display_name ?? null}
+                    readOnly={isReadOnly}
+                  />
+                  <DeviceMetadataEditor device={selectedDevice} readOnly={isReadOnly} />
+                </div>
+              ) : (
+                <EmptyState title="Select a device">Pick a device on the left to view details and edit metadata.</EmptyState>
+              )}
+            </CardBody>
+          </Card>
 
           <CreateDeviceForm readOnly={isReadOnly} />
         </div>

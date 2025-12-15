@@ -107,7 +107,7 @@ GET    /api/v1/discovery/runs
 GET    /api/v1/discovery/runs/{id}
 GET    /api/v1/discovery/runs/{id}/logs
 
-Phase 12 — ops/telemetry
+Phase 11 — ops/telemetry
 GET    /metrics
 
 Phase 14+ — map projections (read-only, focus-scoped)
@@ -129,9 +129,9 @@ GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone&focusId=...
 
 ## Blockers & risks (current)
 
-* **Auth boundary is enforced via UI sessions**: the UI now requires a login that issues a signed `roller_session` cookie before any API traffic is allowed, though role-based authorization and session rotation still sit in Phase 11.
+* **Auth boundary is enforced via UI sessions**: the UI requires login and issues a signed `roller_session` cookie before any API traffic is allowed; admin vs read-only roles are enforced in the UI (Go remains headless).
 * **Discovery inside Docker needs a deployment decision**: ARP/ICMP/SNMP fidelity depends on container networking and capabilities (e.g., `CAP_NET_RAW`, host networking, or a dedicated scanner container deployed on the target network).
-* **Production secret injection needs a runbook**: decide and document where `POSTGRES_PASSWORD` and future app secrets live (env, docker secrets, external secret manager), and how they’re rotated.
+* **Production secret injection is a deployment responsibility**: keep secrets out of git, inject via env/Docker secrets/secret manager, and follow `docs/runbooks.md` for rotation expectations.
 * **Historical model implemented**: observations, change feed, and run/log APIs now exist; next focus is documenting retention and monitoring query cost.
 
 ---
@@ -207,7 +207,7 @@ Ship a headless `core-go` service that owns persistence + API + discovery orches
 
 ### Blockers
 
-* None (implementation complete); follow-on risk is enforced auth boundary (Phase 11).
+* None (implementation complete); keep `core-go` private and enforce the auth boundary via `ui-node` (Phases 10–11 completed).
 
 ### Notes (implementation choices)
 
@@ -386,7 +386,7 @@ Make the stack reproducible and boring to run locally and in production via comp
 
 ### Blockers
 
-* Production secret injection still needs a runbook (Phase 12).
+* Production secret injection is a deployment choice; see `docs/runbooks.md` for secret rotation and injection expectations.
 
 ### Docker rules
 
@@ -755,18 +755,80 @@ API/telemetry endpoints (planned):
 
 Make day-to-day operation possible without curl: discovery, triage, and metadata updates are fast and safe.
 
-### Tasks
+### Foundations (read this first)
 
-* [ ] Add device list UX: filters (online/offline/changed), search, sorting, pagination.
-* [ ] Add device detail UX: IPs/MACs/interfaces/services + metadata + change timeline.
-* [ ] Improve metadata editing UX: inline forms with resilient error handling.
-* [ ] Improve discovery UX: queued/running/done views with progress and errors.
-* [ ] Add “operator-grade” UI polish: loading/empty/error states throughout.
+* `docs/ui-ux.md` — Phase 12 UX principles, page anatomy, design primitives, and operator workflow patterns.
+
+### Milestones (Phase 12)
+
+#### M12.1 — UI foundation (app shell + primitives)
+
+Tasks:
+
+* [x] Establish a consistent app shell (header/nav + content layout) used by all pages.
+* [x] Add a small internal set of UI primitives (buttons/inputs/badges/cards/alerts/skeletons).
+* [x] Add global empty/loading/error handling patterns (no blank screens).
+* [x] Ensure read-only role UX is obvious (disabled actions explain why).
+
+Acceptance criteria:
+
+* All primary routes have consistent layout, typography, and spacing.
+* Every screen has a non-jarring loading state and a friendly empty state.
+
+#### M12.2 — Devices list v2 (triage-first)
+
+Tasks:
+
+* [ ] Filters: online/offline/changed + quick clear/reset.
+* [ ] Search: server-backed search with URL-stored state.
+* [ ] Sorting: stable sort options (explicit, never “magical”).
+* [ ] Pagination: cursor-based paging with deterministic ordering.
+* [ ] Row actions: open device, copy ID/IP, quick metadata affordances.
+
+Acceptance criteria:
+
+* Operators can find and open a device in a few seconds.
+* Filter/sort/search state survives refresh and can be shared as a link.
+
+#### M12.3 — Device detail v2 (facts + timeline)
+
+Tasks:
+
+* [ ] Sections (tabs or cards): Overview, Facts (IPs/MACs/interfaces/services), Metadata, History.
+* [ ] History/timeline UX built directly on Phase 9 endpoints (no UI-side diff reconstruction).
+* [ ] Clear “last seen / last changed” indicators.
+
+Acceptance criteria:
+
+* Operators can answer: “what is this device?”, “what changed?”, and “what’s the current truth?” quickly.
+
+#### M12.4 — Discovery UX v2 (confidence + debugging)
+
+Tasks:
+
+* [ ] One obvious “Run discovery” action with clear status feedback.
+* [ ] Add a discovery runs list and a run detail page (including logs) using existing APIs.
+* [ ] Make failures actionable (surface last error + link to logs).
+
+Acceptance criteria:
+
+* Operators can trigger discovery and diagnose failures without leaving the UI.
+
+#### M12.5 — Operator-grade polish (accessibility + resilience)
+
+Tasks:
+
+* [ ] Accessibility pass: keyboard nav, focus ring, contrast, reduced motion.
+* [ ] Error resilience: retries, “last updated” stamps for live panels, and stable polling.
+* [ ] Performance guardrails: avoid unnecessary client JS; keep interactions snappy.
+
+Acceptance criteria:
+
+* The UI is comfortable to use for long sessions (no “death by papercuts”).
 
 ### Blockers
 
-* Timeline/change-feed UX depends on Phase 9 APIs.
-* “Real auth” gating depends on Phase 11 (and affects what actions can ship).
+* None (Phase 9 APIs exist; Phase 10 auth and Phase 11 operations are complete).
 
 Deliverable:
 
@@ -783,7 +845,7 @@ API preference for Phase 12 UX:
 
 ---
 
-## Phase 12.1 — Network map v1 (Layered Explorer shell)
+## Phase 13 — Network map v1 (Layered Explorer shell)
 
 **Status:** Planned
 
@@ -1318,8 +1380,8 @@ Preferred off-the-shelf picks (so we don’t build our own plumbing):
 
 If you want next:
 
-* Push time/history into the product (Phase 9), then wire the operator UX on top (Phase 10).
-* Ship auth hardening (Phase 11) before exposing anything beyond a trusted network.
+* Push time/history into the product (Phase 9), then wire the operator UX on top (Phase 12).
+* Ship auth hardening + operations (Phases 10–11) before exposing anything beyond a trusted network.
 * Start the map track with the UI shell contract (Phase 13), then pin the projection schema (M14.1) and ship L3 first (M14.2).
 
 ## Next milestone checklist
@@ -1327,9 +1389,9 @@ If you want next:
 * [x] M9.1 — `GET /api/v1/devices/changes` (change feed)
 * [x] M9.2 — `GET /api/v1/devices/{id}/history` (device timeline)
 * [x] M9.3 — discovery run listing + logs (`/api/v1/discovery/runs...`)
-* [ ] Phase 10 — filters/search/pagination + device timeline UX
-* [ ] Phase 11 — auth + sessions + roles
-* [ ] Phase 12 — metrics + runbooks + CI smoke
+* [x] Phase 10 — auth + sessions + roles
+* [x] Phase 11 — metrics + runbooks + CI smoke
+* [ ] Phase 12 — operator UX foundations + workflows
 * [ ] M13.1 — `/map` route + 3-pane shell (mock data OK)
 * [ ] M14.1 — `MapProjection` schema pinned in `api/openapi.yaml`
 * [ ] M14.2 — L3 projection (device focus) from live data

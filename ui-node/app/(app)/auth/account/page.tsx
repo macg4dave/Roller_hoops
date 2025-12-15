@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import { getSessionUser } from '../../../lib/auth/session';
+import { getSessionUser } from '../../../../lib/auth/session';
 import { AccountSettings } from './AccountSettings';
 
 export default async function AccountPage() {

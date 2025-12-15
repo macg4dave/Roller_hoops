@@ -20,7 +20,7 @@ Status values: `planned` | `in-progress` | `complete` | `deprecated`
 | UI device list + create | Browse devices and create new devices | ui-node | (calls Go API) | none (no DB access) | complete |
 | UI discovery panel | Trigger runs + show latest status with live polling updates | ui-node | (calls Go API) | none (no DB access) | complete |
 | UI metadata editing | Edit `owner`/`location`/`notes` after creation via inline form + server action | ui-node | (calls Go API) | none (no DB access) | complete |
-| Authentication & sessions | Local login + signed session cookie (roller_session) enforced before proxying to Go | ui-node | `/auth/login`, `/api/auth/login`, `/api/auth/logout` | none | in-progress |
+| Authentication & sessions | Local login + roles (admin/read-only) + signed session cookie (`roller_session`) enforced before proxying to Go | ui-node | `/auth/login`, `/api/auth/login`, `/api/auth/logout`, `/auth/account` | none | complete |
 | Protect `/api` | Prevent browser-direct access to Go API (UI-as-BFF) | traefik + ui-node | `/api/...` (internal only via Traefik internal entrypoint) | none | complete |
 | Reverse proxy routing | `/` → UI (core-go stays private) | traefik | (N/A) | none | complete |
 | Docker compose bootstrap | `docker compose up` works with health checks | (all) | (N/A) | (all) | complete |
@@ -38,6 +38,11 @@ Status values: `planned` | `in-progress` | `complete` | `deprecated`
 | Service/port discovery | Optional active scan via `nmap` (XML parsing) to upsert open ports/services per device, behind explicit enable flags and allowlists. | core-go | (via discovery worker; no dedicated endpoint) | `services` | complete |
 | External inventory import (NetBox/Nautobot) | Import devices from upstream inventory/IPAM exports and backfill `display_name`, metadata, and primary IPs without clobbering existing curated fields. | core-go | `/api/v1/inventory/netbox/import`, `/api/v1/inventory/nautobot/import` | `devices`, `device_metadata`, `ip_addresses` | complete |
 | CI pipeline | GitHub Actions runs Go tests (with Postgres), UI build/typegen drift gate, and a docker-compose smoke test (auth-aware). | (repo) | (N/A) | none | complete |
+| UI foundation (Phase 12) | Consistent app shell + small internal UI primitives (buttons/inputs/badges/cards/alerts/skeletons) + global empty/loading/error patterns | ui-node | (calls Go API) | none | planned |
+| UI device list v2 (Phase 12) | Operator-grade device table: server-backed search, filters, stable sorting, cursor paging, and shareable URL state | ui-node | (calls Go API) | none | planned |
+| UI device detail v2 (Phase 12) | Device detail with facts (IPs/MACs/interfaces/services), metadata editing, and history timeline UX powered by Phase 9 endpoints | ui-node | (calls Go API) | none | planned |
+| UI discovery runs explorer (Phase 12) | Discovery run list + run detail + logs, with actionable failure UX (no DB access) | ui-node | (calls Go API) | none | planned |
+| UI polish & accessibility (Phase 12) | Keyboard navigation, focus styles, contrast, reduced motion, and resilient polling/loading states across the UI | ui-node | (calls Go API) | none | planned |
 | Network map UI shell | `/map` route with constant 3-pane layout (Layer panel / Canvas / Inspector), empty-by-default canvas, deep-linkable layer + focus in URL, and inspector-driven cross-layer navigation stubs. | ui-node | (calls Go API later) | none | planned |
 | Map projection API (base) | Projection-first read endpoints returning render-ready `regions[]/nodes[]/edges[]` + `inspector` for a focused object; **no global graph** endpoints. | core-go | `/api/v1/map/{layer}` (planned), starting with `/api/v1/map/l3` | (derived from existing tables; no new tables required for L3 v1) | planned |
 | Map projection: L3 (Subnets) | Subnet regions derived from IP facts; device membership + minimal relationships for a focused device/subnet. | core-go + ui-node | `/api/v1/map/l3` (planned) | `ip_addresses`, `devices` (+ observations later) | planned |

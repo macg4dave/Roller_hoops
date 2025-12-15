@@ -56,3 +56,11 @@ Required fields where applicable:
 - If you change service boundaries, update:
 
   - `docs/architecture.md`
+
+## UI conventions
+
+Operator-facing UX behavior (loading/error states, navigation, primitives, accessibility expectations) is documented in:
+
+- `docs/ui-ux.md`
+
+If you change UI behavior in a way that affects operator workflows, update that document alongside the code.

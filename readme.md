@@ -7,6 +7,7 @@ Self-hosted network tracker / mapper (Go + Node.js + PostgreSQL), fully containe
 - Start the full stack: `docker compose up --build`
 - Optional: copy `.env.example` to `.env` to override local settings like `POSTGRES_PASSWORD`.
 - Open the UI: <http://localhost/>
+- Sign in: <http://localhost/auth/login> (example users live in `.env.example` via `AUTH_USERS`)
 - The Go API is **not exposed directly to browsers**; ui-node calls it over the internal Docker network (via Traefik’s internal-only entrypoint).
 
 ## Compose profiles
@@ -17,8 +18,8 @@ Self-hosted network tracker / mapper (Go + Node.js + PostgreSQL), fully containe
 
 ## Services (responsibilities)
 
-- `core-go` (Go): REST API + persistence (and later discovery). No HTML/UI.
-- `ui-node` (Next.js): UI rendering + workflows (and later auth/sessions). No DB access.
+- `core-go` (Go): REST API + persistence + discovery worker. No HTML/UI.
+- `ui-node` (Next.js): UI rendering + workflows + auth/sessions. No DB access.
 - `db` (Postgres): the only database.
 - `traefik`: routes `/` → UI (core-go stays private).
 
@@ -48,12 +49,20 @@ The system propagates `X-Request-ID` end-to-end (UI → API). If a request id is
 
 ## What’s implemented right now
 
-- Device CRUD API (minimal):
+- Devices:
 
   - `GET /api/v1/devices`
   - `GET /api/v1/devices/{id}`
   - `POST /api/v1/devices`
   - `PUT /api/v1/devices/{id}`
+
+- History and run inspection:
+
+  - `GET /api/v1/devices/changes`
+  - `GET /api/v1/devices/{id}/history`
+  - `GET /api/v1/discovery/runs`
+  - `GET /api/v1/discovery/runs/{id}`
+  - `GET /api/v1/discovery/runs/{id}/logs`
 
 - Device metadata:
 
@@ -64,6 +73,10 @@ The system propagates `X-Request-ID` end-to-end (UI → API). If a request id is
 
   - `POST /api/v1/discovery/run` returns a real run id and persists into `discovery_runs` + logs
   - `GET /api/v1/discovery/status` surfaces the latest run status (UI shows it and can trigger runs)
+
+- Observability:
+
+  - `GET /metrics` (Prometheus scrape target; intended for internal routing)
 
 - External inventory import (optional):
 
@@ -78,3 +91,9 @@ The UI enforces authentication before proxying any `/api/...` requests to `core-
 
 - Configure users via `AUTH_USERS` (format: `username:password:role`).
 - Optional: set `AUTH_USERS_FILE` to a writable path to enable password changes and admin resets via the `/auth/account` page.
+
+## UI work (Phase 12)
+
+The operator UX is tracked in `docs/roadmap.md` (Phase 12). The UX foundation rules live in:
+
+- `docs/ui-ux.md`

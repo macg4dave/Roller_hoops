@@ -6,6 +6,11 @@ import { useRouter } from 'next/navigation';
 
 import { createDevice } from './actions';
 import { initialCreateDeviceState } from './state';
+import { Card, CardBody } from '../../_components/ui/Card';
+import { Field, Hint, Label } from '../../_components/ui/Field';
+import { Input, Textarea } from '../../_components/ui/Inputs';
+import { Button } from '../../_components/ui/Button';
+import { Alert } from '../../_components/ui/Alert';
 
 type Props = {
   readOnly?: boolean;
@@ -24,134 +29,52 @@ export function CreateDeviceForm({ readOnly = false }: Props) {
   return (
     <form
       action={formAction}
-      style={{
-        border: '1px solid #e0e0e0',
-        borderRadius: 8,
-        padding: 16,
-        marginTop: 16,
-        maxWidth: 480,
-        display: 'grid',
-        gap: 12
-      }}
+      className="stack"
     >
-      <div>
-        <label style={{ display: 'block', fontWeight: 600 }} htmlFor="display_name">
-          Display name
-        </label>
-        <input
-          id="display_name"
-          name="display_name"
-          placeholder="e.g. core switch"
-          disabled={readOnly}
-          style={{
-            marginTop: 6,
-            padding: '10px 12px',
-            width: '100%',
-            borderRadius: 6,
-            border: '1px solid #ccc'
-          }}
-        />
-        <p style={{ color: '#666', marginTop: 6, fontSize: 14 }}>
-          Optional. You can leave it blank to create an unnamed device.
-        </p>
-      </div>
+      <Card style={{ maxWidth: 520 }}>
+        <CardBody>
+          <div className="stack">
+            <div className="split">
+              <div>
+                <div style={{ fontWeight: 800 }}>Create device</div>
+                <div className="hint">Add a device and optional operator metadata.</div>
+              </div>
+            </div>
 
-      <div style={{ display: 'grid', gap: 10 }}>
-        <div>
-          <label style={{ display: 'block', fontWeight: 600 }} htmlFor="owner">
-            Owner
-          </label>
-          <input
-            id="owner"
-            name="owner"
-            placeholder="e.g. network team"
-            disabled={readOnly}
-            style={{
-              marginTop: 6,
-              padding: '10px 12px',
-              width: '100%',
-              borderRadius: 6,
-              border: '1px solid #ccc'
-            }}
-          />
-        </div>
+            <Field>
+              <Label htmlFor="display_name">Display name</Label>
+              <Input id="display_name" name="display_name" placeholder="e.g. core switch" disabled={readOnly} />
+              <Hint>Optional. You can leave it blank to create an unnamed device.</Hint>
+            </Field>
 
-        <div>
-          <label style={{ display: 'block', fontWeight: 600 }} htmlFor="location">
-            Location
-          </label>
-          <input
-            id="location"
-            name="location"
-            placeholder="e.g. data hall A / rack 3"
-            disabled={readOnly}
-            style={{
-              marginTop: 6,
-              padding: '10px 12px',
-              width: '100%',
-              borderRadius: 6,
-              border: '1px solid #ccc'
-            }}
-          />
-        </div>
+            <Field>
+              <Label htmlFor="owner">Owner</Label>
+              <Input id="owner" name="owner" placeholder="e.g. network team" disabled={readOnly} />
+            </Field>
 
-        <div>
-          <label style={{ display: 'block', fontWeight: 600 }} htmlFor="notes">
-            Notes
-          </label>
-          <textarea
-            id="notes"
-            name="notes"
-            placeholder="free-form notes"
-            rows={3}
-            disabled={readOnly}
-            style={{
-              marginTop: 6,
-              padding: '10px 12px',
-              width: '100%',
-              borderRadius: 6,
-              border: '1px solid #ccc',
-              resize: 'vertical'
-            }}
-          />
-        </div>
-      </div>
+            <Field>
+              <Label htmlFor="location">Location</Label>
+              <Input id="location" name="location" placeholder="e.g. data hall A / rack 3" disabled={readOnly} />
+            </Field>
 
-      <button
-        type="submit"
-        disabled={readOnly}
-        style={{
-          background: readOnly ? '#9ca3af' : '#0f766e',
-          color: '#fff',
-          border: 'none',
-          borderRadius: 6,
-          padding: '10px 12px',
-          fontWeight: 600,
-          cursor: readOnly ? 'not-allowed' : 'pointer',
-          width: 'fit-content'
-        }}
-      >
-        Create device
-      </button>
+            <Field>
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea id="notes" name="notes" placeholder="free-form notes" rows={3} disabled={readOnly} />
+            </Field>
 
-      {readOnly ? (
-        <p style={{ color: '#92400e', fontSize: 13, margin: 0 }}>Read-only access cannot create devices.</p>
-      ) : null}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Button type="submit" variant="primary" disabled={readOnly}>
+                Create device
+              </Button>
+              {readOnly ? <span className="hint">Read-only access cannot create devices.</span> : null}
+            </div>
 
-      {state.message ? (
-        <p
-          style={{
-            margin: 0,
-            color: state.status === 'error' ? '#b00020' : '#0f5132',
-            background: state.status === 'error' ? '#f9d7da' : '#d1e7dd',
-            borderRadius: 6,
-            padding: '8px 10px',
-            fontWeight: 600
-          }}
-        >
-          {state.message}
-        </p>
-      ) : null}
+            {state.message ? (
+              <Alert tone={state.status === 'error' ? 'danger' : 'success'}>{state.message}</Alert>
+            ) : null}
+          </div>
+        </CardBody>
+      </Card>
     </form>
   );
 }

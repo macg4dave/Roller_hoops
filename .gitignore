@@ -28,6 +28,9 @@ out/
 # Next.js (per-service)
 ui-node/.next/
 ui-node/.next/standalone/
+ui-node/.next/**
+ui-node/out/
+ui-node/.turbo/
 ui-node/tsconfig.tsbuildinfo
 
 # Next.js (optional)

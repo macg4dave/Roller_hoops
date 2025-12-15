@@ -7,8 +7,8 @@ import { randomUUID } from 'crypto';
 import { Device, DiscoveryRun } from './types';
 
 import { CreateDeviceState, DiscoveryRunState, DeviceMetadataState, DeviceDisplayNameState } from './state';
-import { getSessionUser } from '../../lib/auth/session';
-import { writeAuditEvent } from '../../lib/audit';
+import { getSessionUser } from '../../../lib/auth/session';
+import { writeAuditEvent } from '../../../lib/audit';
 
 function apiBase() {
   return process.env.CORE_GO_BASE_URL ?? 'http://localhost:8081';

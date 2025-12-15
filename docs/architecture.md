@@ -46,6 +46,14 @@ Forbidden:
 - Direct database access
 - Re-implementing Go business rules
 
+## UI/UX contract (Phase 12)
+
+The operator UI is guided by a small set of UX rules (loading/error states, navigation, primitives, accessibility) documented here:
+
+- `docs/ui-ux.md`
+
+This is intentionally separate from API and data-model contracts: the UI defines *how operators work*, while Go defines *what is true*.
+
 ## Routing and trust boundaries
 
 - Only Traefik publishes ports to the host.

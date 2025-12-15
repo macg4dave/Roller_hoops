@@ -132,7 +132,17 @@ Implementation details:
 - The `roller_session` cookie is `HttpOnly`, `SameSite=Lax`, and marked `Secure` in production; it is signed with `AUTH_SESSION_SECRET` and expires after 24 hours.
 - The UI checks the `roller_session` cookie before proxying any `/api` requests, ensuring the Go API stays inaccessible until authentication succeeds.
 
-(Exact role-based auth, audit logging, and session rotation still live in Phase 11+.)
+Role-aware UX (admin vs read-only) is enforced in the UI layer; `core-go` remains headless and does not consume UI session state.
+
+## UI-driven API evolution (Phase 12)
+
+Phase 12 focuses on operator workflows (filters/search/sort/paging) and may require new optional query parameters on existing endpoints (especially `GET /api/v1/devices`).
+
+Rules:
+
+- **OpenAPI is canonical**: do not ship UI features that rely on undocumented query params.
+- Prefer small, explicit query params (filter/sort/search/paging) over “return everything then filter in the browser”.
+- Keep ordering deterministic and cursor paging stable to avoid UI churn.
 
 ## Network map projections (planned)
 
