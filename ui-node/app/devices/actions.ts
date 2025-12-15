@@ -7,6 +7,8 @@ import { randomUUID } from 'crypto';
 import { Device, DiscoveryRun } from './types';
 
 import { CreateDeviceState, DiscoveryRunState, DeviceMetadataState, DeviceDisplayNameState } from './state';
+import { getSessionUser } from '../../lib/auth/session';
+import { writeAuditEvent } from '../../lib/audit';
 
 function apiBase() {
   return process.env.CORE_GO_BASE_URL ?? 'http://localhost:8081';
@@ -25,6 +27,14 @@ export async function createDevice(
   _prevState: CreateDeviceState,
   formData: FormData
 ): Promise<CreateDeviceState> {
+  const session = await getSessionUser();
+  if (!session) {
+    return { status: 'error', message: 'Authentication required.' };
+  }
+  if (session.role === 'read-only') {
+    return { status: 'error', message: 'Read-only users cannot create devices.' };
+  }
+
   const displayNameRaw = formData.get('display_name');
   const payload: Record<string, unknown> = {};
 
@@ -70,6 +80,17 @@ export async function createDevice(
   }
 
   const device = (await res.json()) as Device;
+  await writeAuditEvent(
+    {
+      actor: session.username,
+      actor_role: session.role,
+      action: 'device.create',
+      target_type: 'device',
+      target_id: device.id,
+      details: { display_name: device.display_name ?? null }
+    },
+    reqId
+  );
   revalidatePath('/devices');
   const label = device.display_name?.trim() || 'device';
   return { status: 'success', message: `Created ${label} (${device.id})` };
@@ -79,6 +100,14 @@ export async function triggerDiscovery(
   _prevState: DiscoveryRunState,
   formData: FormData
 ): Promise<DiscoveryRunState> {
+  const session = await getSessionUser();
+  if (!session) {
+    return { status: 'error', message: 'Authentication required.' };
+  }
+  if (session.role === 'read-only') {
+    return { status: 'error', message: 'Read-only users cannot trigger discoveries.' };
+  }
+
   const scopeRaw = formData.get('scope');
   const payload: Record<string, unknown> = {};
   if (typeof scopeRaw === 'string' && scopeRaw.trim().length > 0) {
@@ -103,6 +132,17 @@ export async function triggerDiscovery(
   }
 
   const run = (await res.json()) as DiscoveryRun;
+  await writeAuditEvent(
+    {
+      actor: session.username,
+      actor_role: session.role,
+      action: 'discovery.trigger',
+      target_type: 'discovery_run',
+      target_id: run.id,
+      details: { scope: run.scope ?? null }
+    },
+    reqId
+  );
   revalidatePath('/devices');
   return {
     status: 'success',
@@ -114,6 +154,14 @@ export async function updateDeviceMetadata(
   _prevState: DeviceMetadataState,
   formData: FormData
 ): Promise<DeviceMetadataState> {
+  const session = await getSessionUser();
+  if (!session) {
+    return { status: 'error', message: 'Authentication required.' };
+  }
+  if (session.role === 'read-only') {
+    return { status: 'error', message: 'Read-only users cannot modify metadata.' };
+  }
+
   const deviceId = formData.get('device_id');
   if (typeof deviceId !== 'string' || deviceId.trim().length === 0) {
     return { status: 'error', message: 'missing device id' };
@@ -160,6 +208,17 @@ export async function updateDeviceMetadata(
   }
 
   const device = (await res.json()) as Device;
+  await writeAuditEvent(
+    {
+      actor: session.username,
+      actor_role: session.role,
+      action: 'device.metadata.update',
+      target_type: 'device',
+      target_id: device.id,
+      details: payload
+    },
+    reqId
+  );
   revalidatePath('/devices');
 
   return { status: 'success', message: `Metadata updated (${device.id})` };
@@ -169,6 +228,14 @@ export async function updateDeviceDisplayName(
   _prevState: DeviceDisplayNameState,
   formData: FormData
 ): Promise<DeviceDisplayNameState> {
+  const session = await getSessionUser();
+  if (!session) {
+    return { status: 'error', message: 'Authentication required.' };
+  }
+  if (session.role === 'read-only') {
+    return { status: 'error', message: 'Read-only users cannot modify devices.' };
+  }
+
   const deviceId = formData.get('device_id');
   if (typeof deviceId !== 'string' || deviceId.trim().length === 0) {
     return { status: 'error', message: 'missing device id' };
@@ -198,6 +265,17 @@ export async function updateDeviceDisplayName(
   }
 
   const device = (await res.json()) as Device;
+  await writeAuditEvent(
+    {
+      actor: session.username,
+      actor_role: session.role,
+      action: 'device.display_name.update',
+      target_type: 'device',
+      target_id: device.id,
+      details: { display_name: device.display_name ?? null }
+    },
+    reqId
+  );
   revalidatePath('/devices');
   const label = device.display_name?.trim() || 'device';
   return { status: 'success', message: `Display name set to ${label}` };

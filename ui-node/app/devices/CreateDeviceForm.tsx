@@ -7,7 +7,11 @@ import { useRouter } from 'next/navigation';
 import { createDevice } from './actions';
 import { initialCreateDeviceState } from './state';
 
-export function CreateDeviceForm() {
+type Props = {
+  readOnly?: boolean;
+};
+
+export function CreateDeviceForm({ readOnly = false }: Props) {
   const router = useRouter();
   const [state, formAction] = useFormState(createDevice, initialCreateDeviceState());
 
@@ -38,6 +42,7 @@ export function CreateDeviceForm() {
           id="display_name"
           name="display_name"
           placeholder="e.g. core switch"
+          disabled={readOnly}
           style={{
             marginTop: 6,
             padding: '10px 12px',
@@ -60,6 +65,7 @@ export function CreateDeviceForm() {
             id="owner"
             name="owner"
             placeholder="e.g. network team"
+            disabled={readOnly}
             style={{
               marginTop: 6,
               padding: '10px 12px',
@@ -78,6 +84,7 @@ export function CreateDeviceForm() {
             id="location"
             name="location"
             placeholder="e.g. data hall A / rack 3"
+            disabled={readOnly}
             style={{
               marginTop: 6,
               padding: '10px 12px',
@@ -97,6 +104,7 @@ export function CreateDeviceForm() {
             name="notes"
             placeholder="free-form notes"
             rows={3}
+            disabled={readOnly}
             style={{
               marginTop: 6,
               padding: '10px 12px',
@@ -111,19 +119,24 @@ export function CreateDeviceForm() {
 
       <button
         type="submit"
+        disabled={readOnly}
         style={{
-          background: '#0f766e',
+          background: readOnly ? '#9ca3af' : '#0f766e',
           color: '#fff',
           border: 'none',
           borderRadius: 6,
           padding: '10px 12px',
           fontWeight: 600,
-          cursor: 'pointer',
+          cursor: readOnly ? 'not-allowed' : 'pointer',
           width: 'fit-content'
         }}
       >
         Create device
       </button>
+
+      {readOnly ? (
+        <p style={{ color: '#92400e', fontSize: 13, margin: 0 }}>Read-only access cannot create devices.</p>
+      ) : null}
 
       {state.message ? (
         <p

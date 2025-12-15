@@ -112,6 +112,11 @@ Both endpoints emit change events derived from observations, metadata edits, dis
 
 Logs are bounded (default 100 entries) and use deterministic cursoring so UI consumers can traverse backward without churn.
 
+## Observability
+
+- `GET /metrics` exports Prometheus metrics from `core-go` (currently `roller_http_requests_total`, `roller_http_request_duration_seconds`, `roller_discovery_runs_total`, and `roller_discovery_run_duration_seconds`).
+- The endpoint should be scraped through Traefik/internal load balancers and is not intended for public exposure. All metrics live under the `roller` namespace and stay stable across releases.
+
 ## Authentication
 
 v1 intent:
@@ -119,7 +124,15 @@ v1 intent:
 - Authentication and sessions are owned by **ui-node**.
 - `core-go` remains headless and is not exposed directly to browsers.
 
-(Exact auth propagation and authorization rules will be pinned in OpenAPI and `docs/architecture.md` once the first implementation lands.)
+Implementation details:
+
+- `GET /auth/login` renders the login form that captures the operator credentials.
+- `POST /api/auth/login` validates `username`/`password` against `AUTH_USERNAME` / `AUTH_PASSWORD` (see `.env.example`) and issues a signed `roller_session` cookie.
+- `POST /api/auth/logout` clears the `roller_session` cookie to force the UI back to the login screen.
+- The `roller_session` cookie is `HttpOnly`, `SameSite=Lax`, and marked `Secure` in production; it is signed with `AUTH_SESSION_SECRET` and expires after 24 hours.
+- The UI checks the `roller_session` cookie before proxying any `/api` requests, ensuring the Go API stays inaccessible until authentication succeeds.
+
+(Exact role-based auth, audit logging, and session rotation still live in Phase 11+.)
 
 ## Network map projections (planned)
 

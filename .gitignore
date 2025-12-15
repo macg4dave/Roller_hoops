@@ -25,6 +25,11 @@ out/
 .vercel/
 .turbo/
 
+# Next.js (per-service)
+ui-node/.next/
+ui-node/.next/standalone/
+ui-node/tsconfig.tsbuildinfo
+
 # Next.js (optional)
 .swc/
 

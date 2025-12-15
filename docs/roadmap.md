@@ -58,6 +58,7 @@ docker-compose.yml
 * Device CRUD live end-to-end via Go API and UI; metadata fields (`owner`, `location`, `notes`) persist in `device_metadata`.
 * Discovery endpoints persist runs/logs (`discovery_runs`, `discovery_run_logs`) and return real run ids; the Go worker claims queued runs and performs an ARP scrape + best-effort ICMP sweep (where available) to populate current IP/MAC facts and per-run observations, with optional enrichment (reverse DNS + SNMP) writing `device_name_candidates`, `device_snmp`, interface details, and VLAN PVIDs (`interface_vlans`) when enabled.
 * Traefik + docker-compose bring up UI and PostgreSQL with health checks enabled; **core-go stays private on the Docker network**.
+* Prometheus metrics (HTTP request counts/durations and discovery run counts/durations) are exposed at `/metrics`, and `docs/runbooks.md` captures the runbook for scraping, backups, migrations, and secrets rotation while we finish Phase 11.
 * OpenAPI spec exists at `api/openapi.yaml`, and a **Go contract test prevents drift** between the spec and the chi router.
 * Dev DB auth uses a password via env vars (no more `trust` by default); secrets are injected via `.env` (gitignored) or a secret manager.
 
@@ -128,7 +129,7 @@ GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone&focusId=...
 
 ## Blockers & risks (current)
 
-* **Auth boundary is not enforced yet (security)**: auth is not implemented, but the browser → Go API bypass is mitigated by keeping `core-go` private and only exposing the UI via Traefik.
+* **Auth boundary is enforced via UI sessions**: the UI now requires a login that issues a signed `roller_session` cookie before any API traffic is allowed, though role-based authorization and session rotation still sit in Phase 11.
 * **Discovery inside Docker needs a deployment decision**: ARP/ICMP/SNMP fidelity depends on container networking and capabilities (e.g., `CAP_NET_RAW`, host networking, or a dedicated scanner container deployed on the target network).
 * **Production secret injection needs a runbook**: decide and document where `POSTGRES_PASSWORD` and future app secrets live (env, docker secrets, external secret manager), and how they’re rotated.
 * **Historical model implemented**: observations, change feed, and run/log APIs now exist; next focus is documenting retention and monitoring query cost.
@@ -149,9 +150,9 @@ GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone&focusId=...
 | 7 | Done | Enrichment integrations (mDNS/NetBIOS/ports/IPAM) |
 | 8 | Done | Discovery engine v1 (runs/logs + worker + observations) |
 | 9 | Done | Historical/diffing APIs (changes feed, history, runs/logs) |
-| 10 | Planned | Operator workflows + timeline UX |
-| 11 | Planned | Auth + sessions + roles |
-| 12 | Planned | Metrics + runbooks + CI confidence |
+| 10 | Done | Auth + session hardening (roles + audit hooks) |
+| 11 | In-progress | Observability & operations (metrics/runbooks/CI) |
+| 12 | Planned | UI workflows for operators |
 | 13 | Planned | Map shell + interaction contract |
 | 14 | Planned | Projection API + map data model (L3 first) |
 | 15 | Planned | Physical/L2/L3 layers |
@@ -487,7 +488,7 @@ POST /api/v1/inventory/nautobot/import
 
 ## Phase 8 — Discovery engine v1 (network scanning)
 
-**Status:** 
+**Status:**
 
 ### Goal
 
@@ -673,7 +674,80 @@ Deliverable:
 
 ---
 
-## Phase 10 — UI workflows for operators
+
+
+## Phase 10 — Auth + session hardening
+
+**Status:** Done
+
+### Goal
+
+Make authentication and authorization real, so the system can be exposed safely beyond a dev network while keeping `core-go` headless.
+
+### Tasks
+
+* [x] Implement a UI-owned login page (`/auth/login`) that validates credentials from `AUTH_USERS` (or back-compat `AUTH_USERNAME` / `AUTH_PASSWORD`).
+* [x] Issue signed HTTP-only session cookies (`roller_session`, 24h TTL) backed by `AUTH_SESSION_SECRET` and scoped to the UI domain.
+* [x] Add roles (admin vs read-only) and enforce authorization in the UI before calling Go (proxy routes + server actions).
+* [x] Add account lifecycle (password change, admin reset/recovery flow; requires `AUTH_USERS_FILE` to persist updates).
+* [x] Add minimal audit logging via Go API (UI never writes core tables directly).
+* [x] Decide whether to use Auth.js/NextAuth vs a minimal custom session implementation (v1 uses a minimal custom signed-cookie session).
+
+### Blockers
+
+* Public exposure of `core-go` (and broader adoption) is blocked on shipping this phase and the associated role/authorization work.
+
+Deliverable:
+
+* Auth no longer relies on stubs; sign-in/out and session cookies work end-to-end, even though finer-grained RBAC is still Phase 11.
+
+Implementation notes:
+
+* `/auth/login` renders the form, and `/api/auth/login` + `/api/auth/logout` handle credential validation plus signed `roller_session` cookies.
+* Sessions are signed with `AUTH_SESSION_SECRET`, last 24 hours, and are marked `HttpOnly; SameSite=Lax` for CSRF resilience on the same hostname.
+* Configure users via `AUTH_USERS` (or back-compat `AUTH_USERNAME` / `AUTH_PASSWORD`), and optionally set `AUTH_USERS_FILE` to enable password changes; the UI enforces the login before any `/api` request is proxied.
+
+---
+
+## Phase 11 — Observability & operations
+
+**Status:** In-progress
+
+### Goal
+
+Make the stack operable by someone who didn’t write it: metrics, runbooks, backups, and CI confidence.
+
+### Tasks
+
+* [x] Add metrics (`GET /metrics`) and decide on internal scrape/routing posture.
+* [x] Add runbooks: backup/restore (`pg_dump`), migrations, secret rotation, seeding, and document them in `docs/runbooks.md`.
+* [ ] Add CI coverage: Go unit/integration (Postgres), UI smoke against real API, OpenAPI contract drift gate.
+* [ ] Add basic SLO monitoring approach (health endpoints + uptime alert stubs).
+
+### Blockers
+
+* Requires agreement on production secret injection and rotation (ties back to “Blockers & risks (current)”).
+
+### Notes
+
+* Metrics: Prometheus endpoints from Go (HTTP request/duration + discovery run counters/durations) and Traefik access logs/metrics.
+* Tracing/logging: request IDs end-to-end; structured logs on stdout; optional OpenTelemetry spans for discovery runs.
+* Runbooks: `docs/runbooks.md` details `docker compose` snippets for backup/restore (`pg_dump`), migrations (`golang-migrate up`), rotating secrets, seeding a dev stack, and configuring `/metrics` scrapes.
+* Testing: CI jobs for Go unit/integration (with Postgres container), UI smoke against `next dev` + API, and a contract test to keep OpenAPI in sync.
+* SLOs: health endpoints monitored by Traefik + simple uptime check; webhook/email alert stubs.
+
+Deliverable:
+
+* Operators have metrics, logs, runbooks, and tests so the stack can be run by someone who did not write it.
+
+API/telemetry endpoints (planned):
+
+* `GET /metrics` on `core-go` (Prometheus scrape target; internal network)
+* Traefik metrics/access logs as configured per deployment
+
+---
+
+## Phase 12 — UI workflows for operators
 
 **Status:** Planned
 
@@ -709,77 +783,7 @@ API preference for Phase 10 UX:
 
 ---
 
-## Phase 11 — Auth + session hardening
-
-**Status:** Planned
-
-### Goal
-
-Make authentication and authorization real, so the system can be exposed safely beyond a dev network.
-
-### Tasks
-
-* [ ] Implement local users (UI-owned) with secure password hashing (argon2id or bcrypt).
-* [ ] Implement secure session cookies + CSRF protection.
-* [ ] Add roles (admin vs read-only) and enforce authorization in the UI before calling Go.
-* [ ] Add account lifecycle (password change, admin reset/recovery flow).
-* [ ] Add minimal audit logging via Go API (UI never writes core tables directly).
-* [ ] Decide whether to use Auth.js/NextAuth vs a minimal custom session implementation.
-
-### Blockers
-
-* Public exposure of `core-go` (and broader adoption) is blocked on shipping this phase.
-
-Deliverable:
-
-* Auth no longer relies on stubs; sign-in/out and role-based access work end-to-end with secure cookies and hashed credentials.
-
-API note:
-
-* Keep `core-go` headless. Authentication stays UI-owned; the browser should not call `core-go` directly.
-* Prefer small UI-owned auth routes (e.g. `/auth/login`, `/auth/logout`) and keep the core API stable and internal.
-
----
-
-## Phase 12 — Observability & operations
-
-**Status:** Planned
-
-### Goal
-
-Make the stack operable by someone who didn’t write it: metrics, runbooks, backups, and CI confidence.
-
-### Tasks
-
-* [ ] Add metrics (`GET /metrics`) and decide on internal scrape/routing posture.
-* [ ] Add runbooks: backup/restore (`pg_dump`), migrations, secret rotation, seeding.
-* [ ] Add CI coverage: Go unit/integration (Postgres), UI smoke against real API, OpenAPI contract drift gate.
-* [ ] Add basic SLO monitoring approach (health endpoints + uptime alert stubs).
-
-### Blockers
-
-* Requires agreement on production secret injection and rotation (ties back to “Blockers & risks (current)”).
-
-### Notes
-
-* Metrics: Prometheus endpoints from Go (HTTP + DB latency, discovery duration) and Traefik access logs/metrics.
-* Tracing/logging: request IDs end-to-end; structured logs on stdout; optional OpenTelemetry spans for discovery runs.
-* Runbooks: `docker compose` snippets for backup/restore (`pg_dump`), migrations (`golang-migrate up`), rotating secrets, and seeding a dev stack.
-* Testing: CI jobs for Go unit/integration (with Postgres container), UI smoke against `next dev` + API, and a contract test to keep OpenAPI in sync.
-* SLOs: health endpoints monitored by Traefik + simple uptime check; webhook/email alert stubs.
-
-Deliverable:
-
-* Operators have metrics, logs, backups, and tests so the stack can be run by someone who did not write it.
-
-API/telemetry endpoints (planned):
-
-* `GET /metrics` on `core-go` (Prometheus scrape target; internal network)
-* Traefik metrics/access logs as configured per deployment
-
----
-
-## Phase 13 — Network map v1 (Layered Explorer shell)
+## Phase 12.1 — Network map v1 (Layered Explorer shell)
 
 **Status:** Planned
 

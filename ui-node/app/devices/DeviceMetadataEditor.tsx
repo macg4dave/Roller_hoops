@@ -4,13 +4,14 @@ import { useFormState } from 'react-dom';
 
 import { updateDeviceMetadata } from './actions';
 import type { Device } from './types';
-import { DeviceMetadataState, initialDeviceMetadataState } from './state';
+import { initialDeviceMetadataState } from './state';
 
 type Props = {
   device: Device;
+  readOnly?: boolean;
 };
 
-export function DeviceMetadataEditor({ device }: Props) {
+export function DeviceMetadataEditor({ device, readOnly = false }: Props) {
   const [state, formAction] = useFormState(updateDeviceMetadata, initialDeviceMetadataState());
 
   return (
@@ -33,6 +34,7 @@ export function DeviceMetadataEditor({ device }: Props) {
           name="owner"
           defaultValue={device.metadata?.owner ?? ''}
           placeholder="owner"
+          disabled={readOnly}
           style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ccc' }}
         />
       </div>
@@ -43,6 +45,7 @@ export function DeviceMetadataEditor({ device }: Props) {
           name="location"
           defaultValue={device.metadata?.location ?? ''}
           placeholder="location"
+          disabled={readOnly}
           style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ccc' }}
         />
       </div>
@@ -54,20 +57,22 @@ export function DeviceMetadataEditor({ device }: Props) {
           defaultValue={device.metadata?.notes ?? ''}
           placeholder="notes"
           rows={2}
+          disabled={readOnly}
           style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ccc', resize: 'vertical' }}
         />
       </div>
 
       <button
         type="submit"
+        disabled={readOnly}
         style={{
-          background: '#111827',
+          background: readOnly ? '#9ca3af' : '#111827',
           color: '#fff',
           border: 'none',
           borderRadius: 6,
           padding: '8px 10px',
           fontWeight: 600,
-          cursor: 'pointer',
+          cursor: readOnly ? 'not-allowed' : 'pointer',
           alignSelf: 'flex-start'
         }}
       >

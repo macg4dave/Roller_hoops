@@ -20,6 +20,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"roller_hoops/core-go/internal/db"
+	"roller_hoops/core-go/internal/metrics"
 	"roller_hoops/core-go/internal/sqlcgen"
 )
 
@@ -29,6 +30,8 @@ type Handler struct {
 	devices   deviceQueries
 	discovery discoveryQueries
 	inventory inventoryQueries
+	audit     auditQueries
+	metrics   *metrics.Metrics
 }
 
 type deviceQueries interface {
@@ -60,17 +63,31 @@ type inventoryQueries interface {
 	UpsertDeviceMetadataFillBlank(ctx context.Context, arg sqlcgen.UpsertDeviceMetadataParams) (sqlcgen.DeviceMetadata, error)
 }
 
+type auditQueries interface {
+	InsertAuditEvent(ctx context.Context, arg sqlcgen.InsertAuditEventParams) error
+}
+
 func NewHandler(log zerolog.Logger, pool *db.Pool) *Handler {
+	return newHandler(log, pool, nil)
+}
+
+func NewHandlerWithMetrics(log zerolog.Logger, pool *db.Pool, m *metrics.Metrics) *Handler {
+	return newHandler(log, pool, m)
+}
+
+func newHandler(log zerolog.Logger, pool *db.Pool, m *metrics.Metrics) *Handler {
 	var dq deviceQueries
 	var drq discoveryQueries
 	var iq inventoryQueries
+	var aq auditQueries
 	if pool != nil {
 		q := pool.Queries()
 		dq = q
 		drq = q
 		iq = q
+		aq = q
 	}
-	return &Handler{log: log, pool: pool, devices: dq, discovery: drq, inventory: iq}
+	return &Handler{log: log, pool: pool, devices: dq, discovery: drq, inventory: iq, audit: aq, metrics: m}
 }
 
 func (h *Handler) Router() http.Handler {
@@ -82,6 +99,10 @@ func (h *Handler) Router() http.Handler {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(15 * time.Second))
 	r.Use(h.accessLog)
+
+	if h.metrics != nil {
+		r.Handle("/metrics", h.metrics.Handler())
+	}
 
 	// Health
 	r.Get("/healthz", h.handleHealthz)
@@ -120,6 +141,10 @@ func (h *Handler) Router() http.Handler {
 				r.Post("/netbox/import", h.handleImportNetBox)
 				r.Post("/nautobot/import", h.handleImportNautobot)
 			})
+
+			r.Route("/audit", func(r chi.Router) {
+				r.Post("/events", h.handleCreateAuditEvent)
+			})
 		})
 	})
 
@@ -143,15 +168,35 @@ func (h *Handler) accessLog(next http.Handler) http.Handler {
 
 		next.ServeHTTP(ww, r)
 
+		status := ww.Status()
+		duration := time.Since(start)
 		h.log.Info().
 			Str("request_id", middleware.GetReqID(r.Context())).
 			Str("method", r.Method).
 			Str("path", r.URL.Path).
-			Int("status", ww.Status()).
+			Int("status", status).
 			Int("bytes", ww.BytesWritten()).
-			Int64("duration_ms", time.Since(start).Milliseconds()).
+			Int64("duration_ms", duration.Milliseconds()).
 			Msg("http_request")
+
+		h.observeRequestMetrics(r, status, duration)
 	})
+}
+
+func (h *Handler) observeRequestMetrics(r *http.Request, status int, duration time.Duration) {
+	if h.metrics == nil {
+		return
+	}
+	h.metrics.ObserveHTTPRequest(r.Method, requestRouteLabel(r), status, duration)
+}
+
+func requestRouteLabel(r *http.Request) string {
+	if rc := chi.RouteContext(r.Context()); rc != nil {
+		if pattern := rc.RoutePattern(); pattern != "" {
+			return pattern
+		}
+	}
+	return r.URL.Path
 }
 
 func (h *Handler) writeJSON(w http.ResponseWriter, status int, v any) {
@@ -316,6 +361,15 @@ type inventoryImportResult struct {
 	Skipped         int `json:"skipped"`
 }
 
+type auditEventCreate struct {
+	Actor      string         `json:"actor"`
+	ActorRole  *string        `json:"actor_role,omitempty"`
+	Action     string         `json:"action"`
+	TargetType *string        `json:"target_type,omitempty"`
+	TargetID   *string        `json:"target_id,omitempty"`
+	Details    map[string]any `json:"details,omitempty"`
+}
+
 func (h *Handler) ensureDeviceQueries(w http.ResponseWriter) bool {
 	if h.devices == nil {
 		h.writeError(w, http.StatusServiceUnavailable, "db_unavailable", "database not configured", nil)
@@ -326,6 +380,14 @@ func (h *Handler) ensureDeviceQueries(w http.ResponseWriter) bool {
 
 func (h *Handler) ensureInventoryQueries(w http.ResponseWriter) bool {
 	if h.inventory == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "db_unavailable", "database not configured", nil)
+		return false
+	}
+	return true
+}
+
+func (h *Handler) ensureAuditQueries(w http.ResponseWriter) bool {
+	if h.audit == nil {
 		h.writeError(w, http.StatusServiceUnavailable, "db_unavailable", "database not configured", nil)
 		return false
 	}
@@ -887,6 +949,67 @@ func stripPrefixLen(addr string) string {
 		return ""
 	}
 	return addr
+}
+
+func (h *Handler) handleCreateAuditEvent(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureAuditQueries(w) {
+		return
+	}
+	var req auditEventCreate
+	if err := decodeJSONStrict(r, &req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "validation_failed", "invalid json body", map[string]any{"error": err.Error()})
+		return
+	}
+	req.Actor = strings.TrimSpace(req.Actor)
+	req.Action = strings.TrimSpace(req.Action)
+	if req.Actor == "" || req.Action == "" {
+		h.writeError(w, http.StatusBadRequest, "validation_failed", "actor and action are required", nil)
+		return
+	}
+	if req.TargetType != nil {
+		if s := strings.TrimSpace(*req.TargetType); s == "" {
+			req.TargetType = nil
+		} else {
+			req.TargetType = &s
+		}
+	}
+	if req.TargetID != nil {
+		if s := strings.TrimSpace(*req.TargetID); s == "" {
+			req.TargetID = nil
+		} else {
+			req.TargetID = &s
+		}
+	}
+	if req.ActorRole != nil {
+		if s := strings.TrimSpace(*req.ActorRole); s == "" {
+			req.ActorRole = nil
+		} else {
+			req.ActorRole = &s
+		}
+	}
+	details := req.Details
+	if details == nil {
+		details = map[string]any{}
+	}
+
+	if err := h.audit.InsertAuditEvent(r.Context(), sqlcgen.InsertAuditEventParams{
+		Actor:      req.Actor,
+		ActorRole:  req.ActorRole,
+		Action:     req.Action,
+		TargetType: req.TargetType,
+		TargetID:   req.TargetID,
+		Details:    details,
+	}); err != nil {
+		if isInvalidUUID(err) {
+			h.writeError(w, http.StatusBadRequest, "validation_failed", "invalid target_id", map[string]any{"target_id": req.TargetID})
+			return
+		}
+		h.log.Error().Err(err).Msg("insert audit event failed")
+		h.writeError(w, http.StatusInternalServerError, "db_error", "failed to write audit event", nil)
+		return
+	}
+
+	h.writeJSON(w, http.StatusCreated, map[string]any{"ok": true})
 }
 
 func (h *Handler) handleGetDevice(w http.ResponseWriter, r *http.Request) {

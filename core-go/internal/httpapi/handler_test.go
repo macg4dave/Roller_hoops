@@ -129,6 +129,17 @@ func (f fakeDiscoveryQueries) ListDiscoveryRunLogs(ctx context.Context, arg sqlc
 	return f.listLogFn(ctx, arg)
 }
 
+type fakeAuditQueries struct {
+	insertFn func(ctx context.Context, arg sqlcgen.InsertAuditEventParams) error
+}
+
+func (f fakeAuditQueries) InsertAuditEvent(ctx context.Context, arg sqlcgen.InsertAuditEventParams) error {
+	if f.insertFn == nil {
+		return nil
+	}
+	return f.insertFn(ctx, arg)
+}
+
 func decodeBody(t *testing.T, rr *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
 	var v map[string]any
@@ -775,5 +786,34 @@ func TestDiscovery_RunLogs_Pagination(t *testing.T) {
 	}
 	if resp.Cursor == nil {
 		t.Fatalf("expected cursor")
+	}
+}
+
+func TestAudit_Create_OK(t *testing.T) {
+	h := NewHandler(NewLogger("debug"), nil)
+	seen := false
+	h.audit = fakeAuditQueries{
+		insertFn: func(ctx context.Context, arg sqlcgen.InsertAuditEventParams) error {
+			seen = true
+			if arg.Actor != "alice" || arg.Action != "device.create" {
+				t.Fatalf("unexpected audit payload: %#v", arg)
+			}
+			if arg.Details == nil || arg.Details["x"] != float64(1) {
+				t.Fatalf("expected details to include x=1, got %#v", arg.Details)
+			}
+			return nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/audit/events", strings.NewReader(`{"actor":"alice","action":"device.create","details":{"x":1}}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	h.Router().ServeHTTP(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if !seen {
+		t.Fatalf("expected InsertAuditEvent to be called")
 	}
 }

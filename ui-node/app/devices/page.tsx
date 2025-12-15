@@ -2,6 +2,8 @@ import { DevicesDashboard } from './DevicesDashboard';
 import type { Device, DiscoveryStatus } from './types';
 import { headers } from 'next/headers';
 import { randomUUID } from 'crypto';
+import { redirect } from 'next/navigation';
+import { getSessionUser } from '../../lib/auth/session';
 
 async function fetchDevices(): Promise<Device[]> {
   const base = process.env.CORE_GO_BASE_URL ?? 'http://localhost:8081';
@@ -35,6 +37,11 @@ async function fetchDiscoveryStatus(): Promise<DiscoveryStatus> {
 }
 
 export default async function DevicesPage() {
+  const currentUser = await getSessionUser();
+  if (!currentUser) {
+    redirect('/auth/login');
+  }
+
   const [devices, discoveryStatus] = await Promise.all([fetchDevices(), fetchDiscoveryStatus()]);
 
   return (
@@ -44,7 +51,7 @@ export default async function DevicesPage() {
         CRUD backed by the Go API. The UI only talks to the API; no database access.
       </p>
 
-      <DevicesDashboard devices={devices} discoveryStatus={discoveryStatus} />
+      <DevicesDashboard devices={devices} discoveryStatus={discoveryStatus} currentUser={currentUser} />
     </main>
   );
 }

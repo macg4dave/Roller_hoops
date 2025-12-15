@@ -12,6 +12,7 @@ import { api } from '../../lib/api-client';
 
 type Props = {
   status: DiscoveryStatus;
+  readOnly?: boolean;
 };
 
 function formatTimestamp(ts?: string | null) {
@@ -38,7 +39,7 @@ function statusBadgeColor(status: string) {
   }
 }
 
-export function DiscoveryPanel({ status }: Props) {
+export function DiscoveryPanel({ status, readOnly = false }: Props) {
   const router = useRouter();
   const [state, formAction] = useFormState(triggerDiscovery, initialDiscoveryRunState());
   const [liveStatus, setLiveStatus] = useState<DiscoveryStatus>(status);
@@ -127,6 +128,7 @@ export function DiscoveryPanel({ status }: Props) {
           <input
             name="scope"
             placeholder="optional scope (e.g. 10.0.0.0/24)"
+            disabled={readOnly}
             style={{
               padding: '10px 12px',
               borderRadius: 8,
@@ -136,14 +138,15 @@ export function DiscoveryPanel({ status }: Props) {
           />
           <button
             type="submit"
+            disabled={readOnly}
             style={{
-              background: '#111827',
+              background: readOnly ? '#9ca3af' : '#111827',
               color: '#fff',
               border: 'none',
               borderRadius: 8,
               padding: '10px 14px',
               fontWeight: 700,
-              cursor: 'pointer'
+              cursor: readOnly ? 'not-allowed' : 'pointer'
             }}
           >
             Trigger discovery
@@ -164,6 +167,10 @@ export function DiscoveryPanel({ status }: Props) {
         >
           {state.message}
         </p>
+      ) : null}
+
+      {readOnly ? (
+        <p style={{ color: '#92400e', fontSize: 13, margin: 0 }}>Read-only access cannot trigger discoveries.</p>
       ) : null}
     </section>
   );

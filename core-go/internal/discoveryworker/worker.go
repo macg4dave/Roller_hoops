@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"
 
+	"roller_hoops/core-go/internal/metrics"
 	"roller_hoops/core-go/internal/sqlcgen"
 )
 
@@ -75,6 +76,7 @@ type Worker struct {
 	portScanWorkers       int
 	portScanTimeout       time.Duration
 	portScanMaxTargets    int
+	metrics               *metrics.Metrics
 }
 
 type Options struct {
@@ -105,7 +107,7 @@ type Options struct {
 	PortScanMaxTargets    int
 }
 
-func New(log zerolog.Logger, q Queries, opts Options) *Worker {
+func New(log zerolog.Logger, q Queries, opts Options, m *metrics.Metrics) *Worker {
 	pi := opts.PollInterval
 	if pi <= 0 {
 		pi = 400 * time.Millisecond
@@ -206,6 +208,7 @@ func New(log zerolog.Logger, q Queries, opts Options) *Worker {
 		portScanWorkers:       portScanWorkers,
 		portScanTimeout:       portScanTimeout,
 		portScanMaxTargets:    portScanMaxTargets,
+		metrics:               m,
 	}
 }
 
@@ -276,6 +279,16 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 		w.log.Error().Err(err).Msg("discovery worker failed to claim next run")
 		return false, err
 	}
+
+	if w.metrics != nil {
+		w.metrics.IncDiscoveryRun()
+	}
+	start := time.Now()
+	defer func() {
+		if w.metrics != nil {
+			w.metrics.ObserveDiscoveryRunDuration(time.Since(start))
+		}
+	}()
 
 	w.log.Info().Str("run_id", run.ID).Msg("discovery run claimed")
 

@@ -27,6 +27,32 @@ func (q *Queries) WithTx(tx pgx.Tx) *Queries {
 	return &Queries{db: tx}
 }
 
+const insertAuditEvent = `-- name: InsertAuditEvent :exec
+INSERT INTO audit_events (
+  actor,
+  actor_role,
+  action,
+  target_type,
+  target_id,
+  details
+)
+VALUES ($1, $2, $3, $4, $5::uuid, COALESCE($6, '{}'::jsonb))
+`
+
+type InsertAuditEventParams struct {
+	Actor      string
+	ActorRole  *string
+	Action     string
+	TargetType *string
+	TargetID   *string
+	Details    map[string]any
+}
+
+func (q *Queries) InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) error {
+	_, err := q.db.Exec(ctx, insertAuditEvent, arg.Actor, arg.ActorRole, arg.Action, arg.TargetType, arg.TargetID, arg.Details)
+	return err
+}
+
 const createDevice = `-- name: CreateDevice :one
 WITH inserted AS (
   INSERT INTO devices (display_name)

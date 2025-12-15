@@ -39,7 +39,11 @@ function digestImportResponse(payload: string) {
   }
 }
 
-export function ImportExportPanel() {
+type Props = {
+  readOnly?: boolean;
+};
+
+export function ImportExportPanel({ readOnly = false }: Props) {
   const router = useRouter();
   const [state, setState] = useState<PanelState>(initialState);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -71,6 +75,10 @@ export function ImportExportPanel() {
   };
 
   const handleImport = async (event: FormEvent<HTMLFormElement>) => {
+    if (readOnly) {
+      setState({ status: 'error', message: 'Read-only users cannot import snapshots.' });
+      return;
+    }
     event.preventDefault();
     const file = fileInput.current?.files?.[0];
     if (!file) {
@@ -149,17 +157,18 @@ export function ImportExportPanel() {
           Upload JSON snapshot
         </label>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input ref={fileInput} type="file" accept="application/json" />
+          <input ref={fileInput} type="file" accept="application/json" disabled={readOnly} />
           <button
             type="submit"
+            disabled={readOnly}
             style={{
-              background: '#111827',
+              background: readOnly ? '#9ca3af' : '#111827',
               color: '#fff',
               border: 'none',
               borderRadius: 8,
               padding: '10px 16px',
               fontWeight: 700,
-              cursor: 'pointer'
+              cursor: readOnly ? 'not-allowed' : 'pointer'
             }}
           >
             Import
@@ -179,6 +188,9 @@ export function ImportExportPanel() {
         >
           {state.message}
         </p>
+      ) : null}
+      {readOnly ? (
+        <p style={{ color: '#92400e', fontSize: 13, margin: 0 }}>Read-only access only restricts snapshot imports.</p>
       ) : null}
     </section>
   );

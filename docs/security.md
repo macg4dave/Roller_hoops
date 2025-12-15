@@ -33,3 +33,17 @@ For production deployments:
 - Inject secrets via your platform’s secret manager (preferred) or a secure CI/CD mechanism.
 - Avoid printing secrets in logs.
 - Rotate secrets periodically (and always after an incident).
+
+
+## UI authentication variables
+
+- `AUTH_SESSION_SECRET` (required in production) is used to HMAC the session token stored in the `roller_session` cookie. Rotate this secret if it leaks to invalidate sessions.
+- `AUTH_USERS` is a comma-separated list of `username:password:role` entries that the Next.js UI accepts for login. Example: `admin:change_me:admin,viewer:readonly:read-only`. The first entry acts as a fallback for legacy tooling that assumes a single admin user.
+- `read-only` users can still view devices, discovery status, and export snapshots, but the UI disables mutating controls (device creation, metadata updates, display name choices, discovery triggers, imports) and the `/api/[...path]` proxy rejects `POST/PUT/PATCH/DELETE` calls issued with a `read-only` session role.
+
+Example `.env` snippet:
+
+```env
+AUTH_USERS=admin:change_me:admin,viewer:readonly:read-only
+AUTH_SESSION_SECRET=some-production-secret
+```

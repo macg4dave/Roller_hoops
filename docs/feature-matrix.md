@@ -20,11 +20,12 @@ Status values: `planned` | `in-progress` | `complete` | `deprecated`
 | UI device list + create | Browse devices and create new devices | ui-node | (calls Go API) | none (no DB access) | complete |
 | UI discovery panel | Trigger runs + show latest status with live polling updates | ui-node | (calls Go API) | none (no DB access) | complete |
 | UI metadata editing | Edit `owner`/`location`/`notes` after creation via inline form + server action | ui-node | (calls Go API) | none (no DB access) | complete |
-| Authentication & sessions | Local users + session cookies in UI | ui-node | (N/A) | none | planned |
+| Authentication & sessions | Local login + signed session cookie (roller_session) enforced before proxying to Go | ui-node | `/auth/login`, `/api/auth/login`, `/api/auth/logout` | none | in-progress |
 | Protect `/api` | Prevent browser-direct access to Go API (UI-as-BFF) | traefik + ui-node | `/api/...` (internal only via Traefik internal entrypoint) | none | complete |
 | Reverse proxy routing | `/` → UI (core-go stays private) | traefik | (N/A) | none | complete |
 | Docker compose bootstrap | `docker compose up` works with health checks | (all) | (N/A) | (all) | complete |
 | Health + readiness | `/healthz` and `/readyz` across services | core-go + ui-node | `/healthz`, `/readyz` | none | complete |
+| Observability metrics | Prometheus scrape endpoint exposing HTTP and discovery metrics (`roller_http_*`, `roller_discovery_*`) | core-go | `/metrics` | none | complete |
 | Request ID propagation | End-to-end `X-Request-ID` correlation | core-go + ui-node | (all) | none | complete |
 | Strict JSON decoding | Reject unknown JSON fields | core-go | (all JSON endpoints) | none | complete |
 | OpenAPI spec | Canonical API contract file | (repo) | (N/A) | none | complete |

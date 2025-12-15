@@ -71,3 +71,10 @@ The system propagates `X-Request-ID` end-to-end (UI → API). If a request id is
   - `POST /api/v1/inventory/nautobot/import`
 
 The canonical API contract is in `api/openapi.yaml`.
+
+## Authentication (UI-owned)
+
+The UI enforces authentication before proxying any `/api/...` requests to `core-go`.
+
+- Configure users via `AUTH_USERS` (format: `username:password:role`).
+- Optional: set `AUTH_USERS_FILE` to a writable path to enable password changes and admin resets via the `/auth/account` page.

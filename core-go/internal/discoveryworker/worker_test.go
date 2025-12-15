@@ -200,7 +200,7 @@ func TestWorker_RunOnce_NoQueuedRuns(t *testing.T) {
 	}
 
 	arpPath := writeTempARPFile(t, "IP address       HW type     Flags       HW address            Mask     Device\n")
-	w := New(zerolog.Nop(), q, Options{PollInterval: 0, RunDelay: 0, ARPTablePath: arpPath})
+	w := New(zerolog.Nop(), q, Options{PollInterval: 0, RunDelay: 0, ARPTablePath: arpPath}, nil)
 	processed, err := w.runOnce(context.Background())
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
@@ -247,7 +247,7 @@ func TestWorker_RunOnce_ClaimsAndCompletes(t *testing.T) {
 	}
 
 	arpPath := writeTempARPFile(t, "IP address       HW type     Flags       HW address            Mask     Device\n")
-	w := New(zerolog.Nop(), q, Options{PollInterval: 0, RunDelay: 0, ARPTablePath: arpPath})
+	w := New(zerolog.Nop(), q, Options{PollInterval: 0, RunDelay: 0, ARPTablePath: arpPath}, nil)
 	processed, err := w.runOnce(context.Background())
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
@@ -290,7 +290,7 @@ func TestWorker_RunOnce_FailsRunWhenUpdateFails(t *testing.T) {
 	}
 
 	arpPath := writeTempARPFile(t, "IP address       HW type     Flags       HW address            Mask     Device\n")
-	w := New(zerolog.Nop(), q, Options{PollInterval: 0, RunDelay: 0, ARPTablePath: arpPath})
+	w := New(zerolog.Nop(), q, Options{PollInterval: 0, RunDelay: 0, ARPTablePath: arpPath}, nil)
 	processed, err := w.runOnce(context.Background())
 	if !processed {
 		t.Fatalf("expected processed=true")
@@ -372,7 +372,7 @@ func TestWorker_RunOnce_ARPEntryCreatesAndUpserts(t *testing.T) {
 		},
 	}
 
-	w := New(zerolog.Nop(), q, Options{PollInterval: 0, RunDelay: 0, ARPTablePath: arpPath})
+	w := New(zerolog.Nop(), q, Options{PollInterval: 0, RunDelay: 0, ARPTablePath: arpPath}, nil)
 	processed, err := w.runOnce(context.Background())
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
@@ -436,7 +436,7 @@ func TestWorker_RunOnce_ARPEntryReusesDeviceByIP(t *testing.T) {
 		},
 	}
 
-	w := New(zerolog.Nop(), q, Options{PollInterval: 0, RunDelay: 0, ARPTablePath: arpPath})
+	w := New(zerolog.Nop(), q, Options{PollInterval: 0, RunDelay: 0, ARPTablePath: arpPath}, nil)
 	processed, err := w.runOnce(context.Background())
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)

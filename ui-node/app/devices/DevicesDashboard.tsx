@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 
 import { CreateDeviceForm } from './CreateDeviceForm';
 import { DeviceNameCandidatesPanel } from './DeviceNameCandidatesPanel';
 import { DeviceMetadataEditor } from './DeviceMetadataEditor';
 import { DiscoveryPanel } from './DiscoveryPanel';
 import { ImportExportPanel } from './ImportExportPanel';
+import { LogoutButton } from './LogoutButton';
 import type { Device, DiscoveryStatus } from './types';
+import type { SessionUser } from '../../lib/auth/session';
 
 const FILTER_OPTIONS = [
   { id: 'all', label: 'All devices' },
@@ -20,12 +23,14 @@ type FilterMode = (typeof FILTER_OPTIONS)[number]['id'];
 type Props = {
   devices: Device[];
   discoveryStatus: DiscoveryStatus;
+  currentUser: SessionUser;
 };
 
-export function DevicesDashboard({ devices, discoveryStatus }: Props) {
+export function DevicesDashboard({ devices, discoveryStatus, currentUser }: Props) {
   const [search, setSearch] = useState('');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [selectedId, setSelectedId] = useState<string | undefined>(() => devices[0]?.id);
+  const isReadOnly = currentUser.role === 'read-only';
 
   useEffect(() => {
     if (devices.length === 0) {
@@ -86,13 +91,37 @@ export function DevicesDashboard({ devices, discoveryStatus }: Props) {
     <section style={{ display: 'grid', gap: 16, marginTop: 16 }}>
       <div
         style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12
+        }}
+      >
+          <div style={{ display: 'grid', gap: 4 }}>
+            <div style={{ fontSize: 14, color: '#111827' }}>Signed in as {currentUser.username}</div>
+            <div style={{ fontSize: 12, color: '#4b5563' }}>Role: {currentUser.role}</div>
+          </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <Link href="/auth/account" style={{ color: '#111827', fontWeight: 600 }}>
+            Account
+          </Link>
+          <LogoutButton />
+        </div>
+      </div>
+      {isReadOnly ? (
+        <div style={{ color: '#92400e', fontSize: 13, marginTop: 4 }}>
+          Read-only role: mutation controls have been disabled. Contact your admin to change this role.
+        </div>
+      ) : null}
+      <div
+        style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
           gap: 16
         }}
       >
-        <DiscoveryPanel status={discoveryStatus} />
-        <ImportExportPanel />
+          <DiscoveryPanel status={discoveryStatus} readOnly={isReadOnly} />
+          <ImportExportPanel readOnly={isReadOnly} />
       </div>
 
       <div
@@ -266,15 +295,15 @@ export function DevicesDashboard({ devices, discoveryStatus }: Props) {
                   {!selectedDevice.metadata && <div>No metadata recorded yet.</div>}
                 </div>
 
-                <DeviceNameCandidatesPanel deviceId={selectedDevice.id} currentDisplayName={selectedDevice.display_name ?? null} />
-                <DeviceMetadataEditor device={selectedDevice} />
+                <DeviceNameCandidatesPanel deviceId={selectedDevice.id} currentDisplayName={selectedDevice.display_name ?? null} readOnly={isReadOnly} />
+                <DeviceMetadataEditor device={selectedDevice} readOnly={isReadOnly} />
               </div>
             ) : (
               <div style={{ color: '#6b7280' }}>Select a device to see its details and edit metadata.</div>
             )}
           </div>
 
-          <CreateDeviceForm />
+          <CreateDeviceForm readOnly={isReadOnly} />
         </div>
       </div>
     </section>

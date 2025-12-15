@@ -11,13 +11,14 @@ import { initialDeviceDisplayNameState } from './state';
 type Props = {
   deviceId: string;
   currentDisplayName?: string | null;
+  readOnly?: boolean;
 };
 
 function normalizeName(name: string) {
   return name.trim().toLowerCase();
 }
 
-export function DeviceNameCandidatesPanel({ deviceId, currentDisplayName }: Props) {
+export function DeviceNameCandidatesPanel({ deviceId, currentDisplayName, readOnly = false }: Props) {
   const router = useRouter();
   const [state, formAction] = useFormState(updateDeviceDisplayName, initialDeviceDisplayNameState());
   const [candidates, setCandidates] = useState<DeviceNameCandidate[] | null>(null);
@@ -90,13 +91,13 @@ export function DeviceNameCandidatesPanel({ deviceId, currentDisplayName }: Prop
         <button
           type="button"
           onClick={() => setRefreshKey((v) => v + 1)}
-          disabled={loading}
+          disabled={loading || readOnly}
           style={{
             borderRadius: 6,
             padding: '6px 10px',
             border: '1px solid #d1d5db',
             background: '#fff',
-            cursor: loading ? 'default' : 'pointer',
+            cursor: loading || readOnly ? 'not-allowed' : 'pointer',
             fontWeight: 600,
             fontSize: 12
           }}
@@ -147,17 +148,23 @@ export function DeviceNameCandidatesPanel({ deviceId, currentDisplayName }: Prop
 
                 <button
                   type="submit"
-                  disabled={isCurrent}
+                  disabled={isCurrent || readOnly}
                   style={{
-                    background: isCurrent ? '#e5e7eb' : '#111827',
-                    color: isCurrent ? '#6b7280' : '#fff',
+                    background: isCurrent || readOnly ? '#e5e7eb' : '#111827',
+                    color: isCurrent ? '#6b7280' : readOnly ? '#6b7280' : '#fff',
                     border: 'none',
                     borderRadius: 6,
                     padding: '8px 10px',
                     fontWeight: 700,
-                    cursor: isCurrent ? 'default' : 'pointer'
+                    cursor: isCurrent || readOnly ? 'not-allowed' : 'pointer'
                   }}
-                  title={isCurrent ? 'Already the current display name' : 'Apply as display name'}
+                  title={
+                    readOnly
+                      ? 'Read-only users cannot update display names'
+                      : isCurrent
+                      ? 'Already the current display name'
+                      : 'Apply as display name'
+                  }
                 >
                   Use
                 </button>
@@ -165,6 +172,10 @@ export function DeviceNameCandidatesPanel({ deviceId, currentDisplayName }: Prop
             );
           })}
         </div>
+      ) : null}
+
+      {readOnly ? (
+        <p style={{ color: '#92400e', fontSize: 13, margin: 0 }}>Read-only users cannot apply new display names.</p>
       ) : null}
 
       {state.message ? (

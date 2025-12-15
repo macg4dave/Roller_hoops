@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"net/netip"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
 	"sort"
@@ -15,6 +15,7 @@ import (
 	"roller_hoops/core-go/internal/db"
 	"roller_hoops/core-go/internal/discoveryworker"
 	"roller_hoops/core-go/internal/httpapi"
+	"roller_hoops/core-go/internal/metrics"
 )
 
 func main() {
@@ -23,6 +24,7 @@ func main() {
 	databaseURL := envOr("DATABASE_URL", "")
 
 	logger := httpapi.NewLogger(logLevel)
+	sharedMetrics := metrics.New()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -65,11 +67,11 @@ func main() {
 			PortScanTimeout:       envOrDuration("DISCOVERY_PORT_SCAN_TIMEOUT", 3*time.Second),
 			PortScanMaxTargets:    envOrInt("DISCOVERY_PORT_SCAN_MAX_TARGETS", 24),
 		}
-		worker := discoveryworker.New(logger, pool.Queries(), opts)
+		worker := discoveryworker.New(logger, pool.Queries(), opts, sharedMetrics)
 		go worker.Run(ctx)
 	}
 
-	h := httpapi.NewHandler(logger, pool)
+	h := httpapi.NewHandlerWithMetrics(logger, pool, sharedMetrics)
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           h.Router(),
