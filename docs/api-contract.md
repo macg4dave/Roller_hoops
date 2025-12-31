@@ -191,6 +191,13 @@ Rules:
 - Avoid overloading `edges`; prefer region membership + a small number of intentional connectors.
 - Errors use the standard error envelope (see “Error format”).
 
+Container guidance (important for “objects that contain other objects”):
+
+- Treat **Subnet/VLAN/Zone** as first-class **container objects** in `regions[]`.
+- Treat **Devices/Interfaces/Services** as occupant objects in `nodes[]`.
+- Prefer expressing “lives inside” as **region membership** (so the canvas can show stacked regions without edge spaghetti).
+- “Server/router/switch” should be represented as a **device kind/role** on a device node (icon/label/filtering), not separate entity tables.
+
 ### Error handling expectations
 
 - Invalid focus IDs return `400 invalid_id`.

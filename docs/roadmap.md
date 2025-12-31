@@ -124,6 +124,7 @@ GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone&focusId=...
 * Service boundaries: `docs/architecture.md`
 * Security guardrails: `docs/security.md`
 * Network map product direction + mocks: `docs/network_map/network_map_ideas.md` (mocks: `docs/network_map/idea1.png`, `docs/network_map/idea2.png`)
+* Network map interaction contract (must-haves + gaps): `docs/network_map/interface-rules.md`
 
 ---
 
@@ -872,6 +873,10 @@ API preference for Phase 12 UX:
 
 Land the stable layout + interaction contract from the mocks, without committing to a “global topology” view.
 
+Primary guide:
+
+* Use `docs/network_map/interface-rules.md` as the interaction contract (non-negotiables, v1 must-haves, and open decisions/gaps).
+
 ### Mock-driven UI contract (what the screenshots actually imply)
 
 The two mock screens in `docs/network_map/idea1.png` and `docs/network_map/idea2.png` anchor the v1 UX:
@@ -894,6 +899,8 @@ Non-negotiables (from `docs/network_map/network_map_ideas.md` + mocks):
 * Only **one layer active** at a time; switching layers **fully re-renders** the canvas
 * Object-first: nothing renders by default; user selects a layer and a focus object/scope
 * “Stacked regions”, not wire soup (e.g., subnets as rounded regions; labels on hover)
+* Deterministic presentation: stable ordering + minimal churn during polling
+* Input/accessibility: must work without hover and support keyboard focus/navigation
 
 ### Milestones (Phase 13)
 
@@ -977,6 +984,7 @@ Acceptance criteria:
 * The inspector is always visible and stays in sync with focus.
 * Deep links are stable (layer/focus stored in URL).
 * No API changes required yet; mock data is acceptable for this phase.
+* The implementation follows the v1 must-haves in `docs/network_map/interface-rules.md` (especially deterministic behavior and keyboard-visible focus).
 
 Deliverable:
 
@@ -1017,6 +1025,9 @@ Rules:
 * No “entire network graph” endpoint in v1.
 * Default response for no focus: empty graph + guidance message.
 * OpenAPI is canonical; add contract tests for projections (shape + required fields).
+* Follow `docs/network_map/interface-rules.md` for projection assumptions:
+  * membership is primarily expressed via regions/containment, not dense edges
+  * edges are rare/intentional and must be bounded
 
 ### Blockers
 

@@ -245,6 +245,46 @@ That’s why:
 
 ---
 
+## Object model: containers + occupants (what “things can live inside other things” means)
+
+To support “VLANs, servers, routers, etc. as objects” while still keeping the system coherent, treat map items as one of:
+
+- **Object nodes** (things you can select/focus)
+- **Container objects** (things that can contain other objects)
+
+In practice:
+
+- **Containers are usually `regions`** (Subnet/VLAN/Zone, later Rack/Site/Cluster).
+- **Occupants are `nodes`** (Devices/Interfaces/Services, later “virtual endpoints” if needed).
+- A device can belong to **multiple containers** at once (e.g., in L3 it “lives in” a subnet region; in Security it “lives in” a zone region).
+
+### Device “kinds” (server/router/switch) are still devices
+
+“Server” and “router” are best modeled as **kinds/roles of a device**, not separate entity tables:
+
+- `device` remains the canonical object for discovered inventory.
+- `device.kind` (or roles/tags) drives:
+  - iconography on the canvas (server vs router)
+  - inspector identity fields (“Role: router”)
+  - optional filtering (“show only routers”)
+
+This avoids duplicating lifecycle rules (discovery, history, metadata, ownership) across multiple “device-ish” tables.
+
+### How this maps to the canvas language
+
+- **Subnet/VLAN/Zone**: render as a **region container**.
+- **Devices**: render as **nodes placed inside regions**.
+- **Relationships**: prefer “membership inside a region” over drawing edges; use edges sparingly for intentional connectors only.
+
+### What we deliberately avoid (v1)
+
+- A generic “any node can contain any node” free-for-all.
+- Global graph rendering (“draw everything”).
+
+We can still add curated containers later (Rack/Site/Cluster) without changing the core concept: containers are objects too, just with an “occupant membership” relationship.
+
+---
+
 ## Mental model for users
 
 > “I’m not looking at *the network*.
@@ -257,6 +297,9 @@ That’s the entire product.
 ## If you want next steps
 
 I can:
+
+- Write the Phase 14 projection schema so `regions[]` represent container objects (vlan/subnet/zone) and `nodes[]` represent occupants (devices/services), with deterministic membership rules.
+- Add a minimal “device kind” field/roles model (manual override + best-effort derived hints from SNMP/service scans) so servers/routers render distinctly.
 
 * Turn this into a **product spec**
 * Design the **exact wireframe**

@@ -225,6 +225,25 @@ Proposed `vlans` (optional) columns:
 - `notes` (text, nullable)
 - `created_at` (timestamptz)
 
+### Device kinds / roles (optional, recommended)
+
+To support “servers”, “routers”, “switches”, etc. without multiplying device-like tables, model them as **roles of a device**.
+
+Initial option (normalized, supports multiple roles per device):
+
+- `device_roles`
+  - `device_id` (uuid, foreign key → `devices.id`)
+  - `role` (text; e.g. `server` | `router` | `switch` | `firewall`)
+  - `source` (text; `manual` | `snmp` | `nmap`, optional)
+  - `created_at` (timestamptz)
+
+Constraints:
+
+- unique `(device_id, role)`
+- index `(role, device_id)`
+
+This enables the map/UI to render different device icons and filter by role while keeping `devices` as the canonical inventory entity.
+
 ### `links` (physical adjacency)
 
 Purpose: represent curated physical adjacency for the Physical layer (manual-first; later enrichment may write with `source=lldp|cdp`).

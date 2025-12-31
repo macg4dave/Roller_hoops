@@ -90,6 +90,11 @@ Required documents:
 - `/docs/api-contract.md`
 - `/docs/architecture.md`
 
+Network map work (UI, projection APIs, map data model):
+
+- Read `/docs/network_map/interface-rules.md` first and treat it as the interaction contract (non-negotiables + v1 must-haves).
+- Cross-check against `/docs/network_map/network_map_ideas.md` (product concept + mocks) and `/docs/network_map/implementation-stack.md` (tooling choices).
+
 Rules:
 
 - Never implement a feature not listed in feature-matrix without permission.
