@@ -225,6 +225,23 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 				return
 			}
 
+			if len(deviceIPs) > 0 {
+				ips := append([]sqlcgen.DeviceIP(nil), deviceIPs...)
+				sort.SliceStable(ips, func(i, j int) bool {
+					if ips[i].UpdatedAt.Equal(ips[j].UpdatedAt) {
+						return ips[i].IP < ips[j].IP
+					}
+					return ips[i].UpdatedAt.After(ips[j].UpdatedAt)
+				})
+				primary := strings.TrimSpace(ips[0].IP)
+				if primary != "" {
+					identity = append(identity, mapInspectorField{Label: "Primary IP", Value: primary})
+				}
+				status = append(status, mapInspectorField{Label: "IP facts", Value: strconv.Itoa(len(deviceIPs))})
+			} else {
+				status = append(status, mapInspectorField{Label: "IP facts", Value: "0"})
+			}
+
 			ipStrings := make([]string, 0, len(deviceIPs))
 			for _, row := range deviceIPs {
 				ipStrings = append(ipStrings, row.IP)
@@ -322,11 +339,18 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 		if layer == "l3" {
 			projection = "l3 (subnet focus)"
 		}
+
+		family := "IPv4"
+		if prefix.Addr().Is6() {
+			family = "IPv6"
+		}
 		inspector = &mapInspector{
 			Title: label,
 			Identity: []mapInspectorField{
 				{Label: "Type", Value: "Subnet"},
 				{Label: "CIDR", Value: label},
+				{Label: "Family", Value: family},
+				{Label: "Prefix bits", Value: strconv.Itoa(prefix.Bits())},
 			},
 			Status: []mapInspectorField{
 				{Label: "Layer", Value: layer},
@@ -492,6 +516,31 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 				peerCount = peerCount - 1
 			}
 			resp.Inspector.Status = append(resp.Inspector.Status, mapInspectorField{Label: "Peers", Value: strconv.Itoa(peerCount)})
+
+			for _, subnet := range l3Subnets {
+				resp.Inspector.Relationships = append(resp.Inspector.Relationships, mapInspectorRelation{
+					Label:     "Open subnet " + subnet,
+					Layer:     "l3",
+					FocusType: "subnet",
+					FocusID:   subnet,
+				})
+			}
+
+			for _, peerID := range peerIDsIncluded {
+				label := peerID
+				if peerLabel := l3PeerLabels[peerID]; peerLabel != nil {
+					if trimmed := strings.TrimSpace(*peerLabel); trimmed != "" {
+						label = trimmed
+					}
+				}
+
+				resp.Inspector.Relationships = append(resp.Inspector.Relationships, mapInspectorRelation{
+					Label:     "Open device " + label,
+					Layer:     "l3",
+					FocusType: "device",
+					FocusID:   peerID,
+				})
+			}
 		}
 
 		if len(l3AllSubnets) == 0 {
@@ -558,6 +607,22 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 
 			if resp.Inspector != nil {
 				resp.Inspector.Status = append(resp.Inspector.Status, mapInspectorField{Label: "Devices", Value: strconv.Itoa(len(resp.Nodes))})
+
+				for _, node := range resp.Nodes {
+					label := node.ID
+					if node.Label != nil {
+						if trimmed := strings.TrimSpace(*node.Label); trimmed != "" {
+							label = trimmed
+						}
+					}
+
+					resp.Inspector.Relationships = append(resp.Inspector.Relationships, mapInspectorRelation{
+						Label:     "Open device " + label,
+						Layer:     "l3",
+						FocusType: "device",
+						FocusID:   node.ID,
+					})
+				}
 			}
 
 			if len(resp.Nodes) == 0 {

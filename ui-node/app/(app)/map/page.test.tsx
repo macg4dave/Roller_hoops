@@ -1,9 +1,23 @@
 import '@testing-library/jest-dom';
 
 import { render, screen } from '@testing-library/react';
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import MapPage from './page';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+const stubProjectionFetch = (projection: unknown) => {
+  const fetchMock = vi.fn(async () => ({
+    ok: true,
+    status: 200,
+    json: async () => projection
+  }));
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+};
 
 describe('MapPage URL contract', () => {
   test('selects layer from the URL query string', async () => {
@@ -26,14 +40,43 @@ describe('MapPage URL contract', () => {
     await expect(MapPage({ searchParams: Promise.resolve({}) })).rejects.toThrow('NEXT_REDIRECT:/map?layer=l3');
   });
 
-  test('renders focus from the URL query string', async () => {
+  test('renders inspector from the projection response', async () => {
+    const focusId = '550e8400-e29b-41d4-a716-446655440000';
+    stubProjectionFetch({
+      layer: 'l3',
+      focus: { type: 'device', id: focusId, label: null },
+      guidance: null,
+      regions: [],
+      nodes: [],
+      edges: [],
+      inspector: {
+        title: 'Router A',
+        identity: [
+          { label: 'Type', value: 'Device' },
+          { label: 'ID', value: focusId }
+        ],
+        status: [{ label: 'Layer', value: 'l3' }],
+        relationships: [
+          { label: 'View in L3', layer: 'l3', focus_type: 'device', focus_id: focusId },
+          { label: 'View in L2', layer: 'l2', focus_type: 'device', focus_id: focusId }
+        ]
+      },
+      truncation: {
+        regions: { returned: 0, limit: 8, truncated: false, total: null, warning: null },
+        nodes: { returned: 0, limit: 120, truncated: false, total: null, warning: null },
+        edges: { returned: 0, limit: 80, truncated: false, total: null, warning: null }
+      }
+    });
+
     const ui = await MapPage({
-      searchParams: Promise.resolve({ layer: 'l3', focusType: 'device', focusId: '550e8400-e29b-41d4-a716-446655440000' })
+      searchParams: Promise.resolve({ layer: 'l3', focusType: 'device', focusId })
     });
     render(ui);
 
-    expect(screen.getByText(/focused on device/i)).toBeInTheDocument();
-    expect(screen.getByText(/focus: device 550e8400-e29b-41d4-a716-446655440000/i)).toBeInTheDocument();
+    expect(screen.getByText('Router A')).toBeInTheDocument();
+    expect(screen.getByText('Type')).toBeInTheDocument();
+    expect(screen.getByText('Device')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /view in l2/i })).toHaveAttribute('href', expect.stringContaining('layer=l2'));
   });
 
   test('warns when focusType is unknown', async () => {
@@ -65,6 +108,26 @@ describe('MapPage URL contract', () => {
 
   test('relationship actions keep focus when switching layers', async () => {
     const focusId = '550e8400-e29b-41d4-a716-446655440000';
+    stubProjectionFetch({
+      layer: 'l2',
+      focus: { type: 'device', id: focusId, label: null },
+      guidance: null,
+      regions: [],
+      nodes: [],
+      edges: [],
+      inspector: {
+        title: 'Device',
+        identity: [{ label: 'ID', value: focusId }],
+        status: [{ label: 'Layer', value: 'l2' }],
+        relationships: [{ label: 'View in L3', layer: 'l3', focus_type: 'device', focus_id: focusId }]
+      },
+      truncation: {
+        regions: { returned: 0, limit: 8, truncated: false, total: null, warning: null },
+        nodes: { returned: 0, limit: 120, truncated: false, total: null, warning: null },
+        edges: { returned: 0, limit: 80, truncated: false, total: null, warning: null }
+      }
+    });
+
     const ui = await MapPage({
       searchParams: Promise.resolve({ layer: 'l2', focusType: 'device', focusId })
     });

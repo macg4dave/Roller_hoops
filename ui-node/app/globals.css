@@ -827,6 +827,30 @@ pre {
   flex-wrap: wrap;
 }
 
+.mapInspectorFieldList {
+  display: grid;
+  gap: 6px;
+}
+
+.mapInspectorFieldRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mapInspectorFieldLabel {
+  color: var(--muted-2);
+  font-size: 13px;
+}
+
+.mapInspectorFieldValue {
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+  word-break: break-word;
+}
+
 .mapFocusForm {
   display: grid;
   gap: 12px;

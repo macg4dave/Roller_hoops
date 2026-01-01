@@ -282,3 +282,132 @@ func TestMapProjection_DeviceFocus_EchoesFocusAndInspector(t *testing.T) {
 		t.Fatalf("expected inspector to be present")
 	}
 }
+
+func TestMapProjection_DeviceFocus_L3InspectorIncludesSubnetRelationships(t *testing.T) {
+	name := "router-1"
+	h := NewHandler(NewLogger("debug"), nil)
+	h.devices = fakeDeviceQueries{
+		getFn: func(ctx context.Context, id string) (sqlcgen.Device, error) {
+			return sqlcgen.Device{ID: "00000000-0000-0000-0000-000000000011", DisplayName: &name}, nil
+		},
+		listIPsFn: func(ctx context.Context, deviceID string) ([]sqlcgen.DeviceIP, error) {
+			return []sqlcgen.DeviceIP{
+				{IP: "10.0.2.20"},
+				{IP: "10.0.1.10"},
+			}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/map/l3?focusType=device&focusId=00000000-0000-0000-0000-000000000011", nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	body := decodeBody(t, rr)
+	inspector, ok := body["inspector"].(map[string]any)
+	if !ok || inspector == nil {
+		t.Fatalf("expected inspector object, got %T %v", body["inspector"], body["inspector"])
+	}
+	relsAny, ok := inspector["relationships"].([]any)
+	if !ok {
+		t.Fatalf("expected inspector.relationships array, got %T %v", inspector["relationships"], inspector["relationships"])
+	}
+
+	want := map[string]bool{
+		"10.0.1.0/24": false,
+		"10.0.2.0/24": false,
+	}
+	for _, relAny := range relsAny {
+		rel, ok := relAny.(map[string]any)
+		if !ok {
+			continue
+		}
+		if rel["layer"] != "l3" || rel["focus_type"] != "subnet" {
+			continue
+		}
+		if id, ok := rel["focus_id"].(string); ok {
+			if _, exists := want[id]; exists {
+				want[id] = true
+			}
+		}
+	}
+	for subnet, found := range want {
+		if !found {
+			t.Fatalf("expected inspector relationships to include subnet %s", subnet)
+		}
+	}
+}
+
+type fakeDeviceQueriesWithCIDR struct {
+	fakeDeviceQueries
+	listCIDRFn func(ctx context.Context, cidr string, limit int32) ([]sqlcgen.MapDevicePeer, error)
+}
+
+func (f fakeDeviceQueriesWithCIDR) ListDevicesInCIDR(ctx context.Context, cidr string, limit int32) ([]sqlcgen.MapDevicePeer, error) {
+	if f.listCIDRFn == nil {
+		return nil, nil
+	}
+	return f.listCIDRFn(ctx, cidr, limit)
+}
+
+func TestMapProjection_SubnetFocus_L3InspectorIncludesDeviceRelationships(t *testing.T) {
+	h := NewHandler(NewLogger("debug"), nil)
+	h.devices = fakeDeviceQueriesWithCIDR{
+		fakeDeviceQueries: fakeDeviceQueries{
+			getFn: func(ctx context.Context, id string) (sqlcgen.Device, error) { return sqlcgen.Device{}, nil },
+		},
+		listCIDRFn: func(ctx context.Context, cidr string, limit int32) ([]sqlcgen.MapDevicePeer, error) {
+			name1 := "peer-1"
+			name2 := "peer-2"
+			return []sqlcgen.MapDevicePeer{
+				{ID: "00000000-0000-0000-0000-000000000001", DisplayName: &name1},
+				{ID: "00000000-0000-0000-0000-000000000002", DisplayName: &name2},
+			}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/map/l3?focusType=subnet&focusId=10.0.1.5/24", nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	body := decodeBody(t, rr)
+	inspector, ok := body["inspector"].(map[string]any)
+	if !ok || inspector == nil {
+		t.Fatalf("expected inspector object, got %T %v", body["inspector"], body["inspector"])
+	}
+	relsAny, ok := inspector["relationships"].([]any)
+	if !ok {
+		t.Fatalf("expected inspector.relationships array, got %T %v", inspector["relationships"], inspector["relationships"])
+	}
+
+	want := map[string]bool{
+		"00000000-0000-0000-0000-000000000001": false,
+		"00000000-0000-0000-0000-000000000002": false,
+	}
+	for _, relAny := range relsAny {
+		rel, ok := relAny.(map[string]any)
+		if !ok {
+			continue
+		}
+		if rel["layer"] != "l3" || rel["focus_type"] != "device" {
+			continue
+		}
+		if id, ok := rel["focus_id"].(string); ok {
+			if _, exists := want[id]; exists {
+				want[id] = true
+			}
+		}
+	}
+	for deviceID, found := range want {
+		if !found {
+			t.Fatalf("expected inspector relationships to include device %s", deviceID)
+		}
+	}
+}

@@ -76,6 +76,7 @@ The UI should treat the map as a projection payload, not an editable source of t
 - `regions[]`: container objects (zone/subnet/vlan/etc.)
 - `nodes[]`: occupant objects (devices/services/etc.)
 - optional `edges[]`: only when a layer explicitly calls for it (see “Edges policy”)
+- `inspector`: render-ready identity/status/relationships for the focused object (UI renders from this block without extra fetches in v1).
 - Nodes express membership via region IDs (not via a dense edge mesh).
 
 ---

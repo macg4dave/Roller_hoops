@@ -1122,11 +1122,11 @@ Acceptance criteria:
 Tasks:
 
 * Contract
-  * [ ] Define an `inspector` block that is render-ready (identity/status/relationships).
+  * [x] Define an `inspector` block that is render-ready (identity/status/relationships).
 * Core-go implementation
-  * [ ] Populate inspector from existing tables in the same request.
+  * [x] Populate inspector from existing tables in the same request.
 * UI
-  * [ ] Render inspector from the projection response only (no additional fetches for v1).
+  * [x] Render inspector from the projection response only (no additional fetches for v1).
 
 Blockers:
 
@@ -1478,6 +1478,7 @@ If you want next:
 * [x] M14.1 — `MapProjection` schema pinned in `api/openapi.yaml`
 * [x] M14.2 — L3 projection (device focus) from live data
 * [x] M14.3 — L3 projection (subnet focus) from live data
+* [x] M14.4 — Inspector payload (no extra round trips)
 
 ## Definition of done for discovery (Phases 8-10)
 

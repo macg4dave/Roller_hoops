@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { randomUUID } from 'crypto';
 
 import { Alert } from '@/app/_components/ui/Alert';
 import { Button } from '@/app/_components/ui/Button';
@@ -10,6 +11,10 @@ import type { components } from '@/lib/api-types';
 
 type MapLayer = components['schemas']['MapLayer'];
 type MapFocusType = components['schemas']['MapFocusType'];
+type MapProjection = components['schemas']['MapProjection'];
+type MapInspector = components['schemas']['MapInspector'];
+type MapInspectorField = components['schemas']['MapInspectorField'];
+type MapInspectorRelationship = components['schemas']['MapInspectorRelationship'];
 
 const LAYER_OPTIONS = [
   { id: 'physical', label: 'Physical', description: 'Cables, racks, and adjacency' },
@@ -174,6 +179,41 @@ export default async function MapPage({ searchParams }: { searchParams?: Promise
           ? 'Focus id provided, but focus type is missing.'
           : undefined;
 
+  let projection: MapProjection | undefined;
+  let projectionError: string | undefined;
+
+  if (activeLayerId && focus && !focusWarning && !unknownLayer) {
+    const base = process.env.CORE_GO_BASE_URL ?? 'http://localhost:8081';
+    const params = new URLSearchParams();
+    params.set('focusType', focus.type);
+    params.set('focusId', focus.id);
+
+    try {
+      const res = await fetch(`${base}/api/v1/map/${activeLayerId}?${params.toString()}`, {
+        cache: 'no-store',
+        headers: {
+          Accept: 'application/json',
+          'X-Request-ID': randomUUID()
+        }
+      });
+
+      if (res.ok) {
+        projection = (await res.json()) as MapProjection;
+      } else {
+        const payload = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+        projectionError = payload?.error?.message ? payload.error.message : `Failed to load projection (${res.status}).`;
+      }
+    } catch (err) {
+      projectionError = err instanceof Error ? err.message : 'Failed to load projection.';
+    }
+  }
+
+  const inspector: MapInspector | undefined = projection?.inspector;
+  const inspectorTitle = inspector?.title;
+  const inspectorIdentity: MapInspectorField[] = inspector?.identity ?? [];
+  const inspectorStatus: MapInspectorField[] = inspector?.status ?? [];
+  const inspectorRelationships: MapInspectorRelationship[] = inspector?.relationships ?? [];
+
   const clearFocusParams = new URLSearchParams(currentParams);
   clearFocusParams.delete('focusType');
   clearFocusParams.delete('focusId');
@@ -260,10 +300,16 @@ export default async function MapPage({ searchParams }: { searchParams?: Promise
             >
               {focus ? (
                 <>
-                  <p>
-                    This milestone locks the deep-link contract. Rendered projections arrive in Phase 14+ (API
-                    projections) and Phase 15+ (canvas rendering).
-                  </p>
+                  {projection ? (
+                    <p>
+                      Projection loaded: {projection.regions.length} regions, {projection.nodes.length} nodes, {projection.edges.length}{' '}
+                      edges. Canvas rendering ships in Phase 15.
+                    </p>
+                  ) : projectionError ? (
+                    <p>Projection failed to load. The inspector shows the error response for this focus.</p>
+                  ) : (
+                    <p>Projection unavailable.</p>
+                  )}
                   <p>
                     Share this URL to reopen the same layer + focus. Use the inspector to adjust focus without drawing
                     the whole network.
@@ -296,6 +342,7 @@ export default async function MapPage({ searchParams }: { searchParams?: Promise
             </p>
 
             {focusWarning ? <Alert tone="warning">{focusWarning}</Alert> : null}
+            {projectionError ? <Alert tone="warning">{projectionError}</Alert> : null}
 
             <form action="/map" method="get" className="mapFocusForm">
               <input type="hidden" name="layer" value={activeLayerId ?? DEFAULT_LAYER} />
@@ -338,45 +385,72 @@ export default async function MapPage({ searchParams }: { searchParams?: Promise
 
           <div className="mapInspectorSection">
             <div className="mapInspectorHeading">Identity</div>
-            <p className="mapInspectorValue">{focus ? `${focusTypeLabel} ${focus.id}` : 'No object selected'}</p>
-            <p className="mapInspectorHint">
-              When focused, we will show stable identifiers, ownership, and metadata for the focused object.
-            </p>
+            <p className="mapInspectorValue">{inspectorTitle ?? (focus ? `${focusTypeLabel} ${focus.id}` : 'No object selected')}</p>
+            {focus && inspectorIdentity.length > 0 ? (
+              <div className="mapInspectorFieldList">
+                {inspectorIdentity.map((field) => (
+                  <div className="mapInspectorFieldRow" key={`${field.label}:${field.value}`}>
+                    <span className="mapInspectorFieldLabel">{field.label}</span>
+                    <span className="mapInspectorFieldValue">{field.value}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mapInspectorHint">
+                When focused, we will show stable identifiers, ownership, and metadata for the focused object.
+              </p>
+            )}
           </div>
 
           <div className="mapInspectorSection">
             <div className="mapInspectorHeading">Status</div>
-            <p className="mapInspectorValue">{focus ? 'Focus set (mocked projection)' : 'Awaiting focus'}</p>
-            <p className="mapInspectorHint">
-              Active focus will show health, last discovery time, and notes once projections are wired.
+            <p className="mapInspectorValue">
+              {focus ? (inspectorStatus.length > 0 ? 'Focus loaded' : 'Focus set') : 'Awaiting focus'}
             </p>
+            {focus && inspectorStatus.length > 0 ? (
+              <div className="mapInspectorFieldList">
+                {inspectorStatus.map((field) => (
+                  <div className="mapInspectorFieldRow" key={`${field.label}:${field.value}`}>
+                    <span className="mapInspectorFieldLabel">{field.label}</span>
+                    <span className="mapInspectorFieldValue">{field.value}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mapInspectorHint">
+                Active focus will show health, last discovery time, and notes once projections are wired.
+              </p>
+            )}
           </div>
 
           <div className="mapInspectorSection">
             <div className="mapInspectorHeading">Relationships</div>
             <div className="mapInspectorActions">
-              {RELATIONSHIP_LAYER_ACTIONS.map(({ layer, label }) => {
-                if (!focus) {
-                  return (
-                    <Button key={layer} variant="default" disabled>
-                      {label}
-                    </Button>
-                  );
-                }
-
-                const targetParams = new URLSearchParams(currentParams);
-                targetParams.set('layer', layer);
-                targetParams.set('focusType', focus.type);
-                targetParams.set('focusId', focus.id);
-                const href = `/map?${targetParams.toString()}`;
-                const active = layer === activeLayerId;
-
-                return (
-                  <Link key={layer} href={href} className={active ? 'btn btnPrimary' : 'btn'}>
+              {!focus || inspectorRelationships.length === 0 ? (
+                RELATIONSHIP_LAYER_ACTIONS.map(({ layer, label }) => (
+                  <Button key={layer} variant="default" disabled>
                     {label}
-                  </Link>
-                );
-              })}
+                  </Button>
+                ))
+              ) : (
+                <>
+                  {inspectorRelationships.map((rel) => {
+                    const targetParams = new URLSearchParams(currentParams);
+                    targetParams.set('layer', rel.layer);
+                    targetParams.set('focusType', rel.focus_type);
+                    targetParams.set('focusId', rel.focus_id);
+                    const href = `/map?${targetParams.toString()}`;
+                    const isActive =
+                      rel.layer === activeLayerId && focus && rel.focus_type === focus.type && rel.focus_id === focus.id;
+
+                    return (
+                      <Link key={`${rel.layer}:${rel.focus_type}:${rel.focus_id}:${rel.label}`} href={href} className={isActive ? 'btn btnPrimary' : 'btn'}>
+                        {rel.label}
+                      </Link>
+                    );
+                  })}
+                </>
+              )}
             </div>
             <p className="mapInspectorHint">
               Relationship actions will switch layers while keeping the focused object in view.
@@ -385,10 +459,14 @@ export default async function MapPage({ searchParams }: { searchParams?: Promise
 
           <div className="mapInspectorSection">
             <div className="mapInspectorHeading">Guidance</div>
-            <p className="mapInspectorHint">
-              URL-driven state: `/map?layer=l3&focusType=device&focusId=...`. No focus is valid and renders an empty
-              canvas.
-            </p>
+            {projection?.guidance ? (
+              <p className="mapInspectorHint">{projection.guidance}</p>
+            ) : (
+              <p className="mapInspectorHint">
+                URL-driven state: `/map?layer=l3&focusType=device&focusId=...`. No focus is valid and renders an empty
+                canvas.
+              </p>
+            )}
             <Link
               href="https://github.com/macg4dave/Roller_hoops/blob/main/docs/network_map/network_map_ideas.md"
               className="mapInspectorLink"
