@@ -971,9 +971,9 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    /** @description Focus type for object-first navigation. */
+                    /** @description Focus type for object-first navigation (must be provided together with `focusId`). */
                     focusType?: components["schemas"]["MapFocusType"];
-                    /** @description Focus identifier (UUID for `device`; other types are layer-defined). */
+                    /** @description Focus identifier (must be provided together with `focusType`; UUID for `device`; other types are layer-defined). */
                     focusId?: string;
                     /** @description Optional scoping hint (small integer). */
                     depth?: number;
@@ -1008,6 +1008,15 @@ export interface paths {
                 };
                 /** @description Focus not found */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Database not configured */
+                503: {
                     headers: {
                         [name: string]: unknown;
                     };

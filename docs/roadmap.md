@@ -110,8 +110,8 @@ GET    /api/v1/discovery/runs/{id}/logs
 Phase 11 — ops/telemetry
 GET    /metrics
 
-Phase 14+ — map projections (read-only, focus-scoped)
-GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone&focusId=...
+Phase 14 — map projections (implemented; read-only, focus-scoped)
+GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone|service&focusId=...
 ```
 
 ---
@@ -155,7 +155,7 @@ GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone&focusId=...
 | 11 | Done | Observability & operations (metrics/runbooks/CI) |
 | 12 | Planned | UI workflows for operators |
 | 13 | Done | Map shell + interaction contract |
-| 14 | In progress | Projection API + map data model (L3 first) |
+| 14 | Done | Projection API + map data model (L3 first) |
 | 15 | Planned | Physical/L2/L3 layers |
 | 16 | Planned | Services/Security layers + modes |
 
@@ -752,7 +752,7 @@ API/telemetry endpoints (planned):
 
 **Status:** In progress
 
-Phase 13 is complete: the `/map` shell now supports URL-driven layer + focus and inspector-driven cross-layer navigation stubs (no projections yet).
+Phase 13 is complete: the `/map` shell supports URL-driven layer + focus and inspector-driven cross-layer navigation stubs; Phase 14 adds live projections.
 
 ### Goal
 
@@ -997,7 +997,7 @@ Deliverable:
 
 ## Phase 14 — Map data model + API projections (layer-aware)
 
-**Status:** In progress
+**Status:** Done
 
 ### Goal
 
@@ -1016,7 +1016,7 @@ Make the map a projection of structured objects, not a hand-drawn diagram.
 
 Add read endpoints that return a **render-ready projection** for a given layer and focus:
 
-* `GET /api/v1/map/{layer}` with query params like `focusType=device|subnet|vlan|zone`, `focusId=...`, `scope=...`
+* `GET /api/v1/map/{layer}` with query params like `focusType=device|subnet|vlan|zone|service`, `focusId=...`, and optional `depth`/`limit`
 * Response contains:
   * `regions[]` (e.g., subnets/zones as rounded containers)
   * `nodes[]` (devices/interfaces/services)

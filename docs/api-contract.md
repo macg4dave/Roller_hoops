@@ -85,9 +85,9 @@ Initial endpoints (from `docs/roadmap.md`):
   - `GET /api/v1/discovery/runs/{id}`
   - `GET /api/v1/discovery/runs/{id}/logs`
 
-- Network map (planned)
+- Network map projections
   - `GET /api/v1/map/{layer}` (layer-aware projections; no global graph)
-    - Initial target: `GET /api/v1/map/l3`
+    - L3 projections are live at `GET /api/v1/map/l3`
 
 ### Discovery behaviour (v1)
 
@@ -145,7 +145,7 @@ Rules:
 - Prefer small, explicit query params (filter/sort/search/paging) over “return everything then filter in the browser”.
 - Keep ordering deterministic and cursor paging stable to avoid UI churn.
 
-## Network map projections (planned)
+## Network map projections
 
 The network map is **projection-first**:
 
@@ -164,7 +164,7 @@ Layers are mutually exclusive:
 
 ### Focus-driven query
 
-Projection endpoints accept a focus. Proposed query params (exact names live in OpenAPI):
+Projection endpoints accept a focus. Query params (exact names live in OpenAPI):
 
 - `focusType`: `device` | `subnet` | `vlan` | `zone` | `service`
 - `focusId`: stable identifier for the focus object (UUID for device; other types are layer-defined)
@@ -176,7 +176,7 @@ No focus provided ⇒ return an empty projection + a guidance message (still 200
 
 ### Response shape
 
-Map endpoints return a single JSON object (proposed top-level keys):
+Map endpoints return a single JSON object (top-level keys):
 
 - `layer` (string)
 - `focus` (object)

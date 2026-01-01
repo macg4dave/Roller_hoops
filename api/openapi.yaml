@@ -597,12 +597,12 @@ paths:
           in: query
           schema:
             $ref: '#/components/schemas/MapFocusType'
-          description: Focus type for object-first navigation.
+          description: Focus type for object-first navigation (must be provided together with `focusId`).
         - name: focusId
           in: query
           schema:
             type: string
-          description: Focus identifier (UUID for `device`; other types are layer-defined).
+          description: Focus identifier (must be provided together with `focusType`; UUID for `device`; other types are layer-defined).
         - name: depth
           in: query
           schema:
@@ -634,6 +634,12 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Focus not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Database not configured
           content:
             application/json:
               schema:
