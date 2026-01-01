@@ -9,6 +9,8 @@ import { Field, Hint, Label } from '@/app/_components/ui/Field';
 import { Input, Select } from '@/app/_components/ui/Inputs';
 import type { components } from '@/lib/api-types';
 
+import { MapCanvas } from './MapCanvas';
+
 type MapLayer = components['schemas']['MapLayer'];
 type MapFocusType = components['schemas']['MapFocusType'];
 type MapProjection = components['schemas']['MapProjection'];
@@ -52,23 +54,23 @@ const LAYER_RENDER_CONFIG: Record<
   }
 > = {
   physical: {
-    canvasHint: 'Physical adjacency projection (mocked)',
+    canvasHint: 'Physical adjacency projection',
     emptyTitle: 'Pick a focus to render physical adjacency'
   },
   l2: {
-    canvasHint: 'L2 VLAN projection (mocked)',
+    canvasHint: 'L2 VLAN projection',
     emptyTitle: 'Pick a focus to render VLAN membership'
   },
   l3: {
-    canvasHint: 'L3 subnet projection (mocked)',
+    canvasHint: 'L3 subnet projection',
     emptyTitle: 'Pick a focus to render subnet membership'
   },
   services: {
-    canvasHint: 'Services projection (mocked)',
+    canvasHint: 'Services projection',
     emptyTitle: 'Pick a focus to render discovered services'
   },
   security: {
-    canvasHint: 'Security projection (mocked)',
+    canvasHint: 'Security projection',
     emptyTitle: 'Pick a focus to render security zones'
   }
 };
@@ -287,47 +289,46 @@ export default async function MapPage({ searchParams }: { searchParams?: Promise
             </p>
           </div>
           <div className="mapCanvasBody">
-            <EmptyState
-              title={
-                unknownLayer
-                  ? 'Unknown layer'
-                  : activeLayer
-                    ? focus
-                      ? `Focused on ${focusTypeLabel}`
-                      : activeLayerConfig?.emptyTitle ?? `Pick a focus to render the ${activeLayer.label} projection`
-                    : 'Select a layer and focus to get started'
-              }
-            >
-              {focus ? (
-                <>
-                  {projection ? (
+            {focus && projection && activeLayerId && !unknownLayer ? (
+              <MapCanvas projection={projection} activeLayerId={activeLayerId} currentParams={currentParams.toString()} />
+            ) : (
+              <EmptyState
+                title={
+                  unknownLayer
+                    ? 'Unknown layer'
+                    : activeLayer
+                      ? focus
+                        ? `Focused on ${focusTypeLabel}`
+                        : activeLayerConfig?.emptyTitle ?? `Pick a focus to render the ${activeLayer.label} projection`
+                      : 'Select a layer and focus to get started'
+                }
+              >
+                {focus ? (
+                  <>
+                    {projectionError ? (
+                      <p>Projection failed to load. The inspector shows the error response for this focus.</p>
+                    ) : (
+                      <p>Projection unavailable.</p>
+                    )}
                     <p>
-                      Projection loaded: {projection.regions.length} regions, {projection.nodes.length} nodes, {projection.edges.length}{' '}
-                      edges. Canvas rendering ships in Phase 15.
+                      Share this URL to reopen the same layer + focus. Use the inspector to adjust focus without drawing
+                      the whole network.
                     </p>
-                  ) : projectionError ? (
-                    <p>Projection failed to load. The inspector shows the error response for this focus.</p>
-                  ) : (
-                    <p>Projection unavailable.</p>
-                  )}
-                  <p>
-                    Share this URL to reopen the same layer + focus. Use the inspector to adjust focus without drawing
-                    the whole network.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p>
-                    The canvas stays empty until you pick something to focus on. This keeps the view intentional and
-                    avoids the spaghetti effect from the mocks.
-                  </p>
-                  <p>
-                    Use the inspector on the right to jump between layers and follow relationships without losing
-                    context.
-                  </p>
-                </>
-              )}
-            </EmptyState>
+                  </>
+                ) : (
+                  <>
+                    <p>
+                      The canvas stays empty until you pick something to focus on. This keeps the view intentional and
+                      avoids the spaghetti effect from the mocks.
+                    </p>
+                    <p>
+                      Use the inspector on the right to jump between layers and follow relationships without losing
+                      context.
+                    </p>
+                  </>
+                )}
+              </EmptyState>
+            )}
           </div>
         </section>
 

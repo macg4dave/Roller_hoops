@@ -159,6 +159,13 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 	var l3SubnetsTruncated bool
 	var l3PeerRegions map[string]map[string]struct{}
 	var l3PeerLabels map[string]*string
+	var l2AllVLANs []string
+	var l2VLANs []string
+	var l2VLANsTruncated bool
+	var l2PeerRegions map[string]map[string]struct{}
+	var l2PeerLabels map[string]*string
+	var physicalLinks []sqlcgen.MapDeviceLinkPeer
+	var physicalLinksTruncated bool
 
 	switch focusType {
 	case "device":
@@ -317,6 +324,162 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 			}
 		}
 
+		if layer == "l2" && depth > 0 {
+			status[1].Value = "l2 (device focus)"
+
+			pvidLister, ok := h.devices.(interface {
+				ListDevicePVIDs(ctx context.Context, deviceID string) ([]int32, error)
+			})
+			if !ok {
+				h.log.Error().Msg("map l2 projection query missing")
+				h.writeError(w, http.StatusInternalServerError, "internal_error", "map l2 projection not supported", nil)
+				return
+			}
+
+			pvids, err := pvidLister.ListDevicePVIDs(ctx, deviceRow.ID)
+			if err != nil {
+				h.log.Error().Err(err).Str("device_id", deviceRow.ID).Msg("list device pvids for map projection failed")
+				h.writeError(w, http.StatusInternalServerError, "db_error", "failed to build l2 projection", nil)
+				return
+			}
+
+			vlanSeen := make(map[int32]struct{})
+			vlanSorted := make([]int, 0, len(pvids))
+			for _, vlanID := range pvids {
+				if vlanID <= 0 {
+					continue
+				}
+				if _, exists := vlanSeen[vlanID]; exists {
+					continue
+				}
+				vlanSeen[vlanID] = struct{}{}
+				vlanSorted = append(vlanSorted, int(vlanID))
+			}
+			sort.Ints(vlanSorted)
+
+			l2AllVLANs = make([]string, 0, len(vlanSorted))
+			for _, vlanID := range vlanSorted {
+				l2AllVLANs = append(l2AllVLANs, strconv.Itoa(vlanID))
+			}
+
+			l2VLANs = l2AllVLANs
+			if len(l2VLANs) > regionLimit {
+				l2VLANs = l2VLANs[:regionLimit]
+			}
+			l2VLANsTruncated = len(l2AllVLANs) > len(l2VLANs)
+
+			peerLister, ok := h.devices.(interface {
+				ListDevicePeersInVLAN(ctx context.Context, vlanID int32, excludeDeviceID string, limit int32) ([]sqlcgen.MapDevicePeer, error)
+			})
+			if ok && len(l2VLANs) > 0 {
+				l2PeerRegions = make(map[string]map[string]struct{})
+				l2PeerLabels = make(map[string]*string)
+				peerQueryLimit := int32(nodeLimit)
+				for _, vlanIDStr := range l2VLANs {
+					vlanIDInt, err := strconv.Atoi(vlanIDStr)
+					if err != nil {
+						continue
+					}
+					peers, err := peerLister.ListDevicePeersInVLAN(ctx, int32(vlanIDInt), deviceRow.ID, peerQueryLimit)
+					if err != nil {
+						h.log.Error().Err(err).Str("device_id", deviceRow.ID).Str("vlan", vlanIDStr).Msg("list l2 peers failed")
+						h.writeError(w, http.StatusInternalServerError, "db_error", "failed to build l2 projection", nil)
+						return
+					}
+					for _, peer := range peers {
+						regions := l2PeerRegions[peer.ID]
+						if regions == nil {
+							regions = make(map[string]struct{})
+							l2PeerRegions[peer.ID] = regions
+						}
+						regions[vlanIDStr] = struct{}{}
+						if _, exists := l2PeerLabels[peer.ID]; !exists {
+							l2PeerLabels[peer.ID] = peer.DisplayName
+						}
+					}
+				}
+			}
+
+			if len(l2VLANs) > 0 {
+				if l2VLANsTruncated {
+					status = append(status, mapInspectorField{
+						Label: "VLANs",
+						Value: fmt.Sprintf("%d of %d", len(l2VLANs), len(l2AllVLANs)),
+					})
+				} else {
+					status = append(status, mapInspectorField{Label: "VLANs", Value: strconv.Itoa(len(l2VLANs))})
+				}
+				primary := l2VLANs[0]
+				status = append(status, mapInspectorField{Label: "Primary VLAN", Value: primary})
+				if len(l2VLANs) > 1 || l2VLANsTruncated {
+					alsoParts := []string{}
+					if len(l2VLANs) > 1 {
+						alsoParts = append(alsoParts, l2VLANs[1:]...)
+					}
+					alsoIn := strings.Join(alsoParts, ", ")
+					if l2VLANsTruncated {
+						omitted := len(l2AllVLANs) - len(l2VLANs)
+						if omitted > 0 {
+							if alsoIn == "" {
+								alsoIn = fmt.Sprintf("(+%d more)", omitted)
+							} else {
+								alsoIn = alsoIn + fmt.Sprintf(" (+%d more)", omitted)
+							}
+						}
+					}
+					if alsoIn != "" {
+						status = append(status, mapInspectorField{Label: "Also in", Value: alsoIn})
+					}
+				}
+			} else {
+				status = append(status, mapInspectorField{Label: "VLANs", Value: "none"})
+			}
+		}
+
+		if layer == "physical" && depth > 0 {
+			status[1].Value = "physical (device focus)"
+
+			linkLister, ok := h.devices.(interface {
+				ListDeviceLinkPeers(ctx context.Context, deviceID string, limit int32) ([]sqlcgen.MapDeviceLinkPeer, error)
+			})
+			if !ok {
+				h.log.Error().Msg("map physical projection query missing")
+				h.writeError(w, http.StatusInternalServerError, "internal_error", "map physical projection not supported", nil)
+				return
+			}
+
+			maxPeers := nodeLimit - 1
+			if maxPeers < 0 {
+				maxPeers = 0
+			}
+			if edgeLimit < maxPeers {
+				maxPeers = edgeLimit
+			}
+			queryLimit := int32(maxPeers + 1)
+			links, err := linkLister.ListDeviceLinkPeers(ctx, deviceRow.ID, queryLimit)
+			if err != nil {
+				h.log.Error().Err(err).Str("device_id", deviceRow.ID).Msg("list device physical links failed")
+				h.writeError(w, http.StatusInternalServerError, "db_error", "failed to build physical projection", nil)
+				return
+			}
+
+			physicalLinksTruncated = len(links) > maxPeers
+			physicalLinks = links
+			if physicalLinksTruncated {
+				physicalLinks = links[:maxPeers]
+			}
+
+			if len(physicalLinks) > 0 {
+				if physicalLinksTruncated {
+					status = append(status, mapInspectorField{Label: "Links", Value: fmt.Sprintf("%d of >%d", len(physicalLinks), maxPeers)})
+				} else {
+					status = append(status, mapInspectorField{Label: "Links", Value: strconv.Itoa(len(physicalLinks))})
+				}
+			} else {
+				status = append(status, mapInspectorField{Label: "Links", Value: "none"})
+			}
+		}
+
 		inspector = &mapInspector{
 			Title:         title,
 			Identity:      identity,
@@ -368,6 +531,11 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 		focusID = strconv.Itoa(vlanID)
 		label := "VLAN " + focusID
 		focusLabel = &label
+
+		projection := "scaffolding (no regions/nodes yet)"
+		if layer == "l2" {
+			projection = "l2 (vlan focus)"
+		}
 		inspector = &mapInspector{
 			Title: label,
 			Identity: []mapInspectorField{
@@ -376,7 +544,7 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 			},
 			Status: []mapInspectorField{
 				{Label: "Layer", Value: layer},
-				{Label: "Projection", Value: "scaffolding (no regions/nodes yet)"},
+				{Label: "Projection", Value: projection},
 			},
 			Relationships: buildMapInspectorRelationships(focusType, focusID),
 		}
@@ -632,6 +800,319 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 				guidance := "Projection truncated: some devices were capped for readability."
 				resp.Guidance = &guidance
 			}
+		}
+	} else if layer == "l2" && focusType == "device" && depth > 0 {
+		if focusNode != nil {
+			focusNode.RegionIDs = append([]string{}, l2VLANs...)
+			if len(l2VLANs) > 0 {
+				primary := l2VLANs[0]
+				focusNode.PrimaryRegionID = &primary
+			}
+		}
+
+		resp.Regions = make([]mapRegion, 0, len(l2VLANs))
+		for _, vlanID := range l2VLANs {
+			resp.Regions = append(resp.Regions, mapRegion{ID: vlanID, Kind: "vlan", Label: "VLAN " + vlanID})
+		}
+		resp.Truncation.Regions.Returned = len(resp.Regions)
+		resp.Truncation.Regions.Truncated = l2VLANsTruncated
+		totalRegions := len(l2AllVLANs)
+		resp.Truncation.Regions.Total = &totalRegions
+		if l2VLANsTruncated {
+			warning := fmt.Sprintf("VLAN cap hit: showing %d of %d.", len(resp.Regions), len(l2AllVLANs))
+			resp.Truncation.Regions.Warning = &warning
+		}
+
+		peerIDs := make([]string, 0, len(l2PeerRegions))
+		for id := range l2PeerRegions {
+			peerIDs = append(peerIDs, id)
+		}
+		sort.Strings(peerIDs)
+
+		maxPeers := nodeLimit - 1
+		if maxPeers < 0 {
+			maxPeers = 0
+		}
+		nodesTruncated := len(peerIDs) > maxPeers
+		peerIDsIncluded := peerIDs
+		if nodesTruncated {
+			peerIDsIncluded = peerIDs[:maxPeers]
+			warning := fmt.Sprintf("Node cap hit: showing %d of >%d devices.", 1+len(peerIDsIncluded), nodeLimit)
+			resp.Truncation.Nodes.Warning = &warning
+		}
+
+		resp.Nodes = make([]mapNode, 0, 1+len(peerIDsIncluded))
+		if focusNode != nil {
+			resp.Nodes = append(resp.Nodes, *focusNode)
+		}
+
+		for _, peerID := range peerIDsIncluded {
+			regionSet := l2PeerRegions[peerID]
+			regionIDs := make([]string, 0, len(regionSet))
+			for regionID := range regionSet {
+				regionIDs = append(regionIDs, regionID)
+			}
+			sort.Strings(regionIDs)
+
+			n := mapNode{ID: peerID, Kind: "device", Label: l2PeerLabels[peerID], RegionIDs: regionIDs}
+			if len(regionIDs) > 0 {
+				primary := regionIDs[0]
+				n.PrimaryRegionID = &primary
+			}
+			resp.Nodes = append(resp.Nodes, n)
+		}
+
+		resp.Truncation.Nodes.Returned = len(resp.Nodes)
+		resp.Truncation.Nodes.Truncated = nodesTruncated
+		if !nodesTruncated {
+			totalNodes := len(resp.Nodes)
+			resp.Truncation.Nodes.Total = &totalNodes
+		}
+
+		if resp.Inspector != nil {
+			peerCount := len(resp.Nodes)
+			if peerCount > 0 {
+				peerCount = peerCount - 1
+			}
+			resp.Inspector.Status = append(resp.Inspector.Status, mapInspectorField{Label: "Peers", Value: strconv.Itoa(peerCount)})
+
+			for _, vlanID := range l2VLANs {
+				resp.Inspector.Relationships = append(resp.Inspector.Relationships, mapInspectorRelation{
+					Label:     "Open VLAN " + vlanID,
+					Layer:     "l2",
+					FocusType: "vlan",
+					FocusID:   vlanID,
+				})
+			}
+
+			for _, peerID := range peerIDsIncluded {
+				label := peerID
+				if peerLabel := l2PeerLabels[peerID]; peerLabel != nil {
+					if trimmed := strings.TrimSpace(*peerLabel); trimmed != "" {
+						label = trimmed
+					}
+				}
+
+				resp.Inspector.Relationships = append(resp.Inspector.Relationships, mapInspectorRelation{
+					Label:     "Open device " + label,
+					Layer:     "l2",
+					FocusType: "device",
+					FocusID:   peerID,
+				})
+			}
+		}
+
+		if len(l2AllVLANs) == 0 {
+			guidance := "No VLAN regions derived (no PVID facts). Run discovery with VLAN enrichment to render an L2 projection."
+			resp.Guidance = &guidance
+		} else if resp.Truncation.Regions.Truncated || resp.Truncation.Nodes.Truncated {
+			guidance := "Projection truncated: some VLANs/nodes were capped for readability."
+			resp.Guidance = &guidance
+		}
+	} else if layer == "l2" && focusType == "vlan" {
+		resp.Regions = []mapRegion{{ID: focusID, Kind: "vlan", Label: "VLAN " + focusID}}
+		resp.Truncation.Regions.Returned = len(resp.Regions)
+		totalRegions := 1
+		resp.Truncation.Regions.Total = &totalRegions
+
+		if depth > 0 {
+			if !h.ensureDeviceQueries(w) {
+				return
+			}
+			ctx := r.Context()
+			vlanLister, ok := h.devices.(interface {
+				ListDevicesInVLAN(ctx context.Context, vlanID int32, limit int32) ([]sqlcgen.MapDevicePeer, error)
+			})
+			if !ok {
+				h.log.Error().Msg("map vlan membership query missing")
+				h.writeError(w, http.StatusInternalServerError, "internal_error", "map vlan projection not supported", nil)
+				return
+			}
+
+			vlanIDInt, err := strconv.Atoi(focusID)
+			if err != nil {
+				h.writeError(w, http.StatusBadRequest, "invalid_id", "vlan id must be an integer between 1 and 4094", map[string]any{"id": focusID})
+				return
+			}
+
+			queryLimit := int32(nodeLimit + 1)
+			members, err := vlanLister.ListDevicesInVLAN(ctx, int32(vlanIDInt), queryLimit)
+			if err != nil {
+				h.log.Error().Err(err).Str("vlan", focusID).Msg("list vlan members failed")
+				h.writeError(w, http.StatusInternalServerError, "db_error", "failed to build l2 projection", nil)
+				return
+			}
+
+			nodesTruncated := len(members) > nodeLimit
+			membersIncluded := members
+			if nodesTruncated {
+				membersIncluded = members[:nodeLimit]
+				warning := fmt.Sprintf("Node cap hit: showing %d of >%d devices.", len(membersIncluded), nodeLimit)
+				resp.Truncation.Nodes.Warning = &warning
+			}
+
+			primary := focusID
+			resp.Nodes = make([]mapNode, 0, len(membersIncluded))
+			for _, member := range membersIncluded {
+				resp.Nodes = append(resp.Nodes, mapNode{
+					ID:              member.ID,
+					Kind:            "device",
+					Label:           member.DisplayName,
+					PrimaryRegionID: &primary,
+					RegionIDs:       []string{focusID},
+				})
+			}
+
+			resp.Truncation.Nodes.Returned = len(resp.Nodes)
+			resp.Truncation.Nodes.Truncated = nodesTruncated
+			if !nodesTruncated {
+				totalNodes := len(resp.Nodes)
+				resp.Truncation.Nodes.Total = &totalNodes
+			}
+
+			if resp.Inspector != nil {
+				resp.Inspector.Status = append(resp.Inspector.Status, mapInspectorField{Label: "Devices", Value: strconv.Itoa(len(resp.Nodes))})
+
+				for _, node := range resp.Nodes {
+					label := node.ID
+					if node.Label != nil {
+						if trimmed := strings.TrimSpace(*node.Label); trimmed != "" {
+							label = trimmed
+						}
+					}
+
+					resp.Inspector.Relationships = append(resp.Inspector.Relationships, mapInspectorRelation{
+						Label:     "Open device " + label,
+						Layer:     "l2",
+						FocusType: "device",
+						FocusID:   node.ID,
+					})
+				}
+			}
+
+			if len(resp.Nodes) == 0 {
+				guidance := "No devices observed in this VLAN yet. Run discovery with VLAN enrichment to populate membership."
+				resp.Guidance = &guidance
+			} else if resp.Truncation.Nodes.Truncated {
+				guidance := "Projection truncated: some devices were capped for readability."
+				resp.Guidance = &guidance
+			}
+		}
+	} else if layer == "physical" && focusType == "device" && depth > 0 {
+		maxPeers := nodeLimit - 1
+		if maxPeers < 0 {
+			maxPeers = 0
+		}
+		if edgeLimit < maxPeers {
+			maxPeers = edgeLimit
+		}
+
+		linksTruncated := physicalLinksTruncated
+		linksIncluded := physicalLinks
+		if len(linksIncluded) > maxPeers {
+			linksIncluded = linksIncluded[:maxPeers]
+			linksTruncated = true
+		}
+
+		peerIDs := make([]string, 0, len(linksIncluded))
+		peerLabels := make(map[string]*string, len(linksIncluded))
+		for _, link := range linksIncluded {
+			peerIDs = append(peerIDs, link.PeerDeviceID)
+			if _, exists := peerLabels[link.PeerDeviceID]; !exists {
+				peerLabels[link.PeerDeviceID] = link.PeerDisplayName
+			}
+		}
+		sort.Strings(peerIDs)
+
+		nodesTruncated := linksTruncated
+		peerIDsIncluded := peerIDs
+		if nodesTruncated && len(peerIDsIncluded) > maxPeers {
+			peerIDsIncluded = peerIDsIncluded[:maxPeers]
+		}
+
+		resp.Nodes = make([]mapNode, 0, 1+len(peerIDsIncluded))
+		if focusNode != nil {
+			resp.Nodes = append(resp.Nodes, *focusNode)
+		}
+		for _, peerID := range peerIDsIncluded {
+			resp.Nodes = append(resp.Nodes, mapNode{
+				ID:        peerID,
+				Kind:      "device",
+				Label:     peerLabels[peerID],
+				RegionIDs: []string{},
+			})
+		}
+		resp.Truncation.Nodes.Returned = len(resp.Nodes)
+		resp.Truncation.Nodes.Truncated = nodesTruncated
+		if nodesTruncated {
+			warning := fmt.Sprintf("Node cap hit: showing %d of >%d devices.", len(resp.Nodes), nodeLimit)
+			resp.Truncation.Nodes.Warning = &warning
+		} else {
+			totalNodes := len(resp.Nodes)
+			resp.Truncation.Nodes.Total = &totalNodes
+		}
+
+		resp.Edges = make([]mapEdge, 0, len(linksIncluded))
+		for _, link := range linksIncluded {
+			linkType := ""
+			if link.LinkType != nil {
+				linkType = strings.TrimSpace(*link.LinkType)
+			}
+			meta := map[string]any{
+				"link_key": link.LinkKey,
+				"source":   link.Source,
+			}
+			if linkType != "" {
+				meta["link_type"] = linkType
+			}
+			resp.Edges = append(resp.Edges, mapEdge{
+				ID:   "link:" + link.LinkID,
+				Kind: "link",
+				From: focusID,
+				To:   link.PeerDeviceID,
+				Meta: meta,
+			})
+		}
+		resp.Truncation.Edges.Returned = len(resp.Edges)
+		resp.Truncation.Edges.Truncated = linksTruncated
+		if linksTruncated {
+			warning := fmt.Sprintf("Edge cap hit: showing %d of >%d.", len(resp.Edges), edgeLimit)
+			resp.Truncation.Edges.Warning = &warning
+		} else {
+			totalEdges := len(resp.Edges)
+			resp.Truncation.Edges.Total = &totalEdges
+		}
+
+		if resp.Inspector != nil {
+			neighborCount := len(resp.Nodes)
+			if neighborCount > 0 {
+				neighborCount = neighborCount - 1
+			}
+			resp.Inspector.Status = append(resp.Inspector.Status, mapInspectorField{Label: "Neighbors", Value: strconv.Itoa(neighborCount)})
+
+			for _, peerID := range peerIDsIncluded {
+				label := peerID
+				if peerLabel := peerLabels[peerID]; peerLabel != nil {
+					if trimmed := strings.TrimSpace(*peerLabel); trimmed != "" {
+						label = trimmed
+					}
+				}
+
+				resp.Inspector.Relationships = append(resp.Inspector.Relationships, mapInspectorRelation{
+					Label:     "Open device " + label,
+					Layer:     "physical",
+					FocusType: "device",
+					FocusID:   peerID,
+				})
+			}
+		}
+
+		if len(linksIncluded) == 0 {
+			guidance := "No physical links known yet. Add manual links or enable LLDP/CDP enrichment to render adjacency."
+			resp.Guidance = &guidance
+		} else if resp.Truncation.Nodes.Truncated || resp.Truncation.Edges.Truncated {
+			guidance := "Projection truncated: some links/nodes were capped for readability."
+			resp.Guidance = &guidance
 		}
 	} else if focusNode != nil {
 		resp.Nodes = []mapNode{*focusNode}

@@ -1146,7 +1146,7 @@ Acceptance criteria:
 
 ## Phase 15 — Layer implementations (Physical / L2 / L3)
 
-**Status:** Planned
+**Status:** In progress
 
 ### Goal
 
@@ -1182,12 +1182,12 @@ Milestones (match mock intent before “smart” layout):
 Tasks:
 
 * Rendering
-  * [ ] Render region containers (subnets) as rounded “stacked regions”.
-  * [ ] Place nodes deterministically within regions (avoid force graphs in v1).
+  * [x] Render region containers (subnets) as rounded “stacked regions”.
+  * [x] Place nodes deterministically within regions (avoid force graphs in v1).
 * Interaction
   * [ ] Click selects a region/node and updates Inspector; drill-in is a distinct action (focus change).
   * [ ] Peek (hover/focus) may highlight/show labels, but is never required for meaning or navigation.
-  * [ ] Ensure visible focus/selection for canvas interactions.
+  * [x] Ensure visible focus/selection for canvas interactions.
 
 Blockers:
 
@@ -1202,9 +1202,9 @@ Acceptance criteria:
 Tasks:
 
 * Data model
-  * [ ] Add `links` table via migration if/when Build mode editing begins (manual-first).
+  * [x] `links` table exists (manual-first; Phase 7 migration).
 * API
-  * [ ] Add `GET /api/v1/map/physical` projection (read-only first).
+  * [x] Add `GET /api/v1/map/physical` projection (read-only first).
 * UI
   * [ ] Render a small adjacency/tree view (no “everything at once”).
 
@@ -1221,10 +1221,10 @@ Acceptance criteria:
 Tasks:
 
 * API
-  * [ ] Add `GET /api/v1/map/l2` projection.
-  * [ ] Use PVID-only membership from `interface_vlans` first.
+  * [x] Add `GET /api/v1/map/l2` projection.
+  * [x] Use PVID-only membership from `interface_vlans` first.
 * UI
-  * [ ] Render VLAN regions with membership.
+  * [x] Render VLAN regions with membership.
 
 Blockers:
 
@@ -1256,9 +1256,9 @@ Tasks:
 
 * UI
   * [ ] Render containers as summary tiles by default (counts + status rollups).
-  * [ ] Implement “Expand” vs “Drill-in” affordances and keep behavior consistent across layers.
-  * [ ] When caps are hit, show honest truncation messaging (“Showing 25 of 140…”) and a drill-in suggestion.
-  * [ ] Show “also in…” memberships in the Inspector (multi-membership without duplicate nodes by default).
+  * [x] Implement “Expand” vs “Drill-in” affordances and keep behavior consistent across layers.
+  * [x] When caps are hit, show honest truncation messaging (“Showing 25 of 140…”) and a drill-in suggestion.
+  * [x] Show “also in…” memberships in the Inspector (multi-membership without duplicate nodes by default).
 
 Blockers:
 

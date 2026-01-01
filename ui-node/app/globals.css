@@ -782,10 +782,173 @@ pre {
 
 .mapCanvasBody {
   flex: 1;
+  padding: 20px;
+  overflow: auto;
+}
+
+.mapCanvasPanel .btn {
+  background: rgba(15, 23, 42, 0.9);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.mapCanvasPanel .btn:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: none;
+  text-decoration: none;
+}
+
+.mapCanvasPanel .btnPrimary {
+  background: rgba(37, 99, 235, 0.92);
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.mapCanvasPanel .btnPrimary:hover {
+  background: rgba(29, 78, 216, 0.98);
+}
+
+.mapCanvasInner {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mapCanvasWarnings {
+  display: grid;
+  gap: 8px;
+}
+
+.mapRegionStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mapRegionCard {
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.55);
+  padding: 14px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mapRegionCard:hover {
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+.mapRegionCard:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.55);
+  outline-offset: 2px;
+}
+
+.mapRegionCardSelected {
+  border-color: rgba(37, 99, 235, 0.85);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+
+.mapRegionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.mapRegionTitle {
+  font-size: 15px;
+  font-weight: 850;
+  color: rgba(226, 232, 240, 0.96);
+}
+
+.mapRegionMeta {
+  margin-top: 3px;
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.7);
+}
+
+.mapRegionActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.mapNodeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.mapNodeChip {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 6, 23, 0.35);
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.mapNodeChip:hover {
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+.mapNodeChipSelected {
+  border-color: rgba(37, 99, 235, 0.85);
+}
+
+.mapNodeChipLabel {
+  font-size: 13px;
+  font-weight: 750;
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mapRegionEmpty {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(226, 232, 240, 0.7);
+}
+
+.mapRegionTruncation {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.7);
+}
+
+.mapCanvasSelection {
+  margin-top: auto;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(2, 6, 23, 0.45);
+  padding: 12px 12px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 20px;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mapCanvasSelectionTitle {
+  font-weight: 850;
+  font-size: 13px;
+  color: rgba(226, 232, 240, 0.92);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mapCanvasSelectionActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .mapInspectorPanel {

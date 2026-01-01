@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -341,6 +342,153 @@ func TestMapProjection_DeviceFocus_L3InspectorIncludesSubnetRelationships(t *tes
 	}
 }
 
+type fakeDeviceQueriesWithVLAN struct {
+	fakeDeviceQueries
+	listPVIDsFn        func(ctx context.Context, deviceID string) ([]int32, error)
+	listPeersInVLANFn  func(ctx context.Context, vlanID int32, excludeDeviceID string, limit int32) ([]sqlcgen.MapDevicePeer, error)
+	listDevicesInVLANFn func(ctx context.Context, vlanID int32, limit int32) ([]sqlcgen.MapDevicePeer, error)
+}
+
+func (f fakeDeviceQueriesWithVLAN) ListDevicePVIDs(ctx context.Context, deviceID string) ([]int32, error) {
+	if f.listPVIDsFn == nil {
+		return nil, nil
+	}
+	return f.listPVIDsFn(ctx, deviceID)
+}
+
+func (f fakeDeviceQueriesWithVLAN) ListDevicePeersInVLAN(ctx context.Context, vlanID int32, excludeDeviceID string, limit int32) ([]sqlcgen.MapDevicePeer, error) {
+	if f.listPeersInVLANFn == nil {
+		return nil, nil
+	}
+	return f.listPeersInVLANFn(ctx, vlanID, excludeDeviceID, limit)
+}
+
+func (f fakeDeviceQueriesWithVLAN) ListDevicesInVLAN(ctx context.Context, vlanID int32, limit int32) ([]sqlcgen.MapDevicePeer, error) {
+	if f.listDevicesInVLANFn == nil {
+		return nil, nil
+	}
+	return f.listDevicesInVLANFn(ctx, vlanID, limit)
+}
+
+func TestMapProjection_DeviceFocus_L2IncludesVLANRegions(t *testing.T) {
+	name := "switch-1"
+	h := NewHandler(NewLogger("debug"), nil)
+	h.devices = fakeDeviceQueriesWithVLAN{
+		fakeDeviceQueries: fakeDeviceQueries{
+			getFn: func(ctx context.Context, id string) (sqlcgen.Device, error) {
+				return sqlcgen.Device{ID: "00000000-0000-0000-0000-000000000011", DisplayName: &name}, nil
+			},
+		},
+		listPVIDsFn: func(ctx context.Context, deviceID string) ([]int32, error) {
+			return []int32{20, 10}, nil
+		},
+		listPeersInVLANFn: func(ctx context.Context, vlanID int32, excludeDeviceID string, limit int32) ([]sqlcgen.MapDevicePeer, error) {
+			peer1 := "peer-1"
+			peer2 := "peer-2"
+			switch vlanID {
+			case 10:
+				return []sqlcgen.MapDevicePeer{
+					{ID: "00000000-0000-0000-0000-000000000101", DisplayName: &peer1},
+				}, nil
+			case 20:
+				return []sqlcgen.MapDevicePeer{
+					{ID: "00000000-0000-0000-0000-000000000101", DisplayName: &peer1},
+					{ID: "00000000-0000-0000-0000-000000000102", DisplayName: &peer2},
+				}, nil
+			default:
+				return nil, nil
+			}
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/map/l2?focusType=device&focusId=00000000-0000-0000-0000-000000000011", nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	body := decodeBody(t, rr)
+	regionsAny := body["regions"].([]any)
+	if len(regionsAny) != 2 {
+		t.Fatalf("expected 2 regions, got %d", len(regionsAny))
+	}
+	if regionsAny[0].(map[string]any)["id"] != "10" {
+		t.Fatalf("expected first region id 10, got %v", regionsAny[0].(map[string]any)["id"])
+	}
+	if regionsAny[1].(map[string]any)["id"] != "20" {
+		t.Fatalf("expected second region id 20, got %v", regionsAny[1].(map[string]any)["id"])
+	}
+
+	nodesAny := body["nodes"].([]any)
+	if len(nodesAny) != 3 {
+		t.Fatalf("expected 3 nodes (focus + peers), got %d", len(nodesAny))
+	}
+	focusNode := nodesAny[0].(map[string]any)
+	if focusNode["id"] != "00000000-0000-0000-0000-000000000011" {
+		t.Fatalf("expected focus node id to match, got %v", focusNode["id"])
+	}
+	regionIDs := focusNode["region_ids"].([]any)
+	if len(regionIDs) != 2 || regionIDs[0].(string) != "10" || regionIDs[1].(string) != "20" {
+		t.Fatalf("expected focus node region_ids [10 20], got %v", focusNode["region_ids"])
+	}
+
+	inspector := body["inspector"].(map[string]any)
+	relsAny := inspector["relationships"].([]any)
+	foundVLAN10 := false
+	foundVLAN20 := false
+	for _, relAny := range relsAny {
+		rel := relAny.(map[string]any)
+		if rel["layer"] == "l2" && rel["focus_type"] == "vlan" {
+			switch rel["focus_id"] {
+			case "10":
+				foundVLAN10 = true
+			case "20":
+				foundVLAN20 = true
+			}
+		}
+	}
+	if !foundVLAN10 || !foundVLAN20 {
+		t.Fatalf("expected inspector to include vlan relationships (10=%v 20=%v)", foundVLAN10, foundVLAN20)
+	}
+}
+
+func TestMapProjection_VLANFocus_L2IncludesDevices(t *testing.T) {
+	h := NewHandler(NewLogger("debug"), nil)
+	h.devices = fakeDeviceQueriesWithVLAN{
+		fakeDeviceQueries: fakeDeviceQueries{
+			getFn: func(ctx context.Context, id string) (sqlcgen.Device, error) { return sqlcgen.Device{}, nil },
+		},
+		listDevicesInVLANFn: func(ctx context.Context, vlanID int32, limit int32) ([]sqlcgen.MapDevicePeer, error) {
+			peer1 := "peer-1"
+			peer2 := "peer-2"
+			return []sqlcgen.MapDevicePeer{
+				{ID: "00000000-0000-0000-0000-000000000201", DisplayName: &peer1},
+				{ID: "00000000-0000-0000-0000-000000000202", DisplayName: &peer2},
+			}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/map/l2?focusType=vlan&focusId=10", nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	body := decodeBody(t, rr)
+	regionsAny := body["regions"].([]any)
+	if len(regionsAny) != 1 || regionsAny[0].(map[string]any)["id"] != "10" {
+		t.Fatalf("expected single region id 10, got %v", body["regions"])
+	}
+	nodesAny := body["nodes"].([]any)
+	if len(nodesAny) != 2 {
+		t.Fatalf("expected 2 nodes, got %d", len(nodesAny))
+	}
+}
+
 type fakeDeviceQueriesWithCIDR struct {
 	fakeDeviceQueries
 	listCIDRFn func(ctx context.Context, cidr string, limit int32) ([]sqlcgen.MapDevicePeer, error)
@@ -409,5 +557,71 @@ func TestMapProjection_SubnetFocus_L3InspectorIncludesDeviceRelationships(t *tes
 		if !found {
 			t.Fatalf("expected inspector relationships to include device %s", deviceID)
 		}
+	}
+}
+
+type fakeDeviceQueriesWithPhysical struct {
+	fakeDeviceQueries
+	listLinkPeersFn func(ctx context.Context, deviceID string, limit int32) ([]sqlcgen.MapDeviceLinkPeer, error)
+}
+
+func (f fakeDeviceQueriesWithPhysical) ListDeviceLinkPeers(ctx context.Context, deviceID string, limit int32) ([]sqlcgen.MapDeviceLinkPeer, error) {
+	if f.listLinkPeersFn == nil {
+		return nil, nil
+	}
+	return f.listLinkPeersFn(ctx, deviceID, limit)
+}
+
+func TestMapProjection_DeviceFocus_PhysicalIncludesEdges(t *testing.T) {
+	name := "router-1"
+	h := NewHandler(NewLogger("debug"), nil)
+	h.devices = fakeDeviceQueriesWithPhysical{
+		fakeDeviceQueries: fakeDeviceQueries{
+			getFn: func(ctx context.Context, id string) (sqlcgen.Device, error) {
+				return sqlcgen.Device{ID: "00000000-0000-0000-0000-000000000011", DisplayName: &name}, nil
+			},
+		},
+		listLinkPeersFn: func(ctx context.Context, deviceID string, limit int32) ([]sqlcgen.MapDeviceLinkPeer, error) {
+			peer := "switch-1"
+			return []sqlcgen.MapDeviceLinkPeer{
+				{
+					LinkID:          "00000000-0000-0000-0000-000000000999",
+					LinkKey:         "router-1:switch-1",
+					PeerDeviceID:    "00000000-0000-0000-0000-000000000101",
+					PeerDisplayName: &peer,
+					LinkType:        nil,
+					Source:          "manual",
+					LastSeenAt:      time.Now().UTC(),
+				},
+			}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/map/physical?focusType=device&focusId=00000000-0000-0000-0000-000000000011", nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	body := decodeBody(t, rr)
+	nodesAny := body["nodes"].([]any)
+	if len(nodesAny) != 2 {
+		t.Fatalf("expected 2 nodes (focus + peer), got %d", len(nodesAny))
+	}
+	edgesAny := body["edges"].([]any)
+	if len(edgesAny) != 1 {
+		t.Fatalf("expected 1 edge, got %d", len(edgesAny))
+	}
+	edge := edgesAny[0].(map[string]any)
+	if edge["kind"] != "link" {
+		t.Fatalf("expected edge kind link, got %v", edge["kind"])
+	}
+	if edge["from"] != "00000000-0000-0000-0000-000000000011" {
+		t.Fatalf("expected edge from focus device, got %v", edge["from"])
+	}
+	if edge["to"] != "00000000-0000-0000-0000-000000000101" {
+		t.Fatalf("expected edge to peer device, got %v", edge["to"])
 	}
 }
