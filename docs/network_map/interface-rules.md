@@ -35,7 +35,7 @@ This document is a **pick-list + contract** for UI rules and interaction pattern
 - Container-level status: show counts (“changed”, “online/offline”, “last discovery”) without expanding.
 - Pinned focus keeps the view stable; hover/peek reveals details without expanding.
 - Deterministic output: stable IDs, stable ordering, stable layout, minimal churn during polling.
-- Keyboard-first interactions and visible focus; never rely on color alone.
+- Visible focus/selection; never rely on color alone.
 
 ---
 
@@ -62,6 +62,7 @@ This document is a **pick-list + contract** for UI rules and interaction pattern
 4. **URL-driven state**
    - Layer + focus are encoded in the URL (`layer`, `focusType`, `focusId`).
    - Deep links are stable and reload-safe.
+   - `focusType=subnet` uses a CIDR string focus id (canonical form, e.g. `10.0.1.0/24`).
 5. **Deterministic presentation**
    - Stable IDs, stable ordering, stable layout.
    - Polling must not reshuffle the view while the user is interacting.
@@ -85,7 +86,7 @@ The UI should treat the map as a projection payload, not an editable source of t
 
 Use `regions[]` for container objects:
 
-- L3: `subnet` regions (derived first; optional persistence later).
+- L3: `subnet` regions (derived first; optional persistence later; until we store prefix lengths, default to `/24` for IPv4 and `/64` for IPv6 when deriving CIDRs).
 - L2: `vlan` regions (derived from `interface_vlans` first; optional VLAN metadata later).
 - Security: `zone` regions (likely curated/manual).
 - Physical (later): `rack`/`site` regions (curated/manual).
@@ -222,9 +223,8 @@ This preserves clarity while still letting operators explore.
 
 ---
 
-## Selection & input rules (must work without a mouse)
+## Selection & input rules
 
-- Keyboard navigation must allow moving focus between regions and nodes, opening Inspector details, and drilling in/back via shortcuts.
 - Clicking a region selects the region; clicking a node selects the node; selection is always visible.
 - Hover is optional affordance (peek), never required to discover critical state.
 - Never rely on color alone for state (changed/offline/selected); pair with icon/text.
@@ -239,7 +239,7 @@ This preserves clarity while still letting operators explore.
 - Deterministic layout and stable ordering (no jitter across polling).
 - Hard caps with honest messaging when truncated (and a path to drill in).
 - Inspector shows “also in…” memberships and provides layer navigation links.
-- Accessible selection + keyboard focus (visible outline, predictable tab order).
+- Accessible selection (visible outline) and predictable interactions.
 
 ---
 

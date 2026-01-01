@@ -14,7 +14,21 @@ export interface paths {
         /** List devices */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Optional search query (matches id, display name, metadata, IPs, MACs, and SNMP fields). */
+                    q?: string;
+                    /** @description Optional status filter. */
+                    status?: "online" | "offline" | "changed";
+                    /** @description Sort order (cursor uses this sort key). */
+                    sort?: "created_desc" | "last_seen_desc" | "last_change_desc";
+                    limit?: number;
+                    /** @description Cursor returning `sort_ts|device_id` from the prior page. */
+                    cursor?: string;
+                    /** @description Lookback window for online/offline filtering (defaults to 1 hour). */
+                    seen_within_seconds?: number;
+                    /** @description Lookback window for changed filtering (defaults to 24 hours). */
+                    changed_within_seconds?: number;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -27,7 +41,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Device"][];
+                        "application/json": components["schemas"]["DevicePage"];
                     };
                 };
             };
@@ -210,6 +224,67 @@ export interface paths {
                 };
                 /** @description Invalid ID */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/devices/{id}/facts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Get current device facts
+         * @description Returns current discovery/enrichment facts for a device (IPs, MACs, interfaces, services, SNMP snapshot, and adjacency links).
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DeviceFacts"];
+                    };
+                };
+                /** @description Invalid ID */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -876,16 +951,298 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/map/{layer}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                layer: components["schemas"]["MapLayer"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get a layer projection (focus-scoped)
+         * @description Returns a small, render-ready projection for a single layer and (optional) focus.
+         *
+         *     No focus is valid and returns an empty projection plus guidance (200 OK).
+         *
+         *     Responses are deterministic: `regions`, `nodes`, and `edges` are sorted by stable `id`.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Focus type for object-first navigation. */
+                    focusType?: components["schemas"]["MapFocusType"];
+                    /** @description Focus identifier (UUID for `device`; other types are layer-defined). */
+                    focusId?: string;
+                    /** @description Optional scoping hint (small integer). */
+                    depth?: number;
+                    /** @description Optional hard cap hint (the API may clamp further). */
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    layer: components["schemas"]["MapLayer"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MapProjection"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Focus not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description Mutually-exclusive layer identifier.
+         * @enum {string}
+         */
+        MapLayer: "physical" | "l2" | "l3" | "services" | "security";
+        /**
+         * @description Focus type for map projections.
+         * @enum {string}
+         */
+        MapFocusType: "device" | "subnet" | "vlan" | "zone" | "service";
+        MapFocus: {
+            type: components["schemas"]["MapFocusType"];
+            id: string;
+            /** @description Optional human-friendly label (best-effort). */
+            label?: string | null;
+        };
+        MapTruncationMetric: {
+            returned: number;
+            limit: number;
+            truncated: boolean;
+            /** @description Optional total size hint when known. */
+            total?: number | null;
+            /** @description Optional operator-facing truncation message. */
+            warning?: string | null;
+        };
+        MapTruncation: {
+            regions: components["schemas"]["MapTruncationMetric"];
+            nodes: components["schemas"]["MapTruncationMetric"];
+            edges: components["schemas"]["MapTruncationMetric"];
+        };
+        MapRegion: {
+            /** @description Stable region identifier within the projection. */
+            id: string;
+            /** @description Region kind (e.g. subnet, vlan, zone). */
+            kind: string;
+            label: string;
+            parent_region_id?: string | null;
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        MapNode: {
+            /** @description Stable node identifier within the projection. */
+            id: string;
+            /** @description Node kind (e.g. device, interface, service). */
+            kind: string;
+            label?: string | null;
+            /** @description Deterministic primary region placement (when applicable). */
+            primary_region_id?: string | null;
+            /** @description Region membership (container ids); membership should not be expressed as dense mesh edges. */
+            region_ids: string[];
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        MapEdge: {
+            id: string;
+            /** @description Edge kind (layer-defined; edges are rare/intentional). */
+            kind: string;
+            /** @description Source node id. */
+            from: string;
+            /** @description Target node id. */
+            to: string;
+            label?: string | null;
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        MapInspectorField: {
+            label: string;
+            value: string;
+        };
+        MapInspectorRelationship: {
+            label: string;
+            layer: components["schemas"]["MapLayer"];
+            focus_type: components["schemas"]["MapFocusType"];
+            focus_id: string;
+        };
+        MapInspector: {
+            title: string;
+            identity: components["schemas"]["MapInspectorField"][];
+            status: components["schemas"]["MapInspectorField"][];
+            relationships: components["schemas"]["MapInspectorRelationship"][];
+        };
+        MapProjection: {
+            layer: components["schemas"]["MapLayer"];
+            focus?: components["schemas"]["MapFocus"];
+            /** @description Operator guidance message when the projection is empty or truncated. */
+            guidance?: string | null;
+            regions: components["schemas"]["MapRegion"][];
+            nodes: components["schemas"]["MapNode"][];
+            edges: components["schemas"]["MapEdge"][];
+            inspector?: components["schemas"]["MapInspector"];
+            truncation: components["schemas"]["MapTruncation"];
+        };
         Device: {
             /** Format: uuid */
             id: string;
             /** @description Optional human-friendly name. */
             display_name?: string;
+            /** @description Best-effort primary IP for UI convenience (may be null when unknown). */
+            primary_ip?: string | null;
+            /**
+             * Format: date-time
+             * @description Latest observation timestamp across known facts (best-effort).
+             */
+            last_seen_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Latest structural change timestamp across known facts (best-effort).
+             */
+            last_change_at?: string | null;
             metadata?: components["schemas"]["DeviceMetadata"];
+        };
+        DevicePage: {
+            devices: components["schemas"]["Device"][];
+            /** @description Cursor for fetching the next page (opaque). */
+            cursor?: string;
+        };
+        DeviceFacts: {
+            /** Format: uuid */
+            device_id: string;
+            ips: components["schemas"]["DeviceIP"][];
+            macs: components["schemas"]["DeviceMAC"][];
+            interfaces: components["schemas"]["DeviceInterface"][];
+            services: components["schemas"]["DeviceService"][];
+            snmp?: components["schemas"]["DeviceSNMP"];
+            links: components["schemas"]["DeviceLink"][];
+        };
+        DeviceIP: {
+            ip: string;
+            /** Format: uuid */
+            interface_id?: string | null;
+            interface_name?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        DeviceMAC: {
+            mac: string;
+            /** Format: uuid */
+            interface_id?: string | null;
+            interface_name?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        DeviceInterface: {
+            /** Format: uuid */
+            id: string;
+            name?: string | null;
+            ifindex?: number | null;
+            descr?: string | null;
+            alias?: string | null;
+            mac?: string | null;
+            admin_status?: number | null;
+            oper_status?: number | null;
+            mtu?: number | null;
+            /** Format: int64 */
+            speed_bps?: number | null;
+            pvid?: number | null;
+            /** Format: date-time */
+            pvid_observed_at?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        DeviceService: {
+            /** @enum {string|null} */
+            protocol?: "tcp" | "udp" | null;
+            port?: number | null;
+            name?: string | null;
+            /** @enum {string|null} */
+            state?: "open" | "closed" | null;
+            source?: string | null;
+            /** Format: date-time */
+            observed_at: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        DeviceSNMP: {
+            address?: string | null;
+            sys_name?: string | null;
+            sys_descr?: string | null;
+            sys_object_id?: string | null;
+            sys_contact?: string | null;
+            sys_location?: string | null;
+            /** Format: date-time */
+            last_success_at?: string | null;
+            last_error?: string | null;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        DeviceLink: {
+            /** Format: uuid */
+            id: string;
+            link_key: string;
+            /** Format: uuid */
+            peer_device_id: string;
+            /** Format: uuid */
+            local_interface_id?: string | null;
+            /** Format: uuid */
+            peer_interface_id?: string | null;
+            link_type?: string | null;
+            source: string;
+            /** Format: date-time */
+            observed_at?: string | null;
+            /** Format: date-time */
+            updated_at: string;
         };
         /** @description Minimal create payload. Additional fields will be added as the data model is finalized. */
         DeviceCreate: {

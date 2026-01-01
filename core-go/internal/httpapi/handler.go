@@ -153,6 +153,10 @@ func (h *Handler) Router() http.Handler {
 			r.Route("/audit", func(r chi.Router) {
 				r.Post("/events", h.handleCreateAuditEvent)
 			})
+
+			r.Route("/map", func(r chi.Router) {
+				r.Get("/{layer}", h.handleGetMapProjection)
+			})
 		})
 	})
 

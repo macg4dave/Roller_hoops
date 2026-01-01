@@ -290,6 +290,7 @@ pre {
 .btn:hover {
   border-color: var(--border-strong);
   box-shadow: var(--shadow-sm);
+  text-decoration: none;
 }
 
 .btn:disabled {
@@ -734,6 +735,7 @@ pre {
 
 .mapLayerItem:hover {
   border-color: var(--border-strong);
+  text-decoration: none;
 }
 
 .mapLayerItemActive {
@@ -825,6 +827,11 @@ pre {
   flex-wrap: wrap;
 }
 
+.mapFocusForm {
+  display: grid;
+  gap: 12px;
+}
+
 .mapInspectorLink {
   color: var(--primary);
   font-weight: 700;
@@ -875,4 +882,3 @@ pre {
     animation: none;
   }
 }
-

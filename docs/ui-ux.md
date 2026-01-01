@@ -101,8 +101,8 @@ Style guidance:
 
 Accessibility requirements:
 
-- Keyboard navigable.
-- Visible focus ring.
+- Visible focus/selection ring.
+- Keyboard navigation beyond browser defaults is out of scope (no custom keybindings/shortcuts).
 - No color-only meaning (badges also carry text).
 - Respect `prefers-reduced-motion`.
 
@@ -154,7 +154,7 @@ Accessibility requirements:
 These are intentionally scoped so they don’t require new architecture.
 
 - **Saved views** for `/devices` (store filter/sort presets in the URL and optionally in local storage).
-- **Triage mode** toggle (compact table, keyboard navigation, quick open).
+- **Triage mode** toggle (compact table, quick open).
 - **Explain-disabled** affordances (when a role blocks an action, show a tooltip explaining why).
 - **Command palette** (optional; later Phase 12) for “Go to device”, “Run discovery”, “Export”.
 - **Bulk metadata edits** (admin-only) as a follow-on once list paging is stable.

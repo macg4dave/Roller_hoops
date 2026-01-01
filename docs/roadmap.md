@@ -124,7 +124,7 @@ GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone&focusId=...
 * Service boundaries: `docs/architecture.md`
 * Security guardrails: `docs/security.md`
 * Network map product direction + mocks: `docs/network_map/network_map_ideas.md` (mocks: `docs/network_map/idea1.png`, `docs/network_map/idea2.png`)
-* Network map interaction contract (must-haves + gaps): `docs/network_map/interface-rules.md`
+* Network map interaction contract (canonical; overrides older interface rules): `docs/network_map/interface-rules.md`
 
 ---
 
@@ -154,8 +154,8 @@ GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone&focusId=...
 | 10 | Done | Auth + session hardening (roles + audit hooks) |
 | 11 | Done | Observability & operations (metrics/runbooks/CI) |
 | 12 | Planned | UI workflows for operators |
-| 13 | In progress | Map shell + interaction contract |
-| 14 | Planned | Projection API + map data model (L3 first) |
+| 13 | Done | Map shell + interaction contract |
+| 14 | In progress | Projection API + map data model (L3 first) |
 | 15 | Planned | Physical/L2/L3 layers |
 | 16 | Planned | Services/Security layers + modes |
 
@@ -752,7 +752,7 @@ API/telemetry endpoints (planned):
 
 **Status:** In progress
 
-M13.1 is underway: the shell now renders the constant three-pane layer/canvas/inspector layout even before projections exist.
+Phase 13 is complete: the `/map` shell now supports URL-driven layer + focus and inspector-driven cross-layer navigation stubs (no projections yet).
 
 ### Goal
 
@@ -823,7 +823,7 @@ Tasks:
 * [x] Ensure discovery scope is clear (e.g., subnet being scanned).
 * [x] Add time estimates or progress bars if possible.
 * [x] Handle cancellation gracefully (if supported by API).
-* [x] Ensure accessibility basics (keyboard nav, focus states).
+* [x] Ensure accessibility basics (focus/selection states).
 * [x] Add tooltips or help text for complex concepts (e.g., what “discovery” entails).
 * [x] Optimize for performance (avoid jank during polling updates).
 * [x] Ensure responsiveness (works well on various screen sizes).
@@ -838,7 +838,7 @@ Acceptance criteria:
 
 Tasks:
 
-* [x] Accessibility pass: keyboard nav, focus ring, contrast, reduced motion.
+* [x] Accessibility pass: focus/selection ring, contrast, reduced motion.
 * [x] Error resilience: retries, “last updated” stamps for live panels, and stable polling.
 * [x] Performance guardrails: avoid unnecessary client JS; keep interactions snappy.
 
@@ -867,7 +867,7 @@ API preference for Phase 12 UX:
 
 ## Phase 13 — Network map v1 (Layered Explorer shell)
 
-**Status:** In progress
+**Status:** Done
 
 ### Goal
 
@@ -893,14 +893,17 @@ The two mock screens in `docs/network_map/idea1.png` and `docs/network_map/idea2
 * **No spaghetti edges**
   * The mock uses a small number of intentional connectors and mostly relies on grouping/regions.
 
-Non-negotiables (from `docs/network_map/network_map_ideas.md` + mocks):
+Non-negotiables (from `docs/network_map/interface-rules.md` + mocks; `interface-rules.md` wins on conflicts):
 
 * 3-pane layout is constant: **Layer panel (left)** / **Canvas (center)** / **Inspector (right)**
+* Empty-by-default: no focus ⇒ empty canvas + guidance (no errors for “no focus”)
+* Object-first: selecting a layer does not imply “draw everything”; focus is required
 * Only **one layer active** at a time; switching layers **fully re-renders** the canvas
-* Object-first: nothing renders by default; user selects a layer and a focus object/scope
-* “Stacked regions”, not wire soup (e.g., subnets as rounded regions; labels on hover)
-* Deterministic presentation: stable ordering + minimal churn during polling
-* Input/accessibility: must work without hover and support keyboard focus/navigation
+* Inspector is always visible and anchors navigation (“View in …”)
+* URL-driven state: `layer`, `focusType`, `focusId` deep-link + reload to the same view
+* Deterministic presentation: stable IDs, stable ordering/layout; polling must not reshuffle during interaction
+* Edges are rare/intentional; membership is primarily regions/containment (avoid spaghetti)
+* Input/accessibility: visible focus/selection, hover is optional, never rely on color alone
 
 ### Milestones (Phase 13)
 
@@ -909,12 +912,12 @@ Non-negotiables (from `docs/network_map/network_map_ideas.md` + mocks):
 Tasks:
 
 * UI routing
-  * [ ] Add `/map` route (SSR-friendly, no client-only dependencies required to show the shell).
-  * [ ] Render the constant 3-pane layout (Layer panel / Canvas / Inspector).
+  * [x] Add `/map` route (SSR-friendly, no client-only dependencies required to show the shell).
+  * [x] Render the constant 3-pane layout (Layer panel / Canvas / Inspector).
 * Empty-state contract
-  * [ ] No focus ⇒ empty canvas + instructional hint text (match mock philosophy).
+  * [x] No focus ⇒ empty canvas + instructional hint text (match mock philosophy).
 * DX + maintainability
-  * [ ] Keep state local to the route (avoid cross-app global state early).
+  * [x] Keep state local to the route (avoid cross-app global state early).
 
 Blockers:
 
@@ -929,10 +932,10 @@ Acceptance criteria:
 Tasks:
 
 * URL contract
-  * [ ] Encode layer in the URL (e.g., `/map?layer=l3`).
-  * [ ] Validate unknown layers (fall back to empty-state or a friendly error).
+  * [x] Encode layer in the URL (e.g., `/map?layer=l3`).
+  * [x] Validate unknown layers (fall back to empty-state or a friendly error).
 * Rendering
-  * [ ] Switching layers clears canvas state; each layer owns its own projection/render config.
+  * [x] Switching layers clears canvas state; each layer owns its own projection/render config.
 
 Blockers:
 
@@ -947,10 +950,10 @@ Acceptance criteria:
 Tasks:
 
 * URL contract
-  * [ ] Encode focus in URL (`focusType`, `focusId`).
-  * [ ] Define “no focus” behavior as valid, not an error.
+  * [x] Encode focus in URL (`focusType`, `focusId`).
+  * [x] Define “no focus” behavior as valid, not an error.
 * UI affordances
-  * [ ] Provide a minimal focus picker entry point (can be a stub/search box for now).
+  * [x] Provide a minimal focus picker entry point (can be a stub/search box for now).
 
 Blockers:
 
@@ -965,10 +968,10 @@ Acceptance criteria:
 Tasks:
 
 * Inspector structure
-  * [ ] Implement sections: Identity / Status / Relationships.
-  * [ ] Relationship actions exist as stubs (e.g., “View in L3”, “View in Physical”).
+  * [x] Implement sections: Identity / Status / Relationships.
+  * [x] Relationship actions exist as stubs (e.g., “View in L3”, “View in Physical”).
 * Cross-layer navigation
-  * [ ] “View in …” actions update URL (layer + focus) without losing focus if possible.
+  * [x] “View in …” actions update URL (layer + focus) without losing focus if possible.
 
 Blockers:
 
@@ -984,7 +987,7 @@ Acceptance criteria:
 * The inspector is always visible and stays in sync with focus.
 * Deep links are stable (layer/focus stored in URL).
 * No API changes required yet; mock data is acceptable for this phase.
-* The implementation follows the v1 must-haves in `docs/network_map/interface-rules.md` (especially deterministic behavior and keyboard-visible focus).
+* The implementation follows the v1 must-haves in `docs/network_map/interface-rules.md` (especially deterministic behavior and minimal churn).
 
 Deliverable:
 
@@ -994,7 +997,7 @@ Deliverable:
 
 ## Phase 14 — Map data model + API projections (layer-aware)
 
-**Status:** Planned
+**Status:** In progress
 
 ### Goal
 
@@ -1046,16 +1049,18 @@ Deliverable:
 Tasks:
 
 * Contract
-  * [ ] Define a `MapProjection` schema in `api/openapi.yaml` (canonical).
-  * [ ] Define shared types: `Region`, `Node`, `Edge`, `Inspector`.
-  * [ ] Define error behavior for invalid layer/focus (per `docs/api-contract.md`).
+  * [x] Define a `MapProjection` schema in `api/openapi.yaml` (canonical).
+  * [x] Define shared types: `Region`, `Node`, `Edge`, `Inspector`.
+  * [x] Define how membership is represented (nodes reference region IDs; avoid “dense mesh” edges).
+  * [x] Define error behavior for invalid layer/focus (per `docs/api-contract.md`).
+  * [x] Include truncation metadata so the UI can be honest when caps are hit (e.g., counts/limits/warnings).
 * Stability rules
-  * [ ] Document sorting rules (e.g., sort regions/nodes/edges by stable id).
-  * [ ] Document “no focus” behavior: return an empty projection + guidance (200 OK).
+  * [x] Document sorting rules (e.g., sort regions/nodes/edges by stable id).
+  * [x] Document “no focus” behavior: return an empty projection + guidance (200 OK).
 * Tests
-  * [ ] Add contract coverage so router cannot drift (keep the existing drift-gate philosophy).
+  * [x] Add contract coverage so router cannot drift (keep the existing drift-gate philosophy).
 * UI wiring (scaffolding)
-  * [ ] Ensure UI types are generated from OpenAPI (no hand-written DTOs).
+  * [x] Ensure UI types are generated from OpenAPI (no hand-written DTOs).
 
 Blockers:
 
@@ -1072,15 +1077,16 @@ Acceptance criteria:
 Tasks:
 
 * Projection rules
-  * [ ] Regions = subnets derived from the focused device’s IP facts.
-  * [ ] Nodes = focused device + peers in those subnets.
-  * [ ] Edges = region membership and a small number of intentional connectors (no mesh).
+  * [x] Regions = subnets derived from the focused device’s IP facts.
+  * [x] Nodes = focused device + peers in those subnets.
+  * [x] Edges = region membership and a small number of intentional connectors (no mesh).
+  * [x] Multi-membership: pick a deterministic primary placement per device and return “also in…” memberships for the Inspector.
 * Core-go implementation
-  * [ ] Implement handler + SQL for IP→subnet grouping and peer selection.
-  * [ ] Enforce hard limits (node/edge caps) to prevent pathological graphs.
-  * [ ] Ensure deterministic ordering.
+  * [x] Implement handler + SQL for IP→subnet grouping and peer selection.
+  * [x] Enforce hard limits (node/edge caps) to prevent pathological graphs.
+  * [x] Ensure deterministic ordering.
 * Tests
-  * [ ] Integration tests using seeded data (subnet grouping + deterministic output).
+  * [x] Integration tests using seeded data (subnet grouping + deterministic output).
 
 Blockers:
 
@@ -1097,11 +1103,11 @@ Acceptance criteria:
 Tasks:
 
 * Contract
-  * [ ] Define `subnet` focus identifier format (recommend: CIDR string unless/until a `subnets` table exists).
+  * [x] Define `subnet` focus identifier format (recommend: CIDR string unless/until a `subnets` table exists).
 * Core-go implementation
-  * [ ] Return devices observed in that subnet, bounded and deterministic.
+  * [x] Return devices observed in that subnet, bounded and deterministic.
 * Tests
-  * [ ] Validate 400 for invalid CIDR and 404 vs empty semantics (choose and document).
+  * [x] Validate 400 for invalid CIDR and document empty vs 404 semantics (chosen: 200 + empty members for valid CIDR).
 
 Blockers:
 
@@ -1156,6 +1162,8 @@ Layers:
 
 * Canvas renderer with “stacked regions” (soft rounded containers) and node placement per region.
 * Minimal, deterministic layout rules first (avoid force-graph chaos); semantic zoom deferred.
+* Progressive disclosure: containers summarize by default; expand vs drill-in are distinct and consistent.
+* Hard caps with honest messaging when truncated (and a clear drill-in path).
 * Inspector shows identity/status/relationships and “View in …” links between layers.
 
 ### Blockers
@@ -1177,8 +1185,9 @@ Tasks:
   * [ ] Render region containers (subnets) as rounded “stacked regions”.
   * [ ] Place nodes deterministically within regions (avoid force graphs in v1).
 * Interaction
-  * [ ] Hover highlights and labels-on-hover.
-  * [ ] Click selects focus and updates Inspector.
+  * [ ] Click selects a region/node and updates Inspector; drill-in is a distinct action (focus change).
+  * [ ] Peek (hover/focus) may highlight/show labels, but is never required for meaning or navigation.
+  * [ ] Ensure visible focus/selection for canvas interactions.
 
 Blockers:
 
@@ -1240,6 +1249,36 @@ Blockers:
 Acceptance criteria:
 
 * “View in …” actions feel predictable and don’t strand the user.
+
+#### M15.5 — Progressive disclosure + caps (v1 must-haves)
+
+Tasks:
+
+* UI
+  * [ ] Render containers as summary tiles by default (counts + status rollups).
+  * [ ] Implement “Expand” vs “Drill-in” affordances and keep behavior consistent across layers.
+  * [ ] When caps are hit, show honest truncation messaging (“Showing 25 of 140…”) and a drill-in suggestion.
+  * [ ] Show “also in…” memberships in the Inspector (multi-membership without duplicate nodes by default).
+
+Blockers:
+
+* Benefits from Phase 14 projection responses including counts/limits/warnings so the UI can message accurately.
+
+Acceptance criteria:
+
+* Large containers remain readable by default; users can expand to peek or drill-in to work without “spaghetti”.
+
+#### M15.6 — Polling stability (pin focus + update semantics)
+
+Tasks:
+
+* UI
+  * [ ] Add “pin focus” so polling updates don’t reshuffle the canvas while the user is interacting.
+  * [ ] Define update semantics: badge + “apply updates” action vs live update (and document the rule).
+
+Acceptance criteria:
+
+* Polling does not create jitter; updates are predictable and do not break the user’s mental map.
 
 Acceptance criteria:
 
@@ -1366,6 +1405,16 @@ Acceptance criteria:
 
 ## Open decisions (network map)
 
+Contract decisions (from `docs/network_map/interface-rules.md`):
+
+* **Primary membership rules (per layer)**: how we choose a single “primary” container placement while still showing “also in…” memberships.
+* **Derived vs curated membership**: when (if ever) operators can override derived membership on the map.
+* **Selection model**: v1 single-select only vs multi-select (Build mode bulk actions).
+* **Region identity**: stable IDs for derived containers (subnets/VLANs) so URLs remain stable over time.
+* **Update semantics**: how to present “data changed” without reflowing the canvas (badge + apply vs live update).
+
+Implementation choices:
+
 * **Renderer**: SVG (simple, accessible) vs Canvas/WebGL (performance) vs React Flow (speed of delivery).
 * **Layout strategy**: deterministic region layout (recommended for v1) vs force-directed.
 * **Editing model**: what becomes user-authored truth (`links`, `zones`, `service deps`) vs discovered truth.
@@ -1422,9 +1471,13 @@ If you want next:
 * [x] Phase 10 — auth + sessions + roles
 * [x] Phase 11 — metrics + runbooks + CI smoke
 * [ ] Phase 12 — operator UX foundations + workflows
-* [ ] M13.1 — `/map` route + 3-pane shell (mock data OK)
-* [ ] M14.1 — `MapProjection` schema pinned in `api/openapi.yaml`
-* [ ] M14.2 — L3 projection (device focus) from live data
+* [x] M13.1 — `/map` route + 3-pane shell (mock data OK)
+* [x] M13.2 — Layer switching contract (URL-driven)
+* [x] M13.3 — Focus contract (object-first)
+* [x] M13.4 — Inspector contract (always-on)
+* [x] M14.1 — `MapProjection` schema pinned in `api/openapi.yaml`
+* [x] M14.2 — L3 projection (device focus) from live data
+* [x] M14.3 — L3 projection (subnet focus) from live data
 
 ## Definition of done for discovery (Phases 8-10)
 
@@ -1434,7 +1487,8 @@ If you want next:
 
 ## Definition of done for network map (Phases 13-16)
 
-* The UI matches the mock interaction contract: constant 3-pane layout, mutually-exclusive layers, object-first rendering.
+* The UI matches the interaction contract in `docs/network_map/interface-rules.md` (empty-by-default, inspector-first, URL-driven, deterministic).
+* Deep links are stable and reload-safe: `layer` + `focusType` + `focusId` restore the same view.
 * L3 view can render subnet regions + device membership from real data, and Inspector can cross-navigate between layers.
-* Physical/L2 views work with a minimal, deterministic layout; no uncontrolled “spaghetti graph” screens.
+* Physical/L2 views work with a minimal, deterministic layout; caps/truncation prevent “spaghetti graph” screens.
 * Services/Security views can start manual-first, but are served via projection endpoints (no direct DB access from UI).

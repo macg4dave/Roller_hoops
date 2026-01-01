@@ -13,6 +13,7 @@ tags:
   - name: Discovery
   - name: Inventory
   - name: Audit
+  - name: Map
 
 paths:
   /v1/devices:
@@ -575,8 +576,255 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /v1/map/{layer}:
+    parameters:
+      - name: layer
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/MapLayer'
+    get:
+      tags: [Map]
+      summary: Get a layer projection (focus-scoped)
+      description: |
+        Returns a small, render-ready projection for a single layer and (optional) focus.
+
+        No focus is valid and returns an empty projection plus guidance (200 OK).
+
+        Responses are deterministic: `regions`, `nodes`, and `edges` are sorted by stable `id`.
+      parameters:
+        - name: focusType
+          in: query
+          schema:
+            $ref: '#/components/schemas/MapFocusType'
+          description: Focus type for object-first navigation.
+        - name: focusId
+          in: query
+          schema:
+            type: string
+          description: Focus identifier (UUID for `device`; other types are layer-defined).
+        - name: depth
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 0
+            maximum: 3
+          description: Optional scoping hint (small integer).
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 120
+            minimum: 1
+            maximum: 500
+          description: Optional hard cap hint (the API may clamp further).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MapProjection'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Focus not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   schemas:
+    MapLayer:
+      type: string
+      enum: [physical, l2, l3, services, security]
+      description: Mutually-exclusive layer identifier.
+    MapFocusType:
+      type: string
+      enum: [device, subnet, vlan, zone, service]
+      description: Focus type for map projections.
+    MapFocus:
+      type: object
+      required: [type, id]
+      properties:
+        type:
+          $ref: '#/components/schemas/MapFocusType'
+        id:
+          type: string
+        label:
+          type: string
+          nullable: true
+          description: Optional human-friendly label (best-effort).
+    MapTruncationMetric:
+      type: object
+      required: [returned, limit, truncated]
+      properties:
+        returned:
+          type: integer
+        limit:
+          type: integer
+        truncated:
+          type: boolean
+        total:
+          type: integer
+          nullable: true
+          description: Optional total size hint when known.
+        warning:
+          type: string
+          nullable: true
+          description: Optional operator-facing truncation message.
+    MapTruncation:
+      type: object
+      required: [regions, nodes, edges]
+      properties:
+        regions:
+          $ref: '#/components/schemas/MapTruncationMetric'
+        nodes:
+          $ref: '#/components/schemas/MapTruncationMetric'
+        edges:
+          $ref: '#/components/schemas/MapTruncationMetric'
+    MapRegion:
+      type: object
+      required: [id, kind, label]
+      properties:
+        id:
+          type: string
+          description: Stable region identifier within the projection.
+        kind:
+          type: string
+          description: Region kind (e.g. subnet, vlan, zone).
+        label:
+          type: string
+        parent_region_id:
+          type: string
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+          additionalProperties: true
+    MapNode:
+      type: object
+      required: [id, kind, region_ids]
+      properties:
+        id:
+          type: string
+          description: Stable node identifier within the projection.
+        kind:
+          type: string
+          description: Node kind (e.g. device, interface, service).
+        label:
+          type: string
+          nullable: true
+        primary_region_id:
+          type: string
+          nullable: true
+          description: Deterministic primary region placement (when applicable).
+        region_ids:
+          type: array
+          description: Region membership (container ids); membership should not be expressed as dense mesh edges.
+          items:
+            type: string
+        meta:
+          type: object
+          nullable: true
+          additionalProperties: true
+    MapEdge:
+      type: object
+      required: [id, kind, from, to]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          description: Edge kind (layer-defined; edges are rare/intentional).
+        from:
+          type: string
+          description: Source node id.
+        to:
+          type: string
+          description: Target node id.
+        label:
+          type: string
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+          additionalProperties: true
+    MapInspectorField:
+      type: object
+      required: [label, value]
+      properties:
+        label:
+          type: string
+        value:
+          type: string
+    MapInspectorRelationship:
+      type: object
+      required: [label, layer, focus_type, focus_id]
+      properties:
+        label:
+          type: string
+        layer:
+          $ref: '#/components/schemas/MapLayer'
+        focus_type:
+          $ref: '#/components/schemas/MapFocusType'
+        focus_id:
+          type: string
+    MapInspector:
+      type: object
+      required: [title, identity, status, relationships]
+      properties:
+        title:
+          type: string
+        identity:
+          type: array
+          items:
+            $ref: '#/components/schemas/MapInspectorField'
+        status:
+          type: array
+          items:
+            $ref: '#/components/schemas/MapInspectorField'
+        relationships:
+          type: array
+          items:
+            $ref: '#/components/schemas/MapInspectorRelationship'
+    MapProjection:
+      type: object
+      required: [layer, regions, nodes, edges, truncation]
+      properties:
+        layer:
+          $ref: '#/components/schemas/MapLayer'
+        focus:
+          $ref: '#/components/schemas/MapFocus'
+          nullable: true
+        guidance:
+          type: string
+          nullable: true
+          description: Operator guidance message when the projection is empty or truncated.
+        regions:
+          type: array
+          items:
+            $ref: '#/components/schemas/MapRegion'
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/MapNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/MapEdge'
+        inspector:
+          $ref: '#/components/schemas/MapInspector'
+          nullable: true
+        truncation:
+          $ref: '#/components/schemas/MapTruncation'
+
     Device:
       type: object
       required: [id]
