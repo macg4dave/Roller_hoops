@@ -344,8 +344,8 @@ func TestMapProjection_DeviceFocus_L3InspectorIncludesSubnetRelationships(t *tes
 
 type fakeDeviceQueriesWithVLAN struct {
 	fakeDeviceQueries
-	listPVIDsFn        func(ctx context.Context, deviceID string) ([]int32, error)
-	listPeersInVLANFn  func(ctx context.Context, vlanID int32, excludeDeviceID string, limit int32) ([]sqlcgen.MapDevicePeer, error)
+	listPVIDsFn         func(ctx context.Context, deviceID string) ([]int32, error)
+	listPeersInVLANFn   func(ctx context.Context, vlanID int32, excludeDeviceID string, limit int32) ([]sqlcgen.MapDevicePeer, error)
 	listDevicesInVLANFn func(ctx context.Context, vlanID int32, limit int32) ([]sqlcgen.MapDevicePeer, error)
 }
 
@@ -623,5 +623,229 @@ func TestMapProjection_DeviceFocus_PhysicalIncludesEdges(t *testing.T) {
 	}
 	if edge["to"] != "00000000-0000-0000-0000-000000000101" {
 		t.Fatalf("expected edge to peer device, got %v", edge["to"])
+	}
+}
+
+type fakeDeviceQueriesWithServices struct {
+	fakeDeviceQueries
+	getServiceFn            func(ctx context.Context, serviceID string) (sqlcgen.MapService, error)
+	listServicesForDeviceFn func(ctx context.Context, deviceID string, limit int32) ([]sqlcgen.MapService, error)
+}
+
+func (f fakeDeviceQueriesWithServices) GetServiceByID(ctx context.Context, serviceID string) (sqlcgen.MapService, error) {
+	if f.getServiceFn == nil {
+		return sqlcgen.MapService{}, pgx.ErrNoRows
+	}
+	return f.getServiceFn(ctx, serviceID)
+}
+
+func (f fakeDeviceQueriesWithServices) ListServicesForDevice(ctx context.Context, deviceID string, limit int32) ([]sqlcgen.MapService, error) {
+	if f.listServicesForDeviceFn == nil {
+		return nil, nil
+	}
+	return f.listServicesForDeviceFn(ctx, deviceID, limit)
+}
+
+func TestMapProjection_DeviceFocus_ServicesIncludesServiceNodes(t *testing.T) {
+	name := "host-1"
+	deviceID := "00000000-0000-0000-0000-000000000011"
+	service1ID := "00000000-0000-0000-0000-000000001111"
+	service2ID := "00000000-0000-0000-0000-000000002222"
+	now := time.Now().UTC()
+
+	proto := "tcp"
+	sshName := "ssh"
+	httpName := "http"
+	port22 := int32(22)
+	port80 := int32(80)
+
+	h := NewHandler(NewLogger("debug"), nil)
+	h.devices = fakeDeviceQueriesWithServices{
+		fakeDeviceQueries: fakeDeviceQueries{
+			getFn: func(ctx context.Context, id string) (sqlcgen.Device, error) {
+				return sqlcgen.Device{ID: deviceID, DisplayName: &name}, nil
+			},
+		},
+		listServicesForDeviceFn: func(ctx context.Context, targetDeviceID string, limit int32) ([]sqlcgen.MapService, error) {
+			if targetDeviceID != deviceID {
+				return nil, nil
+			}
+			return []sqlcgen.MapService{
+				{
+					ID:         service1ID,
+					DeviceID:   deviceID,
+					Protocol:   &proto,
+					Port:       &port22,
+					Name:       &sshName,
+					State:      nil,
+					Source:     nil,
+					ObservedAt: now,
+				},
+				{
+					ID:         service2ID,
+					DeviceID:   deviceID,
+					Protocol:   &proto,
+					Port:       &port80,
+					Name:       &httpName,
+					State:      nil,
+					Source:     nil,
+					ObservedAt: now.Add(-time.Minute),
+				},
+			}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/map/services?focusType=device&focusId="+deviceID, nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	body := decodeBody(t, rr)
+	if body["layer"] != "services" {
+		t.Fatalf("expected layer services, got %v", body["layer"])
+	}
+
+	regionsAny := body["regions"].([]any)
+	if len(regionsAny) != 1 {
+		t.Fatalf("expected 1 region, got %d", len(regionsAny))
+	}
+	region := regionsAny[0].(map[string]any)
+	if region["id"] != deviceID {
+		t.Fatalf("expected region id %s, got %v", deviceID, region["id"])
+	}
+	if region["kind"] != "device" {
+		t.Fatalf("expected region kind device, got %v", region["kind"])
+	}
+
+	nodesAny := body["nodes"].([]any)
+	if len(nodesAny) != 2 {
+		t.Fatalf("expected 2 nodes, got %d", len(nodesAny))
+	}
+
+	found := map[string]bool{
+		service1ID: false,
+		service2ID: false,
+	}
+	for _, nodeAny := range nodesAny {
+		node := nodeAny.(map[string]any)
+		if node["kind"] != "service" {
+			t.Fatalf("expected node kind service, got %v", node["kind"])
+		}
+		nodeID := node["id"].(string)
+		if _, ok := found[nodeID]; ok {
+			found[nodeID] = true
+		}
+		if node["primary_region_id"] != deviceID {
+			t.Fatalf("expected primary_region_id=%s, got %v", deviceID, node["primary_region_id"])
+		}
+		regionIDs := node["region_ids"].([]any)
+		if len(regionIDs) != 1 || regionIDs[0].(string) != deviceID {
+			t.Fatalf("expected region_ids=[%s], got %v", deviceID, node["region_ids"])
+		}
+	}
+	for id, ok := range found {
+		if !ok {
+			t.Fatalf("expected node %s to be present", id)
+		}
+	}
+
+	inspector := body["inspector"].(map[string]any)
+	statusAny := inspector["status"].([]any)
+	foundProjection := false
+	for _, fieldAny := range statusAny {
+		field := fieldAny.(map[string]any)
+		if field["label"] == "Projection" {
+			foundProjection = true
+			if field["value"] != "services (device focus)" {
+				t.Fatalf("expected projection=services (device focus), got %v", field["value"])
+			}
+		}
+	}
+	if !foundProjection {
+		t.Fatalf("expected inspector status to include Projection field")
+	}
+}
+
+func TestMapProjection_ServiceFocus_ServicesIncludesHostRegion(t *testing.T) {
+	hostName := "host-1"
+	hostDeviceID := "00000000-0000-0000-0000-000000000011"
+	serviceID := "00000000-0000-0000-0000-000000001111"
+	now := time.Now().UTC()
+
+	proto := "tcp"
+	sshName := "ssh"
+	port22 := int32(22)
+
+	h := NewHandler(NewLogger("debug"), nil)
+	h.devices = fakeDeviceQueriesWithServices{
+		fakeDeviceQueries: fakeDeviceQueries{
+			getFn: func(ctx context.Context, id string) (sqlcgen.Device, error) {
+				return sqlcgen.Device{ID: hostDeviceID, DisplayName: &hostName}, nil
+			},
+		},
+		getServiceFn: func(ctx context.Context, targetServiceID string) (sqlcgen.MapService, error) {
+			if targetServiceID != serviceID {
+				return sqlcgen.MapService{}, pgx.ErrNoRows
+			}
+			return sqlcgen.MapService{
+				ID:         serviceID,
+				DeviceID:   hostDeviceID,
+				Protocol:   &proto,
+				Port:       &port22,
+				Name:       &sshName,
+				State:      nil,
+				Source:     nil,
+				ObservedAt: now,
+			}, nil
+		},
+		listServicesForDeviceFn: func(ctx context.Context, targetDeviceID string, limit int32) ([]sqlcgen.MapService, error) {
+			if targetDeviceID != hostDeviceID {
+				return nil, nil
+			}
+			return []sqlcgen.MapService{
+				{
+					ID:         serviceID,
+					DeviceID:   hostDeviceID,
+					Protocol:   &proto,
+					Port:       &port22,
+					Name:       &sshName,
+					State:      nil,
+					Source:     nil,
+					ObservedAt: now,
+				},
+			}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/map/services?focusType=service&focusId="+serviceID, nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	body := decodeBody(t, rr)
+	focus := body["focus"].(map[string]any)
+	if focus["type"] != "service" {
+		t.Fatalf("expected focus.type=service, got %v", focus["type"])
+	}
+	if focus["id"] != serviceID {
+		t.Fatalf("expected focus.id=%s, got %v", serviceID, focus["id"])
+	}
+
+	regionsAny := body["regions"].([]any)
+	if len(regionsAny) != 1 {
+		t.Fatalf("expected 1 region, got %d", len(regionsAny))
+	}
+	region := regionsAny[0].(map[string]any)
+	if region["id"] != hostDeviceID {
+		t.Fatalf("expected host region id %s, got %v", hostDeviceID, region["id"])
+	}
+	if region["kind"] != "device" {
+		t.Fatalf("expected host region kind device, got %v", region["kind"])
 	}
 }

@@ -70,6 +70,8 @@ function resolveFocusTypeFromRegion(region: MapRegion): MapFocusType | undefined
       return 'vlan';
     case 'zone':
       return 'zone';
+    case 'device':
+      return 'device';
     default:
       return undefined;
   }

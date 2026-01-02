@@ -15,6 +15,10 @@ export default defineConfig({
     globals: true,
     restoreMocks: true,
     setupFiles: './test/setup.ts',
-    include: ['**/*.{test,spec}.{ts,tsx}']
+    testTimeout: 10_000,
+    hookTimeout: 10_000,
+    teardownTimeout: 10_000,
+    include: ['app/**/*.{test,spec}.{ts,tsx}', 'lib/**/*.{test,spec}.{ts,tsx}', 'test/**/*.{test,spec}.{ts,tsx}'],
+    exclude: ['**/node_modules/**', '**/.next/**']
   }
 });

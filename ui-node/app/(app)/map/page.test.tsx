@@ -92,7 +92,9 @@ describe('MapPage URL contract', () => {
 
     expect(screen.getByText('Router A')).toBeInTheDocument();
     expect(screen.getByText('Type')).toBeInTheDocument();
-    expect(screen.getByText('Device')).toBeInTheDocument();
+    const identitySection = screen.getByText('Identity').closest('.mapInspectorSection');
+    expect(identitySection).not.toBeNull();
+    expect(within(identitySection as HTMLElement).getByText('Device')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /view in l2/i })).toHaveAttribute('href', expect.stringContaining('layer=l2'));
   });
 
@@ -354,7 +356,7 @@ describe('MapPage URL contract', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Expand' }));
     fireEvent.click(screen.getByRole('button', { name: 'Peer Device' }));
 
-    expect(within(identitySection as HTMLElement).getByText('Peer Device')).toBeInTheDocument();
+    expect(within(identitySection as HTMLElement).getByText('Peer Device', { selector: '.mapInspectorValue' })).toBeInTheDocument();
     expect(within(focusSection as HTMLElement).getByText(new RegExp(focusId))).toBeInTheDocument();
     expect(within(focusSection as HTMLElement).queryByText(new RegExp(peerId))).not.toBeInTheDocument();
 
@@ -416,7 +418,7 @@ describe('MapPage URL contract', () => {
 
     const identitySection = screen.getByText('Identity').closest('.mapInspectorSection');
     expect(identitySection).not.toBeNull();
-    expect(within(identitySection as HTMLElement).getByText(subnetId)).toBeInTheDocument();
+    expect(within(identitySection as HTMLElement).getByText(subnetId, { selector: '.mapInspectorValue' })).toBeInTheDocument();
     expect(within(identitySection as HTMLElement).getByText('Subnet')).toBeInTheDocument();
 
     const relationshipsSection = screen.getByText('Relationships').closest('.mapInspectorSection');

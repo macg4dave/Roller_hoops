@@ -665,6 +665,51 @@ pre {
   gap: 12px;
 }
 
+.mapModeBar {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mapModeBarMeta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mapModeBarKicker {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.mapModeBarTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+}
+
+.mapModeBarHint {
+  margin: 0;
+  color: var(--muted-2);
+  font-size: 13px;
+}
+
+.mapModeBarActions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+}
+
 .mapShell {
   border: 1px solid var(--border);
   border-radius: var(--radius);

@@ -19,6 +19,15 @@ type MapLayer = components['schemas']['MapLayer'];
 type MapFocusType = components['schemas']['MapFocusType'];
 type MapProjection = components['schemas']['MapProjection'];
 
+const MODE_OPTIONS = [
+  { id: 'explore', label: 'Explore', description: 'Read-only, minimal chrome' },
+  { id: 'build', label: 'Build', description: 'Author links, regions, and tags' },
+  { id: 'secure', label: 'Secure', description: 'Zones, policies, and flows only' },
+  { id: 'operate', label: 'Operate', description: 'Overlay status + drift + changes' }
+] as const;
+
+type MapMode = (typeof MODE_OPTIONS)[number]['id'];
+
 const LAYER_OPTIONS = [
   { id: 'physical', label: 'Physical', description: 'Cables, racks, and adjacency' },
   { id: 'l2', label: 'L2 (VLANs)', description: 'VLAN grouping (PVID only)' },
@@ -106,6 +115,26 @@ function toUrlSearchParams(raw: RawSearchParams): URLSearchParams {
 
 const DEFAULT_LAYER: LayerId = 'l3';
 
+const DEFAULT_MODE: MapMode = 'explore';
+
+function resolveMode(raw: string | undefined): { mode?: MapMode; unknown?: string } {
+  if (!raw) {
+    return { mode: undefined };
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  if (!normalized) {
+    return { mode: undefined };
+  }
+
+  const match = MODE_OPTIONS.find((mode) => mode.id === normalized);
+  if (!match) {
+    return { mode: undefined, unknown: normalized };
+  }
+
+  return { mode: match.id };
+}
+
 function resolveLayer(raw: string | undefined): { layer?: LayerId; unknown?: string } {
   if (!raw) {
     return { layer: undefined };
@@ -146,6 +175,10 @@ export default async function MapPage({ searchParams }: { searchParams?: Promise
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const currentParams = toUrlSearchParams(resolvedSearchParams);
   const rawLayer = toSingleValue(resolvedSearchParams.layer);
+  const rawMode = toSingleValue(resolvedSearchParams.mode);
+  const { mode: resolvedMode, unknown: unknownMode } = resolveMode(rawMode);
+  const activeModeId = unknownMode ? DEFAULT_MODE : (resolvedMode ?? DEFAULT_MODE);
+  const activeMode = MODE_OPTIONS.find((mode) => mode.id === activeModeId) ?? MODE_OPTIONS[0];
 
   if (!rawLayer?.trim()) {
     const nextParams = new URLSearchParams(currentParams);
@@ -228,6 +261,35 @@ export default async function MapPage({ searchParams }: { searchParams?: Promise
         <h1 className="pageTitle">Network map</h1>
         <p className="pageSubTitle">Select a layer and focus to render your topology without clutter.</p>
       </header>
+
+      <div className="mapModeBar" aria-label="Map modes">
+        <div className="mapModeBarMeta">
+          <p className="mapModeBarKicker">Mode</p>
+          <p className="mapModeBarTitle">{activeMode.label}</p>
+          <p className="mapModeBarHint">{activeMode.description}</p>
+          {unknownMode ? (
+            <Alert tone="warning">
+              Unknown mode <strong>{unknownMode}</strong>. Defaulting to Explore.
+            </Alert>
+          ) : null}
+        </div>
+        <nav className="mapModeBarActions">
+          {MODE_OPTIONS.map((mode) => {
+            const nextParams = new URLSearchParams(currentParams);
+            nextParams.set('mode', mode.id);
+            return (
+              <Link
+                key={mode.id}
+                href={`/map?${nextParams.toString()}`}
+                className={`btn btnPill${mode.id === activeModeId ? ' btnPillActive' : ''}`}
+                aria-current={mode.id === activeModeId ? 'page' : undefined}
+              >
+                {mode.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
 
       <section className="mapShell">
         <aside className="mapPanel mapLayerPanel">
@@ -348,6 +410,7 @@ export default async function MapPage({ searchParams }: { searchParams?: Promise
 
                 <form action="/map" method="get" className="mapFocusForm">
                   <input type="hidden" name="layer" value={activeLayerId ?? DEFAULT_LAYER} />
+                  {resolvedMode ? <input type="hidden" name="mode" value={activeModeId} /> : null}
 
                   <Field>
                     <Label htmlFor="focusType">Focus type</Label>

@@ -23,14 +23,14 @@ const (
 )
 
 type mapProjection struct {
-	Layer      string         `json:"layer"`
-	Focus      *mapFocus      `json:"focus,omitempty"`
-	Guidance   *string        `json:"guidance,omitempty"`
-	Regions    []mapRegion    `json:"regions"`
-	Nodes      []mapNode      `json:"nodes"`
-	Edges      []mapEdge      `json:"edges"`
-	Inspector  *mapInspector  `json:"inspector,omitempty"`
-	Truncation mapTruncation  `json:"truncation"`
+	Layer      string        `json:"layer"`
+	Focus      *mapFocus     `json:"focus,omitempty"`
+	Guidance   *string       `json:"guidance,omitempty"`
+	Regions    []mapRegion   `json:"regions"`
+	Nodes      []mapNode     `json:"nodes"`
+	Edges      []mapEdge     `json:"edges"`
+	Inspector  *mapInspector `json:"inspector,omitempty"`
+	Truncation mapTruncation `json:"truncation"`
 }
 
 type mapFocus struct {
@@ -80,10 +80,10 @@ type mapEdge struct {
 }
 
 type mapInspector struct {
-	Title         string                   `json:"title"`
-	Identity      []mapInspectorField      `json:"identity"`
-	Status        []mapInspectorField      `json:"status"`
-	Relationships []mapInspectorRelation   `json:"relationships"`
+	Title         string                 `json:"title"`
+	Identity      []mapInspectorField    `json:"identity"`
+	Status        []mapInspectorField    `json:"status"`
+	Relationships []mapInspectorRelation `json:"relationships"`
 }
 
 type mapInspectorField struct {
@@ -166,6 +166,7 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 	var l2PeerLabels map[string]*string
 	var physicalLinks []sqlcgen.MapDeviceLinkPeer
 	var physicalLinksTruncated bool
+	var servicesHostDeviceID string
 
 	switch focusType {
 	case "device":
@@ -481,6 +482,10 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 			}
 		}
 
+		if layer == "services" && depth > 0 {
+			status[1].Value = "services (device focus)"
+		}
+
 		inspector = &mapInspector{
 			Title:         title,
 			Identity:      identity,
@@ -573,19 +578,91 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 		}
 
 	case "service":
-		focusID = focusIDRaw
-		label := focusIDRaw
+		if layer != "services" {
+			focusID = focusIDRaw
+			label := focusIDRaw
+			focusLabel = &label
+			inspector = &mapInspector{
+				Title: label,
+				Identity: []mapInspectorField{
+					{Label: "Type", Value: "Service"},
+					{Label: "ID", Value: focusID},
+				},
+				Status: []mapInspectorField{
+					{Label: "Layer", Value: layer},
+					{Label: "Projection", Value: "scaffolding (no regions/nodes yet)"},
+				},
+				Relationships: buildMapInspectorRelationships(focusType, focusID),
+			}
+			break
+		}
+
+		if !h.ensureDeviceQueries(w) {
+			return
+		}
+
+		ctx := r.Context()
+		serviceGetter, ok := h.devices.(interface {
+			GetServiceByID(ctx context.Context, serviceID string) (sqlcgen.MapService, error)
+		})
+		if !ok {
+			h.log.Error().Msg("map services projection query missing")
+			h.writeError(w, http.StatusInternalServerError, "internal_error", "map services projection not supported", nil)
+			return
+		}
+
+		serviceRow, err := serviceGetter.GetServiceByID(ctx, focusIDRaw)
+		if err != nil {
+			switch {
+			case errors.Is(err, pgx.ErrNoRows):
+				h.writeError(w, http.StatusNotFound, "not_found", "service not found", map[string]any{"id": focusIDRaw})
+			case isInvalidUUID(err):
+				h.writeError(w, http.StatusBadRequest, "invalid_id", "service id is not a valid uuid", map[string]any{"id": focusIDRaw})
+			default:
+				h.log.Error().Err(err).Str("service_id", focusIDRaw).Msg("map projection service lookup failed")
+				h.writeError(w, http.StatusInternalServerError, "db_error", "failed to load service", nil)
+			}
+			return
+		}
+
+		servicesHostDeviceID = serviceRow.DeviceID
+		focusID = serviceRow.ID
+		label := formatServiceLabel(serviceRow.Protocol, serviceRow.Port, serviceRow.Name)
+		if label == "" {
+			label = focusID
+		}
 		focusLabel = &label
+
+		identity := []mapInspectorField{
+			{Label: "Type", Value: "Service"},
+			{Label: "ID", Value: focusID},
+			{Label: "Host device", Value: serviceRow.DeviceID},
+		}
+		if serviceRow.Protocol != nil && strings.TrimSpace(*serviceRow.Protocol) != "" {
+			identity = append(identity, mapInspectorField{Label: "Protocol", Value: strings.TrimSpace(*serviceRow.Protocol)})
+		}
+		if serviceRow.Port != nil && *serviceRow.Port > 0 {
+			identity = append(identity, mapInspectorField{Label: "Port", Value: strconv.Itoa(int(*serviceRow.Port))})
+		}
+		if serviceRow.Name != nil && strings.TrimSpace(*serviceRow.Name) != "" {
+			identity = append(identity, mapInspectorField{Label: "Name", Value: strings.TrimSpace(*serviceRow.Name)})
+		}
+
+		status := []mapInspectorField{
+			{Label: "Layer", Value: layer},
+			{Label: "Projection", Value: "services (service focus)"},
+		}
+		if serviceRow.State != nil && strings.TrimSpace(*serviceRow.State) != "" {
+			status = append(status, mapInspectorField{Label: "State", Value: strings.TrimSpace(*serviceRow.State)})
+		}
+		if serviceRow.Source != nil && strings.TrimSpace(*serviceRow.Source) != "" {
+			status = append(status, mapInspectorField{Label: "Source", Value: strings.TrimSpace(*serviceRow.Source)})
+		}
+
 		inspector = &mapInspector{
-			Title: label,
-			Identity: []mapInspectorField{
-				{Label: "Type", Value: "Service"},
-				{Label: "ID", Value: focusID},
-			},
-			Status: []mapInspectorField{
-				{Label: "Layer", Value: layer},
-				{Label: "Projection", Value: "scaffolding (no regions/nodes yet)"},
-			},
+			Title:         label,
+			Identity:      identity,
+			Status:        status,
 			Relationships: buildMapInspectorRelationships(focusType, focusID),
 		}
 	}
@@ -1136,6 +1213,155 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 			guidance := "Projection truncated: some links/nodes were capped for readability."
 			resp.Guidance = &guidance
 		}
+	} else if layer == "services" && depth > 0 {
+		hostDeviceID := ""
+		hostDeviceLabel := (*string)(nil)
+
+		switch focusType {
+		case "device":
+			hostDeviceID = focusID
+			hostDeviceLabel = focusLabel
+		case "service":
+			hostDeviceID = servicesHostDeviceID
+		default:
+			guidance := "Services projections only support focusType=device or focusType=service."
+			resp.Guidance = &guidance
+		}
+
+		if strings.TrimSpace(hostDeviceID) != "" && resp.Guidance == nil {
+			ctx := r.Context()
+			if hostDeviceLabel == nil {
+				if !h.ensureDeviceQueries(w) {
+					return
+				}
+				deviceRow, err := h.devices.GetDevice(ctx, hostDeviceID)
+				if err != nil {
+					switch {
+					case errors.Is(err, pgx.ErrNoRows):
+						h.writeError(w, http.StatusNotFound, "not_found", "device not found", map[string]any{"id": hostDeviceID})
+					default:
+						h.log.Error().Err(err).Str("device_id", hostDeviceID).Msg("services projection device lookup failed")
+						h.writeError(w, http.StatusInternalServerError, "db_error", "failed to load device", nil)
+					}
+					return
+				}
+				hostDeviceLabel = deviceRow.DisplayName
+			}
+
+			regionLabel := hostDeviceID
+			if hostDeviceLabel != nil && strings.TrimSpace(*hostDeviceLabel) != "" {
+				regionLabel = strings.TrimSpace(*hostDeviceLabel)
+			}
+
+			resp.Regions = []mapRegion{
+				{
+					ID:    hostDeviceID,
+					Kind:  "device",
+					Label: regionLabel,
+					Meta: map[string]any{
+						"device_id": hostDeviceID,
+					},
+				},
+			}
+			resp.Truncation.Regions.Returned = len(resp.Regions)
+			totalRegions := len(resp.Regions)
+			resp.Truncation.Regions.Total = &totalRegions
+
+			if !h.ensureDeviceQueries(w) {
+				return
+			}
+			serviceLister, ok := h.devices.(interface {
+				ListServicesForDevice(ctx context.Context, deviceID string, limit int32) ([]sqlcgen.MapService, error)
+			})
+			if !ok {
+				h.log.Error().Msg("map services projection query missing")
+				h.writeError(w, http.StatusInternalServerError, "internal_error", "map services projection not supported", nil)
+				return
+			}
+
+			queryLimit := int32(nodeLimit + 1)
+			serviceRows, err := serviceLister.ListServicesForDevice(ctx, hostDeviceID, queryLimit)
+			if err != nil {
+				h.log.Error().Err(err).Str("device_id", hostDeviceID).Msg("list device services for map projection failed")
+				h.writeError(w, http.StatusInternalServerError, "db_error", "failed to build services projection", nil)
+				return
+			}
+
+			nodesTruncated := len(serviceRows) > nodeLimit
+			serviceRowsIncluded := serviceRows
+			if nodesTruncated {
+				serviceRowsIncluded = serviceRows[:nodeLimit]
+				warning := fmt.Sprintf("Node cap hit: showing %d of >%d services.", len(serviceRowsIncluded), nodeLimit)
+				resp.Truncation.Nodes.Warning = &warning
+			}
+
+			resp.Nodes = make([]mapNode, 0, len(serviceRowsIncluded))
+			for _, row := range serviceRowsIncluded {
+				label := formatServiceLabel(row.Protocol, row.Port, row.Name)
+				var labelPtr *string
+				if strings.TrimSpace(label) != "" {
+					labelPtr = &label
+				}
+
+				meta := map[string]any{
+					"device_id":   row.DeviceID,
+					"observed_at": row.ObservedAt,
+				}
+				if row.Protocol != nil && strings.TrimSpace(*row.Protocol) != "" {
+					meta["protocol"] = strings.TrimSpace(*row.Protocol)
+				}
+				if row.Port != nil && *row.Port > 0 {
+					meta["port"] = int(*row.Port)
+				}
+				if row.Name != nil && strings.TrimSpace(*row.Name) != "" {
+					meta["name"] = strings.TrimSpace(*row.Name)
+				}
+				if row.State != nil && strings.TrimSpace(*row.State) != "" {
+					meta["state"] = strings.TrimSpace(*row.State)
+				}
+				if row.Source != nil && strings.TrimSpace(*row.Source) != "" {
+					meta["source"] = strings.TrimSpace(*row.Source)
+				}
+
+				resp.Nodes = append(resp.Nodes, mapNode{
+					ID:              row.ID,
+					Kind:            "service",
+					Label:           labelPtr,
+					PrimaryRegionID: &hostDeviceID,
+					RegionIDs:       []string{hostDeviceID},
+					Meta:            meta,
+				})
+			}
+
+			resp.Truncation.Nodes.Returned = len(resp.Nodes)
+			resp.Truncation.Nodes.Truncated = nodesTruncated
+			if !nodesTruncated {
+				totalNodes := len(resp.Nodes)
+				resp.Truncation.Nodes.Total = &totalNodes
+			}
+
+			if resp.Inspector != nil {
+				if nodesTruncated {
+					resp.Inspector.Status = append(resp.Inspector.Status, mapInspectorField{
+						Label: "Services",
+						Value: fmt.Sprintf("%d of >%d", len(resp.Nodes), nodeLimit),
+					})
+				} else {
+					resp.Inspector.Status = append(resp.Inspector.Status, mapInspectorField{
+						Label: "Services",
+						Value: strconv.Itoa(len(resp.Nodes)),
+					})
+				}
+			}
+
+			if len(serviceRows) == 0 {
+				guidance := "No services discovered yet. Enable service scanning enrichment to populate the Services layer."
+				resp.Guidance = &guidance
+			} else if nodesTruncated {
+				guidance := "Projection truncated: some services were capped for readability."
+				resp.Guidance = &guidance
+			}
+		}
 	} else if focusNode != nil {
 		resp.Nodes = []mapNode{*focusNode}
 		resp.Truncation.Nodes.Returned = len(resp.Nodes)
@@ -1143,6 +1369,23 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 
 	sortMapProjection(&resp)
 	h.writeJSON(w, http.StatusOK, resp)
+}
+
+func formatServiceLabel(protocol *string, port *int32, name *string) string {
+	parts := []string{}
+	if protocol != nil && port != nil && strings.TrimSpace(*protocol) != "" && *port > 0 {
+		parts = append(parts, fmt.Sprintf("%s/%d", strings.ToLower(strings.TrimSpace(*protocol)), *port))
+	} else if port != nil && *port > 0 {
+		parts = append(parts, strconv.Itoa(int(*port)))
+	} else if protocol != nil && strings.TrimSpace(*protocol) != "" {
+		parts = append(parts, strings.ToLower(strings.TrimSpace(*protocol)))
+	}
+
+	if name != nil && strings.TrimSpace(*name) != "" {
+		parts = append(parts, strings.TrimSpace(*name))
+	}
+
+	return strings.Join(parts, " ")
 }
 
 func emptyMapProjection(layer string, guidance *string, regionLimit, nodeLimit, edgeLimit int) mapProjection {

@@ -156,8 +156,8 @@ GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone|service&focusId=...
 | 12 | Planned | UI workflows for operators |
 | 13 | Done | Map shell + interaction contract |
 | 14 | Done | Projection API + map data model (L3 first) |
-| 15 | Planned | Physical/L2/L3 layers |
-| 16 | Planned | Services/Security layers + modes |
+| 15 | Done | Physical/L2/L3 layers |
+| 16 | In progress | Services/Security layers + modes |
 
 ## Phases
 
@@ -1146,7 +1146,7 @@ Acceptance criteria:
 
 ## Phase 15 — Layer implementations (Physical / L2 / L3)
 
-**Status:** In progress
+**Status:** Done
 
 ### Goal
 
@@ -1291,7 +1291,7 @@ Acceptance criteria:
 
 ## Phase 16 — Layer implementations (Services / Security) + modes
 
-**Status:** Planned
+**Status:** In progress
 
 ### Goal
 
