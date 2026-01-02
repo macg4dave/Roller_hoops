@@ -311,7 +311,8 @@ export default async function MapPage({ searchParams }: { searchParams?: Promise
               const active = layer.id === activeLayerId;
               const nextParams = new URLSearchParams(currentParams);
               nextParams.set('layer', layer.id);
-              if (focus && !LAYER_FOCUS_SUPPORT[layer.id].includes(focus.type)) {
+              const supported: readonly MapFocusType[] = LAYER_FOCUS_SUPPORT[layer.id];
+              if (focus && !supported.includes(focus.type)) {
                 nextParams.delete('focusType');
                 nextParams.delete('focusId');
               }

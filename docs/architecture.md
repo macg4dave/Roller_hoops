@@ -80,7 +80,8 @@ Generated code (Go server stubs, TypeScript types) is **derived** from OpenAPI a
 
 Discovery (ARP/ICMP/SNMP, etc.) depends on Docker networking and container capabilities. Operational guidance lives in:
 
-- `docs/discovery-deployment.md`
+- [docs/discovery-deployment.md](discovery-deployment.md)
+- [docs/discovery-capabilities.md](discovery-capabilities.md)
 
 ## Observability
 

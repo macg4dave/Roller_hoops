@@ -4,6 +4,8 @@ This document explains how to deploy the **discovery worker** safely and effecti
 
 The discovery engine needs to observe the network (ARP/ICMP/SNMP, etc). In containerized environments, that is **mostly a networking + privileges question**, not an application question.
 
+For a quick “what works where” summary, see [docs/discovery-capabilities.md](discovery-capabilities.md).
+
 ## Goals
 
 - Make discovery work on real networks without redesigning the app.

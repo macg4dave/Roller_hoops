@@ -131,7 +131,7 @@ GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone|service&focusId=...
 ## Blockers & risks (current)
 
 * **Auth boundary is enforced via UI sessions**: the UI requires login and issues a signed `roller_session` cookie before any API traffic is allowed; admin vs read-only roles are enforced in the UI (Go remains headless).
-* **Discovery inside Docker needs a deployment decision**: ARP/ICMP/SNMP fidelity depends on container networking and capabilities (e.g., `CAP_NET_RAW`, host networking, or a dedicated scanner container deployed on the target network).
+* **Discovery inside Docker needs a deployment decision**: ARP/ICMP/SNMP fidelity depends on container networking and capabilities (e.g., `CAP_NET_RAW`, host networking, or a dedicated scanner container deployed on the target network). See [docs/discovery-capabilities.md](discovery-capabilities.md) and [docs/discovery-deployment.md](discovery-deployment.md).
 * **Production secret injection is a deployment responsibility**: keep secrets out of git, inject via env/Docker secrets/secret manager, and follow `docs/runbooks.md` for rotation expectations.
 * **Historical model implemented**: observations, change feed, and run/log APIs now exist; next focus is documenting retention and monitoring query cost.
 

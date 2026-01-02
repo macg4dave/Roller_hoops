@@ -7,17 +7,45 @@ Self-hosted network tracker / mapper (Go + Node.js + PostgreSQL), fully containe
 - **Recommended (no local toolchains):** Docker + Docker Compose v2 (`docker compose ...`)
 - Host port `80/tcp` available (Traefik binds `80:80`; change `docker-compose.yml` if you want a different host port)
 
-### Installing prerequisites (Ubuntu/Debian examples)
+### Installing prerequisites (Debian/Ubuntu)
 
-These are “good enough to get started” commands. For production, pin versions and follow your distro’s Docker/Postgres guidance.
+These are “good enough to get started” commands. For production, pin versions and follow your distro’s guidance.
 
 - Base tools:
   - `sudo apt update`
   - `sudo apt install -y git ca-certificates curl`
+
 - Docker engine + Compose plugin:
-  - `sudo apt install -y docker.io docker-compose-plugin`
-  - `sudo usermod -aG docker "$USER"` (then log out/in so `docker` works without sudo)
+  - Option A (simplest; distro packages, versions may lag):
+    - `sudo apt install -y docker.io docker-compose-plugin`
+  - Option B (Docker CE from Docker’s repo):
+    - `sudo apt install -y ca-certificates curl gnupg`
+    - `sudo install -m 0755 -d /etc/apt/keyrings`
+    - `curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg`
+    - `echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo $VERSION_CODENAME) stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null`
+    - `sudo apt update`
+    - `sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin`
+
+- Post-install:
   - `sudo systemctl enable --now docker`
+  - `sudo usermod -aG docker "$USER"` (then log out/in so `docker` works without sudo)
+
+### Installing prerequisites (Fedora)
+
+- Base tools:
+  - `sudo dnf install -y git ca-certificates curl`
+
+- Docker engine + Compose plugin:
+  - Option A (distro packages, if available):
+    - `sudo dnf install -y docker docker-compose-plugin`
+  - Option B (Docker CE from Docker’s repo):
+    - `sudo dnf install -y dnf-plugins-core`
+    - `sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo`
+    - `sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin`
+
+- Post-install:
+  - `sudo systemctl enable --now docker`
+  - `sudo usermod -aG docker "$USER"` (then log out/in so `docker` works without sudo)
 
 ### Optional (only if running services outside Docker)
 
@@ -87,7 +115,7 @@ Common settings:
 
 ## Discovery requirements (network scanning)
 
-The discovery worker can do ARP/ICMP/SNMP and optional port scanning. In Docker, discovery fidelity depends on container networking and privileges (e.g. `CAP_NET_RAW` and/or host networking on Linux). See `docs/discovery-deployment.md` before enabling scanning in production.
+The discovery worker can do ARP/ICMP/SNMP and optional port scanning. In Docker, discovery fidelity depends on container networking and privileges (e.g. `CAP_NET_RAW` and/or host networking on Linux). See [docs/discovery-capabilities.md](docs/discovery-capabilities.md) (what works where) and [docs/discovery-deployment.md](docs/discovery-deployment.md) (deployment patterns) before enabling scanning in production.
 
 ## Health checks
 
@@ -166,13 +194,50 @@ The UI enforces authentication before proxying any `/api/...` requests to `core-
 
 This is optional; the supported “it just works” path is `docker compose up --build`.
 
-- `core-go`:
-  - Requires `DATABASE_URL` (example: `postgres://postgres:postgres@localhost:5432/roller_hoops?sslmode=disable`)
-  - Run: `cd core-go && go run ./cmd/core-go` (uses `HTTP_ADDR` default `:8081`)
-- `ui-node`:
-  - Install deps: `cd ui-node && npm ci`
-  - Run: `cd ui-node && npm run dev` (serves on `http://localhost:3000`)
-  - Set `CORE_GO_BASE_URL=http://localhost:8081` if you’re not running behind Traefik
+Prereqs:
+
+- Go `1.24.x` (for `core-go/`)
+- Node.js `20.x` + npm (for `ui-node/`)
+- PostgreSQL `15+` running locally
+
+### 1) Database (PostgreSQL)
+
+Create a database and a user/password, then set a `DATABASE_URL` that uses TCP (host `localhost`), for example:
+
+- `postgres://roller:roller@localhost:5432/roller_hoops?sslmode=disable`
+
+(Debian/Ubuntu example)
+
+- Install + start: `sudo apt-get update && sudo apt-get install -y postgresql`
+- Create user + DB:
+  - `sudo -u postgres createuser -P roller`
+  - `sudo -u postgres createdb -O roller roller_hoops`
+
+### 2) Migrations
+
+In Docker, migrations run via the `migrate` container. Locally, use the `migrate` CLI (golang-migrate):
+
+- Install (requires Go toolchain): `go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.17.1`
+- Apply: `migrate -path core-go/migrations -database "$DATABASE_URL" up`
+
+### 3) Run `core-go`
+
+- `export DATABASE_URL='postgres://roller:roller@localhost:5432/roller_hoops?sslmode=disable'`
+- `cd core-go && go run ./cmd/core-go` (serves on `http://localhost:8081`)
+- Health:
+  - `curl http://localhost:8081/healthz`
+  - `curl http://localhost:8081/readyz`
+
+### 4) Run `ui-node`
+
+- `cd ui-node && npm ci`
+- Create `ui-node/.env.local`:
+  - `CORE_GO_BASE_URL=http://localhost:8081`
+  - `AUTH_USERS=admin:admin:admin`
+  - `AUTH_SESSION_SECRET=dev-session-secret`
+- Run:
+  - Dev: `npm run dev` (serves on `http://localhost:3000`)
+  - Prod: `npm run build && npm start` (serves on `http://localhost:3000`)
 
 ## Docs
 

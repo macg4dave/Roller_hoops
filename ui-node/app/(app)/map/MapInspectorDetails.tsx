@@ -58,7 +58,7 @@ function resolveCrossLayerFocus(
   if (!focus) {
     return undefined;
   }
-  const supported = LAYER_FOCUS_SUPPORT[layer] ?? [];
+  const supported: readonly MapFocusType[] = LAYER_FOCUS_SUPPORT[layer] ?? [];
   return supported.includes(focus.type) ? focus : undefined;
 }
 
