@@ -4,7 +4,7 @@ Self-hosted network tracker / mapper (Go + Node.js + PostgreSQL), fully containe
 
 ## Requirements
 
-- **Recommended (no local toolchains):** Docker + Docker Compose v2 (`docker compose ...`)
+- **Recommended (no local toolchains):** Docker + Docker Compose (`docker compose ...`)
 - **Also supported:** run the stack locally without Docker (see [Running locally (no Docker)](#running-locally-no-docker))
 - Host port `80/tcp` available (Traefik binds `80:80`; change `docker-compose.yml` if you want a different host port)
 
@@ -65,9 +65,9 @@ If you want to build/test outside Docker on Ubuntu/Debian:
 
 ## Quickstart (dev)
 
-- Start the full stack: `docker compose up --build`
-- If you get `permission denied while trying to connect to the Docker daemon socket`, run `sudo docker compose up --build` (or add your user to the `docker` group and log out/in).
-- Optional: copy `.env.example` to `.env` to override local settings like `POSTGRES_PASSWORD`.
+- Start the full stack: `docker compose up --build` (or `sudo docker compose up --build` if your user can’t access the Docker socket).
+- If you use `sudo` for `docker compose`, you’ll also need it for `docker compose logs`, `docker compose down`, etc.
+- Optional: copy `.env.example` to `.env` to override local settings like `POSTGRES_PASSWORD`, `AUTH_USERS`, and `DISCOVERY_DEFAULT_SCOPE`.
 - Open the UI: <http://localhost/>
 - Sign in: <http://localhost/auth/login> (example users live in `.env.example` via `AUTH_USERS`)
 - Default quickstart credentials: `admin` / `admin` (also configured in `.env.example`).
@@ -126,6 +126,7 @@ The discovery worker can do ARP/ICMP/SNMP and optional port scanning. In Docker,
 - The default `docker compose up` stack runs `core-go` on a Docker bridge network. It can reach L3 targets, but it cannot see the host ARP cache, so ARP-based discovery will mostly only see the Docker network unless you change the deployment model.
 - For Linux-only host-network discovery (higher fidelity ARP/ICMP), use the provided override:
   - `sudo docker compose -f docker-compose.yml -f docker-compose.hostnet.yml up --build`
+  - Recommended safety: `CORE_GO_HTTP_ADDR=127.0.0.1:8081 sudo docker compose -f docker-compose.yml -f docker-compose.hostnet.yml up --build` (keeps the unauthenticated Go API bound to loopback)
 
 Discovery runs are scoped. The UI can suggest scopes based on the scanner’s local interfaces; you can also set `DISCOVERY_DEFAULT_SCOPE` to provide a default CIDR/IP when a run omits `scope`.
 

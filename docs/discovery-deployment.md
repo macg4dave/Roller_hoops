@@ -49,6 +49,7 @@ Compose example (local dev):
 
 - `docker-compose.hostnet.yml` shows a working “host network” pattern for Linux.
 - Bring it up with: `sudo docker compose -f docker-compose.yml -f docker-compose.hostnet.yml up --build`
+- Recommended safety: set `CORE_GO_HTTP_ADDR=127.0.0.1:8081` so the unauthenticated Go API binds only to loopback.
 
 ### Option B — “Dedicated scanner container / sidecar” (recommended for production)
 

@@ -24,7 +24,7 @@ A **self-hosted network tracker / mapper** that:
 
 ### Infrastructure
 
-* **Docker + Docker Compose v2**
+* **Docker + Docker Compose**
 * **Reverse proxy**: Traefik
 * **Database**: PostgreSQL (only)
 * **Auth**: built-in (handled by UI; Go stays headless)
