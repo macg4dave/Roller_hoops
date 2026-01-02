@@ -43,7 +43,7 @@ describe('DiscoveryRunList', () => {
             id: 'run-1',
             status: 'succeeded',
             scope: '10.0.0.0/24',
-            stats: { stage: 'completed', preset: 'fast' },
+            stats: { stage: 'completed', preset: 'fast', tags: ['ports', 'snmp'] },
             started_at: '2025-12-15T00:00:00.000Z',
             completed_at: '2025-12-15T00:01:00.000Z',
             last_error: null
@@ -77,7 +77,7 @@ describe('DiscoveryRunList', () => {
     renderWithClient(<DiscoveryRunList limit={1} />);
 
     expect(await screen.findByText(/run-1/)).toBeInTheDocument();
-    expect(screen.getByText('Scope: 10.0.0.0/24 • Preset: Fast')).toBeInTheDocument();
+    expect(screen.getByText('Scope: 10.0.0.0/24 • Preset: Fast • Tags: Ports (nmap), SNMP')).toBeInTheDocument();
 
     const loadMore = screen.getByRole('button', { name: /load more runs/i });
     fireEvent.click(loadMore);

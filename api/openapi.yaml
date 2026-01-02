@@ -291,6 +291,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/DiscoveryStatus'
 
+  /v1/discovery/scope-suggestions:
+    get:
+      tags: [Discovery]
+      summary: Suggest local interface scopes
+      responses:
+        '200':
+          description: Scope suggestions derived from local interfaces
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryScopeSuggestions'
+
   /v1/discovery/runs:
     get:
       tags: [Discovery]
@@ -1200,9 +1212,35 @@ components:
           type: string
           enum: [fast, normal, deep]
           description: Scan preset controlling runtime budget and enrichment depth.
+        tags:
+          type: array
+          description: Optional scan tags that enable specific behaviors (ports, snmp, topology, names).
+          items:
+            type: string
+            enum: [ports, snmp, topology, names]
         scope:
           type: string
           description: Optional scope hint for the discovery engine.
+    DiscoveryScopeSuggestion:
+      type: object
+      required: [scope]
+      properties:
+        scope:
+          type: string
+        interface:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+    DiscoveryScopeSuggestions:
+      type: object
+      required: [scopes]
+      properties:
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiscoveryScopeSuggestion'
     DiscoveryRun:
       type: object
       required: [id, status, started_at]

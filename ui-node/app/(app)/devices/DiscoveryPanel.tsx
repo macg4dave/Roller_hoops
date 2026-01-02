@@ -19,6 +19,7 @@ import { Alert } from '../../_components/ui/Alert';
 import { getDiscoveryStatusBadgeTone } from '../discovery/status';
 import { ConfirmDialog } from '../../_components/ui/ConfirmDialog';
 import { getScanPresetLabel, SCAN_PRESET_OPTIONS } from '../discovery/presets';
+import { formatScanTags, normalizeScanTags, SCAN_TAG_OPTIONS, type ScanTag } from '../discovery/tags';
 
 type Props = {
   status: DiscoveryStatus;
@@ -59,6 +60,18 @@ export function DiscoveryPanel({ status, readOnly = false }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const bypassConfirmRef = useRef(false);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const initialRun = status.latest_run ?? undefined;
+  const initialTags = useMemo(() => {
+    const rawStats = initialRun?.stats;
+    const rawTags =
+      rawStats && typeof rawStats === 'object' ? (rawStats as Record<string, unknown>).tags : undefined;
+    if (!Array.isArray(rawTags)) {
+      return [] as ScanTag[];
+    }
+    return normalizeScanTags(rawTags as FormDataEntryValue[]);
+  }, [initialRun?.stats]);
+  const [scopeValue, setScopeValue] = useState(() => (typeof initialRun?.scope === 'string' ? initialRun.scope : ''));
+  const [selectedTags, setSelectedTags] = useState<ScanTag[]>(() => initialTags);
 
   const statusQuery = useQuery({
     queryKey: ['discovery-status'],
@@ -86,10 +99,32 @@ export function DiscoveryPanel({ status, readOnly = false }: Props) {
     refetchIntervalInBackground: false
   });
 
+  const scopeSuggestionsQuery = useQuery({
+    queryKey: ['discovery-scope-suggestions'],
+    queryFn: async ({ signal }) => {
+      const res = await api.GET('/v1/discovery/scope-suggestions', {
+        signal,
+        headers: {
+          'X-Request-ID': globalThis.crypto?.randomUUID?.()
+        }
+      });
+      if (res.error) {
+        throw new Error('Failed to fetch scope suggestions.');
+      }
+      return (res.data ?? { scopes: [] }) as { scopes: Array<{ scope: string; interface?: string | null; address?: string | null }> };
+    },
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false
+  });
+
   const latest = statusQuery.data.latest_run ?? undefined;
   const latestPreset = latest?.stats && typeof latest.stats === 'object'
     ? (latest.stats as Record<string, unknown>).preset
     : undefined;
+  const latestTags = latest?.stats && typeof latest.stats === 'object'
+    ? (latest.stats as Record<string, unknown>).tags
+    : undefined;
+  const latestTagLabel = formatScanTags(latestTags);
   const defaultPreset = typeof latestPreset === 'string' && ['fast', 'normal', 'deep'].includes(latestPreset.trim().toLowerCase())
     ? latestPreset.trim().toLowerCase()
     : 'normal';
@@ -97,6 +132,8 @@ export function DiscoveryPanel({ status, readOnly = false }: Props) {
   const inProgress = liveStatus.status === 'queued' || liveStatus.status === 'running';
   const canTrigger = !readOnly;
   const confirmNeeded = canTrigger && inProgress;
+
+  const scopeSuggestions = scopeSuggestionsQuery.data?.scopes ?? [];
 
   const progressLabel = useMemo(() => {
     if (!latest) return null;
@@ -109,6 +146,27 @@ export function DiscoveryPanel({ status, readOnly = false }: Props) {
     const prefix = latest.completed_at ? 'Duration' : 'Elapsed';
     return `${prefix}: ${formatDurationMs(elapsed)}`;
   }, [latest]);
+
+  const latestSummary = useMemo(() => {
+    const stats = latest?.stats;
+    if (!stats || typeof stats !== 'object') {
+      return null;
+    }
+    const record = stats as Record<string, unknown>;
+    const stage = typeof record.stage === 'string' ? record.stage : '';
+    if (stage !== 'completed') {
+      return null;
+    }
+    const seen = typeof record.devices_seen === 'number' ? record.devices_seen : null;
+    const created = typeof record.devices_created === 'number' ? record.devices_created : null;
+    const arpEntries = typeof record.arp_entries === 'number' ? record.arp_entries : null;
+    const parts = [
+      seen !== null ? `Devices seen: ${seen}` : null,
+      created !== null ? `Created: ${created}` : null,
+      arpEntries !== null ? `ARP entries: ${arpEntries}` : null
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(' • ') : null;
+  }, [latest?.stats]);
 
   useEffect(() => {
     if (state.status === 'success') {
@@ -147,6 +205,7 @@ export function DiscoveryPanel({ status, readOnly = false }: Props) {
                 <Badge tone={badgeTone}>{liveStatus.status}</Badge>
                 {latest?.scope ? <span className="hint">Scope: {latest.scope}</span> : null}
                 {latestPreset ? <span className="hint">Preset: {getScanPresetLabel(latestPreset)}</span> : null}
+                {latestTagLabel ? <span className="hint">Tags: {latestTagLabel}</span> : null}
               </div>
 
               <div className="hint" aria-live="polite">
@@ -168,6 +227,7 @@ export function DiscoveryPanel({ status, readOnly = false }: Props) {
               )}
 
               {progressLabel ? <div className="hint">{progressLabel}</div> : null}
+              {latestSummary ? <div className="hint">{latestSummary}</div> : null}
 
               {inProgress ? (
                 <div className="stack" style={{ gap: 6 }}>
@@ -185,6 +245,10 @@ export function DiscoveryPanel({ status, readOnly = false }: Props) {
               className="stack"
               style={{ gap: 8, justifyItems: 'end' }}
             >
+              {selectedTags.map((tag) => (
+                <input key={tag} type="hidden" name="tags" value={tag} />
+              ))}
+
               <Field>
                 <Label htmlFor="preset">Preset</Label>
                 <Select id="preset" name="preset" defaultValue={defaultPreset} disabled={readOnly}>
@@ -198,15 +262,72 @@ export function DiscoveryPanel({ status, readOnly = false }: Props) {
                   {SCAN_PRESET_OPTIONS.map((opt) => `${opt.label}: ${opt.description}`).join(' ')}
                 </Hint>
               </Field>
+
+              <details className="hint" style={{ marginTop: 4 }}>
+                <summary style={{ cursor: 'pointer', fontWeight: 750 }}>Advanced: scan tags</summary>
+                <div style={{ marginTop: 8 }}>
+                  <Field>
+                    <Label>Tags (optional)</Label>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {SCAN_TAG_OPTIONS.map((opt) => {
+                        const active = selectedTags.includes(opt.value);
+                        return (
+                          <Button
+                            key={opt.value}
+                            type="button"
+                            className={`btnPill${active ? ' btnPillActive' : ''}`}
+                            aria-pressed={active}
+                            onClick={() => {
+                              setSelectedTags((prev) => {
+                                if (prev.includes(opt.value)) {
+                                  return prev.filter((t) => t !== opt.value);
+                                }
+                                return [...prev, opt.value];
+                              });
+                            }}
+                          >
+                            {opt.label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    <Hint>{SCAN_TAG_OPTIONS.map((opt) => `${opt.label}: ${opt.description}`).join(' ')}</Hint>
+                  </Field>
+                </div>
+              </details>
+
               <Field>
                 <Label htmlFor="scope">Scope (optional)</Label>
                 <Input
                   id="scope"
                   name="scope"
                   placeholder="e.g. 10.0.0.0/24"
+                  value={scopeValue}
+                  onChange={(event) => setScopeValue(event.target.value)}
                   disabled={readOnly}
                 />
-                <Hint>Leave blank to run with the default scope. While a run is active, a new trigger will queue another run.</Hint>
+                {scopeSuggestions.length > 0 ? (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                    {scopeSuggestions.slice(0, 8).map((suggestion) => {
+                      const label = suggestion.interface ? `${suggestion.scope} (${suggestion.interface})` : suggestion.scope;
+                      const active = scopeValue.trim() === suggestion.scope;
+                      return (
+                        <Button
+                          key={`${suggestion.scope}:${suggestion.interface ?? ''}`}
+                          type="button"
+                          className={`btnPill${active ? ' btnPillActive' : ''}`}
+                          onClick={() => setScopeValue(suggestion.scope)}
+                        >
+                          {label}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+                <Hint>
+                  Leave blank to run with the default scope. Suggestions come from the scanner’s local interfaces—pick one you can route to.
+                  While a run is active, a new trigger will queue another run.
+                </Hint>
               </Field>
               <Button type="submit" variant="primary" disabled={readOnly}>
                 Trigger discovery

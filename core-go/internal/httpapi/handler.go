@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/netip"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -136,6 +138,7 @@ func (h *Handler) Router() http.Handler {
 			r.Route("/discovery", func(r chi.Router) {
 				r.Post("/run", h.handleDiscoveryRun)
 				r.Get("/status", h.handleDiscoveryStatus)
+				r.Get("/scope-suggestions", h.handleDiscoveryScopeSuggestions)
 				r.Route("/runs", func(r chi.Router) {
 					r.Get("/", h.handleListDiscoveryRuns)
 					r.Route("/{id}", func(r chi.Router) {
@@ -613,8 +616,9 @@ type discoveryStatus struct {
 }
 
 type discoveryRunRequest struct {
-	Scope  *string `json:"scope,omitempty"`
-	Preset *string `json:"preset,omitempty"`
+	Scope  *string  `json:"scope,omitempty"`
+	Preset *string  `json:"preset,omitempty"`
+	Tags   []string `json:"tags,omitempty"`
 }
 
 func (h *Handler) ensureDiscoveryQueries(w http.ResponseWriter) bool {
@@ -694,6 +698,50 @@ func validateScanPreset(preset *string) (*string, error) {
 	default:
 		return nil, fmt.Errorf("preset must be one of: fast, normal, deep")
 	}
+}
+
+var allowedScanTags = map[string]struct{}{
+	"ports":    {},
+	"snmp":     {},
+	"topology": {},
+	"names":    {},
+}
+
+func normalizeScanTags(tags []string) []string {
+	if len(tags) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(tags))
+	seen := make(map[string]struct{}, len(tags))
+	for _, raw := range tags {
+		s := strings.ToLower(strings.TrimSpace(raw))
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
+}
+
+func validateScanTags(tags []string) ([]string, error) {
+	tags = normalizeScanTags(tags)
+	if len(tags) == 0 {
+		return nil, nil
+	}
+	if len(tags) > 8 {
+		return nil, fmt.Errorf("too many tags (max 8)")
+	}
+	for _, tag := range tags {
+		if _, ok := allowedScanTags[tag]; !ok {
+			return nil, fmt.Errorf("unknown tag %q", tag)
+		}
+	}
+	sort.Strings(tags)
+	return tags, nil
 }
 
 func isInvalidUUID(err error) bool {
@@ -1683,10 +1731,21 @@ func (h *Handler) handleDiscoveryRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	req.Tags, err = validateScanTags(req.Tags)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "validation_failed", "invalid scan tags", map[string]any{"error": err.Error()})
+		return
+	}
+
+	stats := map[string]any{"stage": "queued", "preset": *req.Preset}
+	if len(req.Tags) > 0 {
+		stats["tags"] = req.Tags
+	}
+
 	run, err := h.discovery.InsertDiscoveryRun(r.Context(), sqlcgen.InsertDiscoveryRunParams{
 		Status: "queued",
 		Scope:  req.Scope,
-		Stats:  map[string]any{"stage": "queued", "preset": *req.Preset},
+		Stats:  stats,
 	})
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to create discovery run")
@@ -1719,6 +1778,98 @@ func (h *Handler) handleDiscoveryStatus(w http.ResponseWriter, r *http.Request) 
 		Status:    run.Status,
 		LatestRun: &latest,
 	})
+}
+
+type discoveryScopeSuggestion struct {
+	Scope     string  `json:"scope"`
+	Interface *string `json:"interface,omitempty"`
+	Address   *string `json:"address,omitempty"`
+}
+
+type discoveryScopeSuggestionsResponse struct {
+	Scopes []discoveryScopeSuggestion `json:"scopes"`
+}
+
+func (h *Handler) handleDiscoveryScopeSuggestions(w http.ResponseWriter, r *http.Request) {
+	suggestions := buildDiscoveryScopeSuggestions()
+	h.writeJSON(w, http.StatusOK, discoveryScopeSuggestionsResponse{Scopes: suggestions})
+}
+
+func buildDiscoveryScopeSuggestions() []discoveryScopeSuggestion {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+
+	seen := make(map[string]discoveryScopeSuggestion)
+	for _, iface := range ifaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		ifaceName := strings.TrimSpace(iface.Name)
+		if ifaceName == "" {
+			ifaceName = "interface"
+		}
+
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if !ok || ipNet == nil {
+				continue
+			}
+			ip := ipNet.IP
+			if ip == nil {
+				continue
+			}
+
+			netIP := ip
+			if v4 := ip.To4(); v4 != nil {
+				netIP = v4
+			}
+			netipAddr, ok := netip.AddrFromSlice(netIP)
+			if !ok {
+				continue
+			}
+			netipAddr = netipAddr.Unmap()
+			if netipAddr.IsLoopback() || netipAddr.IsUnspecified() || netipAddr.IsLinkLocalUnicast() {
+				continue
+			}
+
+			ones, bits := ipNet.Mask.Size()
+			if ones <= 0 || bits <= 0 {
+				continue
+			}
+			prefix := netip.PrefixFrom(netipAddr, ones).Masked()
+			scope := prefix.String()
+
+			if scope == "" {
+				continue
+			}
+
+			if _, exists := seen[scope]; exists {
+				continue
+			}
+
+			ifaceCopy := ifaceName
+			ipStr := netipAddr.String()
+			ipCopy := ipStr
+			seen[scope] = discoveryScopeSuggestion{
+				Scope:     scope,
+				Interface: &ifaceCopy,
+				Address:   &ipCopy,
+			}
+		}
+	}
+
+	out := make([]discoveryScopeSuggestion, 0, len(seen))
+	for _, entry := range seen {
+		out = append(out, entry)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Scope < out[j].Scope
+	})
+	return out
 }
 
 func (h *Handler) handleListDiscoveryRuns(w http.ResponseWriter, r *http.Request) {

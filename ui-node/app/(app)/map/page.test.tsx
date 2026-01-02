@@ -125,10 +125,10 @@ describe('MapPage URL contract', () => {
     });
     renderWithClient(ui);
 
-    expect(screen.getByText('Pinned')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Unpin' }));
-    expect(screen.getByText('Live')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /pin focus/i })).toBeInTheDocument();
+    expect(screen.getByText(/live updates paused/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Enable live' }));
+    expect(screen.getByText(/live updates enabled/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pause live' })).toBeInTheDocument();
   });
 
   test('warns when focusType is unknown', async () => {

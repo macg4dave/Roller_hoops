@@ -4,6 +4,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, test } from 'vitest';
 
 import { MapCanvas } from './MapCanvas';
+import { MapLayoutProvider } from './MapLayoutContext';
 import { MapSelectionProvider } from './MapSelectionContext';
 
 import type { components } from '@/lib/api-types';
@@ -46,7 +47,9 @@ describe('MapCanvas', () => {
 
     render(
       <MapSelectionProvider>
-        <MapCanvas projection={projection} activeLayerId="l3" currentParams="layer=l3&focusType=device&focusId=device-a" />
+        <MapLayoutProvider>
+          <MapCanvas projection={projection} activeLayerId="l3" currentParams="layer=l3&focusType=device&focusId=device-a" />
+        </MapLayoutProvider>
       </MapSelectionProvider>
     );
 
@@ -103,7 +106,13 @@ describe('MapCanvas', () => {
 
     render(
       <MapSelectionProvider>
-        <MapCanvas projection={projection} activeLayerId="physical" currentParams="layer=physical&focusType=device&focusId=device-a" />
+        <MapLayoutProvider>
+          <MapCanvas
+            projection={projection}
+            activeLayerId="physical"
+            currentParams="layer=physical&focusType=device&focusId=device-a"
+          />
+        </MapLayoutProvider>
       </MapSelectionProvider>
     );
 

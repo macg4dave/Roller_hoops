@@ -21,8 +21,8 @@ This file is the project’s **lightweight issue log**. It’s intentionally Mar
 | ID | Title | Status | Area | Severity | Last updated |
 |---|---|---|---|---|---|
 | ISS-001 | Network discovery doesn’t scan outside Docker | open | core-go/discovery | high | 2025-12-15 |
-| ISS-002 | Map view UX clutter; needs auto-layout | open | ui-node/map | medium | 2026-01-02 |
-| ISS-003 | Discovery UX needs presets + automation | open | ui-node/discovery | high | 2026-01-02 |
+| ISS-002 | Map view UX clutter; needs auto-layout | fixed | ui-node/map | medium | 2026-01-02 |
+| ISS-003 | Discovery UX needs presets + automation | fixed | ui-node/discovery | high | 2026-01-02 |
 | ISS-004 | Device naming is low-quality/inconsistent | open | core-go/enrichment | medium | 2026-01-02 |
 | ISS-005 | Devices should be auto-classified + tagged | open | core-go/enrichment | medium | 2026-01-02 |
 | ISS-006 | Devices page layout wastes space; lacks detail | open | ui-node/devices | medium | 2026-01-02 |
@@ -108,13 +108,15 @@ The network “map” view is hard to use: too many controls for the current sco
 
 ### Next actions
 
-- [ ] Decide the MVP control set (keep/remove candidates).
-- [ ] Add an “Auto layout” action (and/or auto-run on load with a safe debounce).
+- [x] Decide the MVP control set (keep/remove candidates).
+- [x] Add an “Auto layout” action (and/or auto-run on load with a safe debounce).
 - [ ] Capture a screenshot + list of controls that should be removed/hidden behind “Advanced”.
 
 ### Fix reference
 
-- _Not fixed yet._
+- `ui-node/app/(app)/map/page.tsx` removes mode bar (less clutter).
+- `ui-node/app/(app)/map/MapPollingControls.tsx` adds `Auto layout` + simplifies live update controls.
+- `ui-node/app/(app)/map/MapCanvas.tsx` sorts and auto-arranges on load/update (debounced).
 
 ---
 
@@ -138,12 +140,15 @@ Discovery is not working well in practice: it needs more “auto-search” behav
 ### Next actions
 
 - [x] Define initial presets and map each to concrete scan settings (UI preset + `preset` request field; stored in run stats).
-- [ ] Decide where “tags” live (config file vs DB vs UI-only constants).
-- [ ] Add basic guidance text in the UI for what each preset/tag changes.
+- [x] Decide where “tags” live (config file vs DB vs UI-only constants).
+- [x] Add basic guidance text in the UI for what each preset/tag changes.
 
 ### Fix reference
 
-- _Not fixed yet._
+- `ui-node/app/(app)/devices/DiscoveryPanel.tsx` adds scan tags + scope suggestions + clearer guidance.
+- `ui-node/app/(app)/discovery/tags.ts` defines initial tag set + formatting.
+- `core-go/internal/httpapi/handler.go` accepts `tags` and serves `/api/v1/discovery/scope-suggestions`.
+- `core-go/internal/discoveryworker/tags.go` applies tags to per-run behavior.
 
 ---
 

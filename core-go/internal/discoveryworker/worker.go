@@ -295,6 +295,13 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 	restorePreset := applyScanPreset(w, preset)
 	defer restorePreset()
 
+	var tags []string
+	if run.Stats != nil {
+		tags = canonicalizeScanTags(run.Stats["tags"])
+	}
+	restoreTags := applyScanTags(w, tags)
+	defer restoreTags()
+
 	// Execute (ARP scrape to seed IP/MAC facts; other methods are Phase 8+).
 	execCtx, cancel := context.WithTimeout(ctx, w.maxRuntime)
 	defer cancel()
@@ -315,6 +322,16 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 		w.log.Warn().Err(err).Str("run_id", run.ID).Msg("failed to write preset log")
 	}
 
+	if len(tags) > 0 {
+		if err := w.q.InsertDiscoveryRunLog(execCtx, sqlcgen.InsertDiscoveryRunLogParams{
+			RunID:   run.ID,
+			Level:   "info",
+			Message: fmt.Sprintf("scan tags: %s", strings.Join(tags, ", ")),
+		}); err != nil {
+			w.log.Warn().Err(err).Str("run_id", run.ID).Msg("failed to write tags log")
+		}
+	}
+
 	if w.runDelay > 0 {
 		t := time.NewTimer(w.runDelay)
 		select {
@@ -323,6 +340,7 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 			_ = w.failRun(execCtx, run.ID, execCtx.Err().Error(), map[string]any{
 				"stage": "failed",
 				"scope": safeScopeString(run.Scope),
+				"tags":  tags,
 			})
 			return true, execCtx.Err()
 		case <-t.C:
@@ -339,6 +357,7 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 		_ = w.failRun(execCtx, run.ID, "invalid discovery scope", map[string]any{
 			"stage": "failed",
 			"scope": safeScopeString(run.Scope),
+			"tags":  tags,
 		})
 		return true, err
 	}
@@ -355,6 +374,7 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 			_ = w.failRun(execCtx, run.ID, err.Error(), map[string]any{
 				"stage":       "failed",
 				"scope":       scopePrefix.String(),
+				"tags":        tags,
 				"max_targets": w.maxTargets,
 			})
 			return true, err
@@ -373,6 +393,7 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 			_ = w.failRun(execCtx, run.ID, pingErr.Error(), map[string]any{
 				"stage": "failed",
 				"scope": scopePrefix.String(),
+				"tags":  tags,
 			})
 			return true, pingErr
 		}
@@ -390,6 +411,7 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 		_ = w.failRun(execCtx, run.ID, err.Error(), map[string]any{
 			"stage": "failed",
 			"scope": scopePrefixOrNil(scopePrefix),
+			"tags":  tags,
 		})
 		return true, err
 	}
@@ -440,6 +462,9 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 	if portScanStats != nil {
 		stats["port_scan"] = portScanStats
 	}
+	if len(tags) > 0 {
+		stats["tags"] = tags
+	}
 	if _, err := w.q.UpdateDiscoveryRun(execCtx, sqlcgen.UpdateDiscoveryRunParams{
 		ID:          run.ID,
 		Status:      "succeeded",
@@ -453,6 +478,7 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 		_ = w.failRun(execCtx, run.ID, msg, map[string]any{
 			"stage": "failed",
 			"scope": scopePrefixOrNil(scopePrefix),
+			"tags":  tags,
 		})
 		return true, err
 	}

@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Alert } from '@/app/_components/ui/Alert';
 import { Button } from '@/app/_components/ui/Button';
 import type { components } from '@/lib/api-types';
 
+import { useMapLayout } from './MapLayoutContext';
 import { useMapSelection } from './MapSelectionContext';
 import { useOptionalMapProjection } from './MapProjectionContext';
 
@@ -52,6 +53,10 @@ function resolveNodeTitle(node: MapNode): string {
     return label;
   }
   return node.id;
+}
+
+function compareStrings(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
 }
 
 function resolveNodeHoverTitle(node: MapNode): string {
@@ -113,13 +118,23 @@ export function MapCanvas({
 }) {
   const { selection, setSelection, clearSelection } = useMapSelection();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const { autoLayoutToken } = useMapLayout();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const projectionChangeLayoutTimer = useRef<number | null>(null);
   const projectionContext = useOptionalMapProjection();
   const projection = projectionContext?.projection ?? projectionProp;
 
   const paramsBase = useMemo(() => new URLSearchParams(currentParams), [currentParams]);
 
-  const regions = projection.regions ?? [];
-  const nodes = projection.nodes ?? [];
+  const regions = useMemo(() => {
+    const list = projection.regions ?? [];
+    return [...list].sort((a, b) => compareStrings(resolveRegionTitle(a), resolveRegionTitle(b)));
+  }, [projection.regions]);
+
+  const nodes = useMemo(() => {
+    const list = projection.nodes ?? [];
+    return [...list].sort((a, b) => compareStrings(resolveNodeTitle(a), resolveNodeTitle(b)));
+  }, [projection.nodes]);
 
   const regionById = useMemo(() => {
     const map = new Map<string, MapRegion>();
@@ -274,8 +289,36 @@ export function MapCanvas({
 
   const focusId = projection.focus?.id;
 
+  const applyAutoLayout = useCallback(() => {
+    setExpanded({});
+    const container = rootRef.current?.closest('.mapCanvasBody') as HTMLElement | null;
+    if (container && typeof container.scrollTo === 'function') {
+      container.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
+
+  useEffect(() => {
+    applyAutoLayout();
+  }, [autoLayoutToken, applyAutoLayout]);
+
+  useEffect(() => {
+    if (projectionChangeLayoutTimer.current !== null) {
+      window.clearTimeout(projectionChangeLayoutTimer.current);
+    }
+    projectionChangeLayoutTimer.current = window.setTimeout(() => {
+      applyAutoLayout();
+    }, 200);
+
+    return () => {
+      if (projectionChangeLayoutTimer.current !== null) {
+        window.clearTimeout(projectionChangeLayoutTimer.current);
+      }
+      projectionChangeLayoutTimer.current = null;
+    };
+  }, [projection.layer, projection.focus?.type, projection.focus?.id, applyAutoLayout]);
+
   return (
-    <div className="mapCanvasInner">
+    <div className="mapCanvasInner" ref={rootRef}>
       {projection.guidance ? <Alert tone="info">{projection.guidance}</Alert> : null}
       {truncationWarnings.length > 0 ? (
         <div className="mapCanvasWarnings">
