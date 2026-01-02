@@ -4,8 +4,35 @@ Self-hosted network tracker / mapper (Go + Node.js + PostgreSQL), fully containe
 
 ## Requirements
 
-- Docker + Docker Compose v2 (`docker compose ...`)
-- Port `80` available on the host (Traefik binds `80:80`)
+- **Recommended (no local toolchains):** Docker + Docker Compose v2 (`docker compose ...`)
+- Host port `80/tcp` available (Traefik binds `80:80`; change `docker-compose.yml` if you want a different host port)
+
+### Installing prerequisites (Ubuntu/Debian examples)
+
+These are “good enough to get started” commands. For production, pin versions and follow your distro’s Docker/Postgres guidance.
+
+- Base tools:
+  - `sudo apt update`
+  - `sudo apt install -y git ca-certificates curl`
+- Docker engine + Compose plugin:
+  - `sudo apt install -y docker.io docker-compose-plugin`
+  - `sudo usermod -aG docker "$USER"` (then log out/in so `docker` works without sudo)
+  - `sudo systemctl enable --now docker`
+
+### Optional (only if running services outside Docker)
+
+- Go `1.24.x` (for `core-go/`)
+- Node.js `20.x` + npm (for `ui-node/`)
+- PostgreSQL `16.x` (if you don’t use the Compose `db` service)
+
+If you want to build/test outside Docker on Ubuntu/Debian:
+
+- Go (the repo uses `go 1.24.x`): install via your preferred version manager (asdf/gimme) or the official tarball (apt’s `golang-go` is often older).
+- Node.js 20:
+  - `sudo apt install -y nodejs npm` (may be older; for Node 20, use NodeSource or a version manager like nvm/asdf)
+- PostgreSQL 16 client/server (optional):
+  - `sudo apt install -y postgresql-client`
+  - `sudo apt install -y postgresql` (if you want a local server instead of Compose)
 
 ## Quickstart (dev)
 
@@ -45,6 +72,22 @@ Self-hosted network tracker / mapper (Go + Node.js + PostgreSQL), fully containe
   - `core-go:8081` (API + `/metrics`)
   - `ui-node:3000` (Next.js server)
   - `db:5432` (Postgres)
+
+## Configuration (.env)
+
+Compose reads environment variables from `.env` (gitignored). Start with:
+
+- `cp .env.example .env`
+
+Common settings:
+
+- `POSTGRES_PASSWORD`: password for the Compose `db` container (dev default is `postgres`)
+- `AUTH_USERS`: comma-separated `username:password:role` entries (example in `.env.example`)
+- `AUTH_SESSION_SECRET`: HMAC secret for the `roller_session` cookie (set a real value for production)
+
+## Discovery requirements (network scanning)
+
+The discovery worker can do ARP/ICMP/SNMP and optional port scanning. In Docker, discovery fidelity depends on container networking and privileges (e.g. `CAP_NET_RAW` and/or host networking on Linux). See `docs/discovery-deployment.md` before enabling scanning in production.
 
 ## Health checks
 
@@ -118,6 +161,18 @@ The UI enforces authentication before proxying any `/api/...` requests to `core-
 
 - Configure users via `AUTH_USERS` (format: `username:password:role`).
 - Optional: set `AUTH_USERS_FILE` to a writable path to enable password changes and admin resets via the `/auth/account` page.
+
+## Building and running without Docker (advanced)
+
+This is optional; the supported “it just works” path is `docker compose up --build`.
+
+- `core-go`:
+  - Requires `DATABASE_URL` (example: `postgres://postgres:postgres@localhost:5432/roller_hoops?sslmode=disable`)
+  - Run: `cd core-go && go run ./cmd/core-go` (uses `HTTP_ADDR` default `:8081`)
+- `ui-node`:
+  - Install deps: `cd ui-node && npm ci`
+  - Run: `cd ui-node && npm run dev` (serves on `http://localhost:3000`)
+  - Set `CORE_GO_BASE_URL=http://localhost:8081` if you’re not running behind Traefik
 
 ## Docs
 
