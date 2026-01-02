@@ -7,17 +7,16 @@ import { Alert } from '@/app/_components/ui/Alert';
 import { Button } from '@/app/_components/ui/Button';
 import type { components } from '@/lib/api-types';
 
+import { useMapSelection } from './MapSelectionContext';
+
 type MapLayer = components['schemas']['MapLayer'];
 type MapFocusType = components['schemas']['MapFocusType'];
 type MapProjection = components['schemas']['MapProjection'];
 type MapRegion = components['schemas']['MapRegion'];
 type MapNode = components['schemas']['MapNode'];
+type MapEdge = components['schemas']['MapEdge'];
 
-type Selection =
-  | { kind: 'region'; id: string }
-  | { kind: 'node'; id: string };
-
-const OCCUPANT_PREVIEW_LIMIT = 8;
+const SUMMARY_SAMPLE_LIMIT = 3;
 const OCCUPANT_EXPANDED_LIMIT = 25;
 
 function resolveFocusTypeFromRegion(region: MapRegion): MapFocusType | undefined {
@@ -52,12 +51,28 @@ function resolveNodeTitle(node: MapNode): string {
   return node.id;
 }
 
+function resolveNodeHoverTitle(node: MapNode): string {
+  const title = resolveNodeTitle(node);
+  if (node.label?.trim() && title !== node.id) {
+    return `${title} (${node.id})`;
+  }
+  return title;
+}
+
 function resolveRegionTitle(region: MapRegion): string {
   const label = region.label?.trim();
   if (label) {
     return label;
   }
   return region.id;
+}
+
+function resolveRegionHoverTitle(region: MapRegion): string {
+  const title = resolveRegionTitle(region);
+  if (region.label?.trim() && title !== region.id) {
+    return `${title} (${region.id})`;
+  }
+  return title;
 }
 
 function resolveNodePlacement(node: MapNode): string | undefined {
@@ -71,6 +86,19 @@ function resolveNodePlacement(node: MapNode): string | undefined {
   return undefined;
 }
 
+function resolveEdgeMetaString(edge: MapEdge, key: string): string | undefined {
+  const meta = edge.meta;
+  if (!meta || typeof meta !== 'object') {
+    return undefined;
+  }
+  const value = (meta as Record<string, unknown>)[key];
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 export function MapCanvas({
   projection,
   activeLayerId,
@@ -80,7 +108,7 @@ export function MapCanvas({
   activeLayerId: MapLayer;
   currentParams: string;
 }) {
-  const [selection, setSelection] = useState<Selection | null>(null);
+  const { selection, setSelection, clearSelection } = useMapSelection();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const paramsBase = useMemo(() => new URLSearchParams(currentParams), [currentParams]);
@@ -122,6 +150,18 @@ export function MapCanvas({
     return { placements, unplaced };
   }, [nodes, regionById]);
 
+  const nodesByMembership = useMemo(() => {
+    const membership = new Map<string, MapNode[]>();
+    for (const node of nodes) {
+      for (const regionId of node.region_ids ?? []) {
+        const list = membership.get(regionId) ?? [];
+        list.push(node);
+        membership.set(regionId, list);
+      }
+    }
+    return membership;
+  }, [nodes]);
+
   const truncationWarnings = useMemo(() => {
     const warnings: string[] = [];
     const trunc = projection.truncation;
@@ -136,6 +176,12 @@ export function MapCanvas({
     }
     return warnings;
   }, [projection.truncation]);
+
+  const isProjectionTruncated = Boolean(
+    projection.truncation?.regions?.truncated ||
+      projection.truncation?.nodes?.truncated ||
+      projection.truncation?.edges?.truncated
+  );
 
   function buildHref(next: { layer: MapLayer; focusType?: MapFocusType; focusId?: string }): string {
     const params = new URLSearchParams(paramsBase);
@@ -179,7 +225,49 @@ export function MapCanvas({
     };
   }, [selection, nodeById, regionById]);
 
-  const showRegions = regions.length > 0;
+  const isPhysical = activeLayerId === 'physical';
+  const showRegions = !isPhysical && regions.length > 0;
+
+  const physicalLinks = useMemo(() => {
+    if (!isPhysical) {
+      return [];
+    }
+
+    const focusId = projection.focus?.id;
+
+    const links = (projection.edges ?? []).map((edge) => {
+      const from = edge.from;
+      const to = edge.to;
+      const peerId = focusId ? (from === focusId ? to : to === focusId ? from : to) : to;
+      const peerNode = nodeById.get(peerId);
+      const linkType = resolveEdgeMetaString(edge, 'link_type');
+      const source = resolveEdgeMetaString(edge, 'source');
+      const linkKey = resolveEdgeMetaString(edge, 'link_key');
+
+      return {
+        edge,
+        peerId,
+        peerLabel: peerNode ? resolveNodeTitle(peerNode) : peerId,
+        linkType,
+        source,
+        linkKey
+      };
+    });
+
+    return links.sort((a, b) => {
+      const labelA = a.peerLabel.toLowerCase();
+      const labelB = b.peerLabel.toLowerCase();
+      if (labelA !== labelB) {
+        return labelA < labelB ? -1 : 1;
+      }
+      if (a.peerId !== b.peerId) {
+        return a.peerId < b.peerId ? -1 : 1;
+      }
+      return a.edge.id < b.edge.id ? -1 : a.edge.id > b.edge.id ? 1 : 0;
+    });
+  }, [isPhysical, projection.edges, projection.focus?.id, nodeById]);
+
+  const focusId = projection.focus?.id;
 
   return (
     <div className="mapCanvasInner">
@@ -191,19 +279,77 @@ export function MapCanvas({
               {warning}
             </Alert>
           ))}
+          {isProjectionTruncated ? (
+            <Alert tone="info">Projection capped for readability. Drill in to a region to see a smaller, complete slice.</Alert>
+          ) : null}
         </div>
       ) : null}
 
-      {showRegions ? (
+      {isPhysical ? (
+        <div className="mapPhysicalView">
+          <div className="mapPhysicalSection">
+            <div className="mapPhysicalHeading">Focus device</div>
+            {focusId ? (
+              <button
+                type="button"
+                className={`mapPhysicalFocus${selection?.kind === 'node' && selection.id === focusId ? ' mapPhysicalFocusSelected' : ''}`}
+                onClick={() => setSelection({ kind: 'node', id: focusId })}
+                title={nodeById.get(focusId) ? resolveNodeHoverTitle(nodeById.get(focusId)!) : focusId}
+              >
+                {nodeById.get(focusId) ? resolveNodeTitle(nodeById.get(focusId)!) : focusId}
+              </button>
+            ) : (
+              <p className="mapRegionEmpty">No focus returned.</p>
+            )}
+          </div>
+
+          <div className="mapPhysicalSection">
+            <div className="mapPhysicalHeading">Links</div>
+            {physicalLinks.length === 0 ? (
+              <p className="mapRegionEmpty">No links returned for this focus.</p>
+            ) : (
+              <ul className="mapPhysicalLinkList">
+                {physicalLinks.map((link) => {
+                  const selected = selection?.kind === 'node' && selection.id === link.peerId;
+                  const meta: string[] = [];
+                  if (link.linkType) meta.push(link.linkType);
+                  if (link.source) meta.push(link.source);
+                  if (link.linkKey) meta.push(link.linkKey);
+
+                  return (
+                    <li key={link.edge.id} className="mapPhysicalLinkListItem">
+                      <button
+                        type="button"
+                        className={`mapPhysicalLinkRow${selected ? ' mapPhysicalLinkRowSelected' : ''}`}
+                        onClick={() => setSelection({ kind: 'node', id: link.peerId })}
+                        title={nodeById.get(link.peerId) ? resolveNodeHoverTitle(nodeById.get(link.peerId)!) : link.peerLabel}
+                      >
+                        <span className="mapPhysicalLinkLabel">{link.peerLabel}</span>
+                        {meta.length > 0 ? <span className="mapPhysicalLinkMeta">{meta.join(' • ')}</span> : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      ) : showRegions ? (
         <div className="mapRegionStack" role="list">
           {regions.map((region) => {
             const placementNodes = nodesByPlacement.placements.get(region.id) ?? [];
             const isSelected = selection?.kind === 'region' && selection.id === region.id;
             const focusType = resolveFocusTypeFromRegion(region);
-            const expandedKey = expanded[region.id] ?? placementNodes.length <= OCCUPANT_PREVIEW_LIMIT;
-            const limit = expandedKey ? OCCUPANT_EXPANDED_LIMIT : OCCUPANT_PREVIEW_LIMIT;
-            const visible = placementNodes.slice(0, limit);
+            const memberNodes = nodesByMembership.get(region.id) ?? [];
+            const memberCount = memberNodes.length;
+            const placementCount = placementNodes.length;
+            const unplacedCount = Math.max(0, memberCount - placementCount);
+            const canPreview = placementCount > 0;
+            const expandedKey = canPreview ? (expanded[region.id] ?? false) : false;
+            const visible = expandedKey ? placementNodes.slice(0, OCCUPANT_EXPANDED_LIMIT) : [];
             const hiddenCount = Math.max(0, placementNodes.length - visible.length);
+            const sampleTitles = memberNodes.slice(0, SUMMARY_SAMPLE_LIMIT).map(resolveNodeTitle);
+            const sampleRemaining = Math.max(0, memberCount - sampleTitles.length);
 
             return (
               <div
@@ -211,6 +357,7 @@ export function MapCanvas({
                 className={`mapRegionCard${isSelected ? ' mapRegionCardSelected' : ''}`}
                 role="listitem"
                 tabIndex={0}
+                title={resolveRegionHoverTitle(region)}
                 onClick={() => setSelection({ kind: 'region', id: region.id })}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -222,20 +369,25 @@ export function MapCanvas({
                 <div className="mapRegionHeader">
                   <div>
                     <div className="mapRegionTitle">{resolveRegionTitle(region)}</div>
-                    <div className="mapRegionMeta">{placementNodes.length} nodes placed</div>
+                    <div className="mapRegionMeta">
+                      Members: {memberCount} • Placed: {placementCount}
+                      {unplacedCount > 0 ? ` • +${unplacedCount} not placed here` : ''}
+                    </div>
                   </div>
                   <div className="mapRegionActions">
-                    {placementNodes.length > OCCUPANT_PREVIEW_LIMIT ? (
-                      <Button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setExpanded((prev) => ({ ...prev, [region.id]: !expandedKey }));
-                        }}
-                      >
-                        {expandedKey ? 'Collapse' : 'Expand'}
-                      </Button>
-                    ) : null}
+                    <Button
+                      type="button"
+                      disabled={!canPreview}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (!canPreview) {
+                          return;
+                        }
+                        setExpanded((prev) => ({ ...prev, [region.id]: !expandedKey }));
+                      }}
+                    >
+                      {expandedKey ? 'Collapse' : 'Expand'}
+                    </Button>
                     <Link
                       className={`btn${focusType ? ' btnPrimary' : ''}`}
                       href={focusType ? buildHref({ layer: activeLayerId, focusType, focusId: region.id }) : '#'}
@@ -252,7 +404,23 @@ export function MapCanvas({
                   </div>
                 </div>
 
-                {visible.length > 0 ? (
+                {!expandedKey ? (
+                  <div className="mapRegionSummary">
+                    {memberCount === 0 ? (
+                      <p className="mapRegionSummaryText">No members returned for this region.</p>
+                    ) : (
+                      <p className="mapRegionSummaryText">
+                        {sampleTitles.join(', ')}
+                        {sampleRemaining > 0 ? ` (+${sampleRemaining} more)` : ''}
+                      </p>
+                    )}
+                    <p className="mapRegionSummaryHint">
+                      {canPreview
+                        ? 'Expand to preview placed nodes. Drill in to see full membership (and avoid duplicate nodes in the overview).'
+                        : 'No nodes are placed here in the overview (to avoid duplicates). Drill in to see full membership.'}
+                    </p>
+                  </div>
+                ) : visible.length > 0 ? (
                   <div className="mapNodeGrid">
                     {visible.map((node) => {
                       const nodeSelected = selection?.kind === 'node' && selection.id === node.id;
@@ -261,6 +429,7 @@ export function MapCanvas({
                           key={node.id}
                           type="button"
                           className={`mapNodeChip${nodeSelected ? ' mapNodeChipSelected' : ''}`}
+                          title={resolveNodeHoverTitle(node)}
                           onClick={(event) => {
                             event.stopPropagation();
                             setSelection({ kind: 'node', id: node.id });
@@ -275,7 +444,11 @@ export function MapCanvas({
                   <p className="mapRegionEmpty">No placed nodes in this region.</p>
                 )}
 
-                {hiddenCount > 0 ? <p className="mapRegionTruncation">Showing {visible.length} of {placementNodes.length} nodes.</p> : null}
+                {expandedKey && hiddenCount > 0 ? (
+                  <p className="mapRegionTruncation">
+                    Showing {visible.length} of {placementNodes.length} placed nodes. Drill in to view full membership.
+                  </p>
+                ) : null}
               </div>
             );
           })}
@@ -292,6 +465,7 @@ export function MapCanvas({
                     key={node.id}
                     type="button"
                     className={`mapNodeChip${nodeSelected ? ' mapNodeChipSelected' : ''}`}
+                    title={resolveNodeHoverTitle(node)}
                     onClick={() => setSelection({ kind: 'node', id: node.id })}
                   >
                     <span className="mapNodeChipLabel">{resolveNodeTitle(node)}</span>
@@ -319,7 +493,7 @@ export function MapCanvas({
                 Open
               </Button>
             )}
-            <Button type="button" onClick={() => setSelection(null)}>
+            <Button type="button" onClick={clearSelection}>
               Clear
             </Button>
           </div>
@@ -328,4 +502,3 @@ export function MapCanvas({
     </div>
   );
 }
-

@@ -821,6 +821,113 @@ pre {
   gap: 8px;
 }
 
+.mapPhysicalView {
+  display: grid;
+  gap: 14px;
+}
+
+.mapPhysicalSection {
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.55);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mapPhysicalHeading {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.75);
+}
+
+.mapPhysicalFocus {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 6, 23, 0.35);
+  padding: 12px;
+  text-align: left;
+  cursor: pointer;
+  color: rgba(226, 232, 240, 0.92);
+  font-weight: 850;
+  font-size: 14px;
+}
+
+.mapPhysicalFocus:hover {
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+.mapPhysicalFocus:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.55);
+  outline-offset: 2px;
+}
+
+.mapPhysicalFocusSelected {
+  border-color: rgba(37, 99, 235, 0.85);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+
+.mapPhysicalLinkList {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.mapPhysicalLinkListItem {
+  margin: 0;
+}
+
+.mapPhysicalLinkRow {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(2, 6, 23, 0.25);
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.mapPhysicalLinkRow:hover {
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+.mapPhysicalLinkRow:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.55);
+  outline-offset: 2px;
+}
+
+.mapPhysicalLinkRowSelected {
+  border-color: rgba(37, 99, 235, 0.85);
+}
+
+.mapPhysicalLinkLabel {
+  font-size: 13px;
+  font-weight: 750;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mapPhysicalLinkMeta {
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.7);
+  text-align: right;
+  max-width: 55%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .mapRegionStack {
   display: flex;
   flex-direction: column;
@@ -899,6 +1006,11 @@ pre {
   border-color: rgba(148, 163, 184, 0.4);
 }
 
+.mapNodeChip:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.55);
+  outline-offset: 2px;
+}
+
 .mapNodeChipSelected {
   border-color: rgba(37, 99, 235, 0.85);
 }
@@ -910,6 +1022,25 @@ pre {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.mapRegionSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mapRegionSummaryText {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: rgba(226, 232, 240, 0.88);
+}
+
+.mapRegionSummaryHint {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.7);
 }
 
 .mapRegionEmpty {

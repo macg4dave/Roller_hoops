@@ -1185,8 +1185,8 @@ Tasks:
   * [x] Render region containers (subnets) as rounded “stacked regions”.
   * [x] Place nodes deterministically within regions (avoid force graphs in v1).
 * Interaction
-  * [ ] Click selects a region/node and updates Inspector; drill-in is a distinct action (focus change).
-  * [ ] Peek (hover/focus) may highlight/show labels, but is never required for meaning or navigation.
+  * [x] Click selects a region/node and updates Inspector; drill-in is a distinct action (focus change).
+  * [x] Peek (hover/focus) may highlight/show labels, but is never required for meaning or navigation.
   * [x] Ensure visible focus/selection for canvas interactions.
 
 Blockers:
@@ -1206,7 +1206,7 @@ Tasks:
 * API
   * [x] Add `GET /api/v1/map/physical` projection (read-only first).
 * UI
-  * [ ] Render a small adjacency/tree view (no “everything at once”).
+  * [x] Render a small adjacency/tree view (no “everything at once”).
 
 Blockers:
 
@@ -1239,8 +1239,8 @@ Acceptance criteria:
 Tasks:
 
 * UI
-  * [ ] Preserve focus when switching layers where possible.
-  * [ ] Define fallbacks when a focus type does not exist in the target layer.
+  * [x] Preserve focus when switching layers where possible.
+  * [x] Define fallbacks when a focus type does not exist in the target layer.
 
 Blockers:
 
@@ -1255,7 +1255,7 @@ Acceptance criteria:
 Tasks:
 
 * UI
-  * [ ] Render containers as summary tiles by default (counts + status rollups).
+  * [x] Render containers as summary tiles by default (counts + status rollups).
   * [x] Implement “Expand” vs “Drill-in” affordances and keep behavior consistent across layers.
   * [x] When caps are hit, show honest truncation messaging (“Showing 25 of 140…”) and a drill-in suggestion.
   * [x] Show “also in…” memberships in the Inspector (multi-membership without duplicate nodes by default).

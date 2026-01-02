@@ -326,6 +326,7 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 
 		if layer == "l2" && depth > 0 {
 			status[1].Value = "l2 (device focus)"
+			status = append(status, mapInspectorField{Label: "Membership model", Value: "PVID only"})
 
 			pvidLister, ok := h.devices.(interface {
 				ListDevicePVIDs(ctx context.Context, deviceID string) ([]int32, error)
@@ -536,16 +537,21 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 		if layer == "l2" {
 			projection = "l2 (vlan focus)"
 		}
+
+		status := []mapInspectorField{
+			{Label: "Layer", Value: layer},
+			{Label: "Projection", Value: projection},
+		}
+		if layer == "l2" {
+			status = append(status, mapInspectorField{Label: "Membership model", Value: "PVID only"})
+		}
 		inspector = &mapInspector{
 			Title: label,
 			Identity: []mapInspectorField{
 				{Label: "Type", Value: "VLAN"},
 				{Label: "ID", Value: focusID},
 			},
-			Status: []mapInspectorField{
-				{Label: "Layer", Value: layer},
-				{Label: "Projection", Value: projection},
-			},
+			Status:        status,
 			Relationships: buildMapInspectorRelationships(focusType, focusID),
 		}
 
@@ -852,7 +858,23 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 			for regionID := range regionSet {
 				regionIDs = append(regionIDs, regionID)
 			}
-			sort.Strings(regionIDs)
+			sort.SliceStable(regionIDs, func(i, j int) bool {
+				li, errI := strconv.Atoi(regionIDs[i])
+				rj, errJ := strconv.Atoi(regionIDs[j])
+				switch {
+				case errI == nil && errJ == nil:
+					if li == rj {
+						return regionIDs[i] < regionIDs[j]
+					}
+					return li < rj
+				case errI == nil:
+					return true
+				case errJ == nil:
+					return false
+				default:
+					return regionIDs[i] < regionIDs[j]
+				}
+			})
 
 			n := mapNode{ID: peerID, Kind: "device", Label: l2PeerLabels[peerID], RegionIDs: regionIDs}
 			if len(regionIDs) > 0 {
