@@ -1273,8 +1273,8 @@ Acceptance criteria:
 Tasks:
 
 * UI
-  * [ ] Add “pin focus” so polling updates don’t reshuffle the canvas while the user is interacting.
-  * [ ] Define update semantics: badge + “apply updates” action vs live update (and document the rule).
+  * [x] Add “pin focus” so polling updates don’t reshuffle the canvas while the user is interacting.
+  * [x] Define update semantics: badge + “apply updates” action vs live update (and document the rule).
 
 Acceptance criteria:
 

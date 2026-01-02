@@ -11,6 +11,8 @@ import type { components } from '@/lib/api-types';
 
 import { MapCanvas } from './MapCanvas';
 import { MapInspectorDetails } from './MapInspectorDetails';
+import { MapPollingControls } from './MapPollingControls';
+import { MapProjectionProvider } from './MapProjectionContext';
 import { MapSelectionProvider } from './MapSelectionContext';
 
 type MapLayer = components['schemas']['MapLayer'];
@@ -267,149 +269,154 @@ export default async function MapPage({ searchParams }: { searchParams?: Promise
         </aside>
 
         <MapSelectionProvider key={selectionScopeKey}>
-          <section className="mapPanel mapCanvasPanel">
-            <div className="mapCanvasHeader">
-              <p className="mapCanvasIntro">Canvas</p>
-              <p className="mapCanvasHint">
-                {unknownLayer
-                  ? `Unknown layer "${unknownLayer}".`
-                  : activeLayerConfig
-                    ? activeLayerConfig.canvasHint
-                    : 'Select a layer to get started.'}{' '}
-                {focus
-                  ? `Focus: ${focusTypeLabel} ${focus.id}.`
-                  : focusWarning
-                    ? 'No valid focus selected yet.'
-                    : 'No focus selected yet.'}
-              </p>
-            </div>
-            <div className="mapCanvasBody">
-              {focus && projection && activeLayerId && !unknownLayer ? (
-                <MapCanvas projection={projection} activeLayerId={activeLayerId} currentParams={currentParams.toString()} />
-              ) : (
-                <EmptyState
-                  title={
-                    unknownLayer
-                      ? 'Unknown layer'
-                      : activeLayer
-                        ? focus
-                          ? `Focused on ${focusTypeLabel}`
-                          : activeLayerConfig?.emptyTitle ?? `Pick a focus to render the ${activeLayer.label} projection`
-                        : 'Select a layer and focus to get started'
-                  }
-                >
-                  {focus ? (
-                    <>
-                      {projectionError ? (
-                        <p>Projection failed to load. The inspector shows the error response for this focus.</p>
-                      ) : (
-                        <p>Projection unavailable.</p>
-                      )}
-                      <p>
-                        Share this URL to reopen the same layer + focus. Use the inspector to adjust focus without drawing
-                        the whole network.
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p>
-                        The canvas stays empty until you pick something to focus on. This keeps the view intentional and
-                        avoids the spaghetti effect from the mocks.
-                      </p>
-                      <p>
-                        Use the inspector on the right to jump between layers and follow relationships without losing
-                        context.
-                      </p>
-                    </>
-                  )}
-                </EmptyState>
-              )}
-            </div>
-          </section>
-
-          <section className="mapPanel mapInspectorPanel">
-            <div className="mapInspectorSection">
-              <div className="mapInspectorHeading">Focus</div>
-              <p className="mapInspectorValue">
-                {focus ? `${focusTypeLabel} ${focus.id}` : hasFocusParams ? 'Incomplete focus' : 'No focus selected'}
-              </p>
-              <p className="mapInspectorHint">
-                Paste an identifier to create a reload-safe deep link. Selecting a layer never draws the whole network.
-              </p>
-
-              {focusWarning ? <Alert tone="warning">{focusWarning}</Alert> : null}
-              {projectionError ? <Alert tone="warning">{projectionError}</Alert> : null}
-
-              <form action="/map" method="get" className="mapFocusForm">
-                <input type="hidden" name="layer" value={activeLayerId ?? DEFAULT_LAYER} />
-
-                <Field>
-                  <Label htmlFor="focusType">Focus type</Label>
-                  <Select id="focusType" name="focusType" defaultValue={resolvedFocusType ?? ''}>
-                    <option value="">Select…</option>
-                    {FOCUS_TYPE_OPTIONS.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-
-                <Field>
-                  <Label htmlFor="focusId">Focus id</Label>
-                  <Input
-                    id="focusId"
-                    name="focusId"
-                    placeholder="UUID / subnet / vlan / zone / service id"
-                    defaultValue={resolvedFocusId ?? ''}
-                  />
-                  <Hint>
-                    Device focus ids are UUIDs. Subnet focus ids are CIDR strings (e.g. 10.0.1.0/24). VLAN focus ids are
-                    integers (1-4094).
-                  </Hint>
-                </Field>
-
-                <div className="mapInspectorActions">
-                  <Button type="submit" variant="primary">
-                    Apply focus
-                  </Button>
-                  {hasFocusParams ? (
-                    <Link href={`/map?${clearFocusParams.toString()}`} className="btn">
-                      Clear
-                    </Link>
-                  ) : null}
+          <MapProjectionProvider layer={activeLayerId} focus={focus} initialProjection={projection}>
+            <section className="mapPanel mapCanvasPanel">
+              <div className="mapCanvasHeader">
+                <div className="mapCanvasHeaderText">
+                  <p className="mapCanvasIntro">Canvas</p>
+                  <p className="mapCanvasHint">
+                    {unknownLayer
+                      ? `Unknown layer "${unknownLayer}".`
+                      : activeLayerConfig
+                        ? activeLayerConfig.canvasHint
+                        : 'Select a layer to get started.'}{' '}
+                    {focus
+                      ? `Focus: ${focusTypeLabel} ${focus.id}.`
+                      : focusWarning
+                        ? 'No valid focus selected yet.'
+                        : 'No focus selected yet.'}
+                  </p>
                 </div>
-              </form>
-            </div>
+                {focus && projection && activeLayerId && !unknownLayer ? <MapPollingControls /> : null}
+              </div>
+              <div className="mapCanvasBody">
+                {focus && projection && activeLayerId && !unknownLayer ? (
+                  <MapCanvas projection={projection} activeLayerId={activeLayerId} currentParams={currentParams.toString()} />
+                ) : (
+                  <EmptyState
+                    title={
+                      unknownLayer
+                        ? 'Unknown layer'
+                        : activeLayer
+                          ? focus
+                            ? `Focused on ${focusTypeLabel}`
+                            : activeLayerConfig?.emptyTitle ?? `Pick a focus to render the ${activeLayer.label} projection`
+                          : 'Select a layer and focus to get started'
+                    }
+                  >
+                    {focus ? (
+                      <>
+                        {projectionError ? (
+                          <p>Projection failed to load. The inspector shows the error response for this focus.</p>
+                        ) : (
+                          <p>Projection unavailable.</p>
+                        )}
+                        <p>
+                          Share this URL to reopen the same layer + focus. Use the inspector to adjust focus without drawing
+                          the whole network.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p>
+                          The canvas stays empty until you pick something to focus on. This keeps the view intentional and
+                          avoids the spaghetti effect from the mocks.
+                        </p>
+                        <p>
+                          Use the inspector on the right to jump between layers and follow relationships without losing
+                          context.
+                        </p>
+                      </>
+                    )}
+                  </EmptyState>
+                )}
+              </div>
+            </section>
 
-            <MapInspectorDetails
-              focus={focus}
-              focusTypeLabel={focusTypeLabel}
-              projection={projection}
-              activeLayerId={(activeLayerId ?? DEFAULT_LAYER) as MapLayer}
-              currentParams={currentParams.toString()}
-            />
-
-            <div className="mapInspectorSection">
-              <div className="mapInspectorHeading">Guidance</div>
-              {projection?.guidance ? (
-                <p className="mapInspectorHint">{projection.guidance}</p>
-              ) : (
-                <p className="mapInspectorHint">
-                  URL-driven state: `/map?layer=l3&focusType=device&focusId=...`. No focus is valid and renders an empty
-                  canvas.
+            <section className="mapPanel mapInspectorPanel">
+              <div className="mapInspectorSection">
+                <div className="mapInspectorHeading">Focus</div>
+                <p className="mapInspectorValue">
+                  {focus ? `${focusTypeLabel} ${focus.id}` : hasFocusParams ? 'Incomplete focus' : 'No focus selected'}
                 </p>
-              )}
-              <Link
-                href="https://github.com/macg4dave/Roller_hoops/blob/main/docs/network_map/network_map_ideas.md"
-                className="mapInspectorLink"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Preview the mock contract
-              </Link>
-            </div>
-          </section>
+                <p className="mapInspectorHint">
+                  Paste an identifier to create a reload-safe deep link. Selecting a layer never draws the whole network.
+                </p>
+
+                {focusWarning ? <Alert tone="warning">{focusWarning}</Alert> : null}
+                {projectionError ? <Alert tone="warning">{projectionError}</Alert> : null}
+
+                <form action="/map" method="get" className="mapFocusForm">
+                  <input type="hidden" name="layer" value={activeLayerId ?? DEFAULT_LAYER} />
+
+                  <Field>
+                    <Label htmlFor="focusType">Focus type</Label>
+                    <Select id="focusType" name="focusType" defaultValue={resolvedFocusType ?? ''}>
+                      <option value="">Select…</option>
+                      {FOCUS_TYPE_OPTIONS.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+
+                  <Field>
+                    <Label htmlFor="focusId">Focus id</Label>
+                    <Input
+                      id="focusId"
+                      name="focusId"
+                      placeholder="UUID / subnet / vlan / zone / service id"
+                      defaultValue={resolvedFocusId ?? ''}
+                    />
+                    <Hint>
+                      Device focus ids are UUIDs. Subnet focus ids are CIDR strings (e.g. 10.0.1.0/24). VLAN focus ids are
+                      integers (1-4094).
+                    </Hint>
+                  </Field>
+
+                  <div className="mapInspectorActions">
+                    <Button type="submit" variant="primary">
+                      Apply focus
+                    </Button>
+                    {hasFocusParams ? (
+                      <Link href={`/map?${clearFocusParams.toString()}`} className="btn">
+                        Clear
+                      </Link>
+                    ) : null}
+                  </div>
+                </form>
+              </div>
+
+              <MapInspectorDetails
+                focus={focus}
+                focusTypeLabel={focusTypeLabel}
+                projection={projection}
+                activeLayerId={(activeLayerId ?? DEFAULT_LAYER) as MapLayer}
+                currentParams={currentParams.toString()}
+              />
+
+              <div className="mapInspectorSection">
+                <div className="mapInspectorHeading">Guidance</div>
+                {projection?.guidance ? (
+                  <p className="mapInspectorHint">{projection.guidance}</p>
+                ) : (
+                  <p className="mapInspectorHint">
+                    URL-driven state: `/map?layer=l3&focusType=device&focusId=...`. No focus is valid and renders an empty
+                    canvas.
+                  </p>
+                )}
+                <Link
+                  href="https://github.com/macg4dave/Roller_hoops/blob/main/docs/network_map/network_map_ideas.md"
+                  className="mapInspectorLink"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Preview the mock contract
+                </Link>
+              </div>
+            </section>
+          </MapProjectionProvider>
         </MapSelectionProvider>
       </section>
     </div>

@@ -7,6 +7,7 @@ import { Button } from '@/app/_components/ui/Button';
 import type { components } from '@/lib/api-types';
 
 import { useMapSelection } from './MapSelectionContext';
+import { useOptionalMapProjection } from './MapProjectionContext';
 
 type MapLayer = components['schemas']['MapLayer'];
 type MapFocusType = components['schemas']['MapFocusType'];
@@ -226,18 +227,20 @@ export function MapInspectorDetails({
   currentParams: string;
 }) {
   const { selection } = useMapSelection();
+  const projectionContext = useOptionalMapProjection();
+  const resolvedProjection = projectionContext?.projection ?? projection;
 
   const selectionInspector = useMemo(() => {
     if (!selection) {
       return null;
     }
-    if (!projection) {
+    if (!resolvedProjection) {
       return null;
     }
-    return buildSelectionInspector({ selection, projection, activeLayerId });
-  }, [selection, projection, activeLayerId, currentParams]);
+    return buildSelectionInspector({ selection, projection: resolvedProjection, activeLayerId });
+  }, [selection, resolvedProjection, activeLayerId, currentParams]);
 
-  const inspector = selectionInspector ?? projection?.inspector ?? null;
+  const inspector = selectionInspector ?? resolvedProjection?.inspector ?? null;
 
   const inspectorTitle = inspector?.title;
   const inspectorIdentity: MapInspectorField[] = inspector?.identity ?? [];

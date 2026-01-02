@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom';
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import MapPage from './page';
@@ -8,6 +9,22 @@ import MapPage from './page';
 afterEach(() => {
   vi.unstubAllGlobals();
 });
+
+const createClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        refetchOnWindowFocus: false,
+        staleTime: 0
+      }
+    }
+  });
+
+const renderWithClient = (ui: React.ReactElement) => {
+  const client = createClient();
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+};
 
 const stubProjectionFetch = (projection: unknown) => {
   const fetchMock = vi.fn(async () => ({
@@ -22,7 +39,7 @@ const stubProjectionFetch = (projection: unknown) => {
 describe('MapPage URL contract', () => {
   test('selects layer from the URL query string', async () => {
     const ui = await MapPage({ searchParams: Promise.resolve({ layer: 'l2' }) });
-    render(ui);
+    renderWithClient(ui);
 
     expect(screen.getByRole('link', { name: /l2 \(vlans\)/i })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByText(/l2 vlan projection/i)).toBeInTheDocument();
@@ -30,7 +47,7 @@ describe('MapPage URL contract', () => {
 
   test('shows a friendly warning for unknown layers', async () => {
     const ui = await MapPage({ searchParams: Promise.resolve({ layer: 'banana' }) });
-    render(ui);
+    renderWithClient(ui);
 
     expect(screen.getByText('banana')).toBeInTheDocument();
     expect(screen.getByText(/pick a valid layer to continue/i)).toBeInTheDocument();
@@ -71,7 +88,7 @@ describe('MapPage URL contract', () => {
     const ui = await MapPage({
       searchParams: Promise.resolve({ layer: 'l3', focusType: 'device', focusId })
     });
-    render(ui);
+    renderWithClient(ui);
 
     expect(screen.getByText('Router A')).toBeInTheDocument();
     expect(screen.getByText('Type')).toBeInTheDocument();
@@ -79,11 +96,44 @@ describe('MapPage URL contract', () => {
     expect(screen.getByRole('link', { name: /view in l2/i })).toHaveAttribute('href', expect.stringContaining('layer=l2'));
   });
 
+  test('defaults to pinned focus and lets the operator toggle live updates', async () => {
+    const focusId = '550e8400-e29b-41d4-a716-446655440000';
+    stubProjectionFetch({
+      layer: 'l3',
+      focus: { type: 'device', id: focusId, label: null },
+      guidance: null,
+      regions: [],
+      nodes: [],
+      edges: [],
+      inspector: {
+        title: 'Router A',
+        identity: [{ label: 'ID', value: focusId }],
+        status: [{ label: 'Layer', value: 'l3' }],
+        relationships: []
+      },
+      truncation: {
+        regions: { returned: 0, limit: 8, truncated: false, total: null, warning: null },
+        nodes: { returned: 0, limit: 120, truncated: false, total: null, warning: null },
+        edges: { returned: 0, limit: 80, truncated: false, total: null, warning: null }
+      }
+    });
+
+    const ui = await MapPage({
+      searchParams: Promise.resolve({ layer: 'l3', focusType: 'device', focusId })
+    });
+    renderWithClient(ui);
+
+    expect(screen.getByText('Pinned')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Unpin' }));
+    expect(screen.getByText('Live')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /pin focus/i })).toBeInTheDocument();
+  });
+
   test('warns when focusType is unknown', async () => {
     const ui = await MapPage({
       searchParams: Promise.resolve({ layer: 'l3', focusType: 'banana', focusId: '123' })
     });
-    render(ui);
+    renderWithClient(ui);
 
     expect(screen.getByText(/unknown focus type \"banana\"/i)).toBeInTheDocument();
   });
@@ -92,7 +142,7 @@ describe('MapPage URL contract', () => {
     const ui = await MapPage({
       searchParams: Promise.resolve({ layer: 'l3', focusType: 'device' })
     });
-    render(ui);
+    renderWithClient(ui);
 
     expect(screen.getByText(/focus type selected, but focus id is missing/i)).toBeInTheDocument();
   });
@@ -101,7 +151,7 @@ describe('MapPage URL contract', () => {
     const ui = await MapPage({
       searchParams: Promise.resolve({ layer: 'l3', focusId: '550e8400-e29b-41d4-a716-446655440000' })
     });
-    render(ui);
+    renderWithClient(ui);
 
     expect(screen.getByText(/focus id provided, but focus type is missing/i)).toBeInTheDocument();
   });
@@ -131,7 +181,7 @@ describe('MapPage URL contract', () => {
     const ui = await MapPage({
       searchParams: Promise.resolve({ layer: 'l2', focusType: 'device', focusId })
     });
-    render(ui);
+    renderWithClient(ui);
 
     const viewInL3 = screen.getByRole('link', { name: /view in l3/i });
     expect(viewInL3).toHaveAttribute('href', expect.stringContaining('layer=l3'));
@@ -167,7 +217,7 @@ describe('MapPage URL contract', () => {
     const ui = await MapPage({
       searchParams: Promise.resolve({ layer: 'l3', focusType: 'subnet', focusId: subnetId })
     });
-    render(ui);
+    renderWithClient(ui);
 
     const viewInPhysical = screen.getByRole('link', { name: /view in physical/i });
     const href = viewInPhysical.getAttribute('href');
@@ -201,7 +251,7 @@ describe('MapPage URL contract', () => {
     const ui = await MapPage({
       searchParams: Promise.resolve({ layer: 'l2', focusType: 'vlan', focusId: '10' })
     });
-    render(ui);
+    renderWithClient(ui);
 
     const l3Link = screen.getByRole('link', { name: /l3 \(subnets\)/i });
     const href = l3Link.getAttribute('href');
@@ -236,7 +286,7 @@ describe('MapPage URL contract', () => {
     const ui = await MapPage({
       searchParams: Promise.resolve({ layer: 'l2', focusType: 'device', focusId })
     });
-    render(ui);
+    renderWithClient(ui);
 
     const l3Link = screen.getByRole('link', { name: /l3 \(subnets\)/i });
     const href = l3Link.getAttribute('href');
@@ -290,7 +340,7 @@ describe('MapPage URL contract', () => {
     const ui = await MapPage({
       searchParams: Promise.resolve({ layer: 'l3', focusType: 'device', focusId })
     });
-    render(ui);
+    renderWithClient(ui);
 
     const focusSection = screen.getByText('Focus').closest('.mapInspectorSection');
     expect(focusSection).not.toBeNull();
@@ -353,7 +403,7 @@ describe('MapPage URL contract', () => {
     const ui = await MapPage({
       searchParams: Promise.resolve({ layer: 'l3', focusType: 'device', focusId })
     });
-    render(ui);
+    renderWithClient(ui);
 
     const canvasPanel = screen.getByText('Canvas').closest('.mapCanvasPanel');
     expect(canvasPanel).not.toBeNull();

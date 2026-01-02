@@ -8,6 +8,7 @@ import { Button } from '@/app/_components/ui/Button';
 import type { components } from '@/lib/api-types';
 
 import { useMapSelection } from './MapSelectionContext';
+import { useOptionalMapProjection } from './MapProjectionContext';
 
 type MapLayer = components['schemas']['MapLayer'];
 type MapFocusType = components['schemas']['MapFocusType'];
@@ -100,7 +101,7 @@ function resolveEdgeMetaString(edge: MapEdge, key: string): string | undefined {
 }
 
 export function MapCanvas({
-  projection,
+  projection: projectionProp,
   activeLayerId,
   currentParams
 }: {
@@ -110,6 +111,8 @@ export function MapCanvas({
 }) {
   const { selection, setSelection, clearSelection } = useMapSelection();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const projectionContext = useOptionalMapProjection();
+  const projection = projectionContext?.projection ?? projectionProp;
 
   const paramsBase = useMemo(() => new URLSearchParams(currentParams), [currentParams]);
 
