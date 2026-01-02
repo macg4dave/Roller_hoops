@@ -5,6 +5,7 @@ Self-hosted network tracker / mapper (Go + Node.js + PostgreSQL), fully containe
 ## Requirements
 
 - **Recommended (no local toolchains):** Docker + Docker Compose v2 (`docker compose ...`)
+- **Also supported:** run the stack locally without Docker (see [Running locally (no Docker)](#running-locally-no-docker))
 - Host port `80/tcp` available (Traefik binds `80:80`; change `docker-compose.yml` if you want a different host port)
 
 ### Installing prerequisites (Debian/Ubuntu)
@@ -51,14 +52,14 @@ These are “good enough to get started” commands. For production, pin version
 
 - Go `1.24.x` (for `core-go/`)
 - Node.js `20.x` + npm (for `ui-node/`)
-- PostgreSQL `16.x` (if you don’t use the Compose `db` service)
+- PostgreSQL `15+` (Compose uses `postgres:16-alpine`) — only if you don’t use the Compose `db` service
 
 If you want to build/test outside Docker on Ubuntu/Debian:
 
 - Go (the repo uses `go 1.24.x`): install via your preferred version manager (asdf/gimme) or the official tarball (apt’s `golang-go` is often older).
 - Node.js 20:
   - `sudo apt install -y nodejs npm` (may be older; for Node 20, use NodeSource or a version manager like nvm/asdf)
-- PostgreSQL 16 client/server (optional):
+- PostgreSQL client/server (optional):
   - `sudo apt install -y postgresql-client`
   - `sudo apt install -y postgresql` (if you want a local server instead of Compose)
 
@@ -96,7 +97,7 @@ If you want to build/test outside Docker on Ubuntu/Debian:
 - Host-exposed:
   - `80/tcp` → Traefik `web` → `ui-node:3000` (UI)
 - Container/network-only (not published to the host by default):
-  - `traefik:8080` (`internal`) → routes `/api` → `core-go:8081`
+  - `traefik:8080` (`internal`) → routes `/api` → `core-go:8081` (used by the UI proxy; not exposed on the host)
   - `core-go:8081` (API + `/metrics`)
   - `ui-node:3000` (Next.js server)
   - `db:5432` (Postgres)
@@ -106,6 +107,8 @@ If you want to build/test outside Docker on Ubuntu/Debian:
 Compose reads environment variables from `.env` (gitignored). Start with:
 
 - `cp .env.example .env`
+
+For local (no Docker) runs, Next.js reads `ui-node/.env.local` automatically; `core-go` reads env vars from your shell (it does not auto-load `.env`).
 
 Common settings:
 
@@ -192,7 +195,7 @@ The UI enforces authentication before proxying any `/api/...` requests to `core-
 - Configure users via `AUTH_USERS` (format: `username:password:role`).
 - Optional: set `AUTH_USERS_FILE` to a writable path to enable password changes and admin resets via the `/auth/account` page.
 
-## Building and running without Docker (advanced)
+## Running locally (no Docker)
 
 This is optional; the supported “it just works” path is `docker compose up --build`.
 
@@ -200,13 +203,14 @@ Prereqs:
 
 - Go `1.24.x` (for `core-go/`)
 - Node.js `20.x` + npm (for `ui-node/`)
-- PostgreSQL `15+` running locally
+- PostgreSQL `15+` running locally (Compose uses `postgres:16-alpine`)
+- `migrate` CLI (golang-migrate) for database migrations
 
 ### 1) Database (PostgreSQL)
 
 Create a database and a user/password, then set a `DATABASE_URL` that uses TCP (host `localhost`), for example:
 
-- `postgres://roller:roller@localhost:5432/roller_hoops?sslmode=disable`
+- `export DATABASE_URL='postgres://roller:roller@localhost:5432/roller_hoops?sslmode=disable'`
 
 (Debian/Ubuntu example)
 
@@ -222,24 +226,39 @@ In Docker, migrations run via the `migrate` container. Locally, use the `migrate
 - Install (requires Go toolchain): `go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.17.1`
 - Apply: `migrate -path core-go/migrations -database "$DATABASE_URL" up`
 
-### 3) Run `core-go`
+Optional: load the dev seed data used by the Compose `dev` profile:
 
-- `export DATABASE_URL='postgres://roller:roller@localhost:5432/roller_hoops?sslmode=disable'`
-- `cd core-go && go run ./cmd/core-go` (serves on `http://localhost:8081`)
+- `psql "$DATABASE_URL" -f docker/dev/dev-seed.sql`
+
+### 3) Run `core-go` (API + worker)
+
+- `cd core-go && HTTP_ADDR=127.0.0.1:8081 LOG_LEVEL=info DATABASE_URL="$DATABASE_URL" go run ./cmd/core-go` (serves on `http://localhost:8081`)
 - Health:
   - `curl http://localhost:8081/healthz`
   - `curl http://localhost:8081/readyz`
 
-### 4) Run `ui-node`
+Tip: `core-go` is intentionally unauthenticated; in normal usage you should call the API through the UI proxy at `http://localhost:3000/api/...`.
+
+If you want to tweak discovery behavior, export `DISCOVERY_*` env vars before starting `core-go` (see `.env.example` for knobs).
+
+### 4) Run `ui-node` (UI + auth proxy)
 
 - `cd ui-node && npm ci`
-- Create `ui-node/.env.local`:
-  - `CORE_GO_BASE_URL=http://localhost:8081`
+- Optional: create `ui-node/.env.local` (Next.js loads this automatically):
+  - `CORE_GO_BASE_URL=http://localhost:8081` (only needed if you don’t use the default)
   - `AUTH_USERS=admin:admin:admin`
   - `AUTH_SESSION_SECRET=dev-session-secret`
 - Run:
   - Dev: `npm run dev` (serves on `http://localhost:3000`)
   - Prod: `npm run build && npm start` (serves on `http://localhost:3000`)
+- Open: <http://localhost:3000/> and sign in at <http://localhost:3000/auth/login>
+- Default local credentials: `admin` / `admin` (unless overridden via `AUTH_USERS`)
+
+### Troubleshooting (local)
+
+- `GET /readyz` fails: run migrations and verify `DATABASE_URL` points at the right database.
+- UI `/api/...` calls fail: ensure `core-go` is running and `CORE_GO_BASE_URL` can reach it.
+- Discovery ICMP failures: your OS may require raw-socket permissions for ping (see [docs/discovery-capabilities.md](docs/discovery-capabilities.md)).
 
 ## Docs
 
