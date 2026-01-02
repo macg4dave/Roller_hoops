@@ -66,6 +66,7 @@ If you want to build/test outside Docker on Ubuntu/Debian:
 ## Quickstart (dev)
 
 - Start the full stack: `docker compose up --build`
+- If you get `permission denied while trying to connect to the Docker daemon socket`, run `sudo docker compose up --build` (or add your user to the `docker` group and log out/in).
 - Optional: copy `.env.example` to `.env` to override local settings like `POSTGRES_PASSWORD`.
 - Open the UI: <http://localhost/>
 - Sign in: <http://localhost/auth/login> (example users live in `.env.example` via `AUTH_USERS`)
@@ -119,6 +120,12 @@ Common settings:
 ## Discovery requirements (network scanning)
 
 The discovery worker can do ARP/ICMP/SNMP and optional port scanning. In Docker, discovery fidelity depends on container networking and privileges (e.g. `CAP_NET_RAW` and/or host networking on Linux). See [docs/discovery-capabilities.md](docs/discovery-capabilities.md) (what works where) and [docs/discovery-deployment.md](docs/discovery-deployment.md) (deployment patterns) before enabling scanning in production.
+
+### Docker networking notes
+
+- The default `docker compose up` stack runs `core-go` on a Docker bridge network. It can reach L3 targets, but it cannot see the host ARP cache, so ARP-based discovery will mostly only see the Docker network unless you change the deployment model.
+- For Linux-only host-network discovery (higher fidelity ARP/ICMP), use the provided override:
+  - `sudo docker compose -f docker-compose.yml -f docker-compose.hostnet.yml up --build`
 
 Discovery runs are scoped. The UI can suggest scopes based on the scanner’s local interfaces; you can also set `DISCOVERY_DEFAULT_SCOPE` to provide a default CIDR/IP when a run omits `scope`.
 

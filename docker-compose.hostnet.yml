@@ -1,0 +1,30 @@
+# Optional override for higher-fidelity discovery on Linux.
+#
+# Usage:
+#   sudo docker compose -f docker-compose.yml -f docker-compose.hostnet.yml up --build
+#
+# What this changes:
+# - Runs `core-go` with `network_mode: host` so it can see host interfaces/routes/ARP.
+# - Publishes Postgres on `127.0.0.1:15432` so host-networked `core-go` can reach it.
+# - Points `ui-node` directly at `core-go` via `CORE_GO_BASE_URL`.
+#
+# Security note:
+# - `core-go` is intentionally unauthenticated. With host networking, its HTTP listener may be reachable
+#   from other machines on your network unless you bind it to a specific interface via `CORE_GO_HTTP_ADDR`
+#   and/or firewall it. Use only on trusted networks.
+services:
+  db:
+    ports:
+      - "127.0.0.1:15432:5432"
+
+  core-go:
+    network_mode: host
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@127.0.0.1:15432/roller_hoops?sslmode=disable
+      HTTP_ADDR: ${CORE_GO_HTTP_ADDR:-:8081}
+
+  ui-node:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      CORE_GO_BASE_URL: ${CORE_GO_BASE_URL:-http://host.docker.internal:8081}

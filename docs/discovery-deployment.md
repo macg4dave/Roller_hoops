@@ -45,6 +45,11 @@ Operational notes:
 - Keep `core-go` **not published** to the internet even though it’s on host networking.
 - Traefik should continue to expose only the UI, and the UI calls `core-go` over loopback/host network.
 
+Compose example (local dev):
+
+- `docker-compose.hostnet.yml` shows a working “host network” pattern for Linux.
+- Bring it up with: `sudo docker compose -f docker-compose.yml -f docker-compose.hostnet.yml up --build`
+
 ### Option B — “Dedicated scanner container / sidecar” (recommended for production)
 
 Deploy a dedicated **scanner** on each target network segment (VM/container) with the required reachability and privileges. That scanner runs `core-go` (or a future dedicated scanner binary) and writes observations to Postgres.

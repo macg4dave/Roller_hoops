@@ -24,7 +24,7 @@ A **self-hosted network tracker / mapper** that:
 
 ### Infrastructure
 
-* **Docker + docker-compose**
+* **Docker + Docker Compose v2**
 * **Reverse proxy**: Traefik
 * **Database**: PostgreSQL (only)
 * **Auth**: built-in (handled by UI; Go stays headless)
@@ -57,7 +57,7 @@ docker-compose.yml
 
 * Device CRUD live end-to-end via Go API and UI; metadata fields (`owner`, `location`, `notes`) persist in `device_metadata`.
 * Discovery endpoints persist runs/logs (`discovery_runs`, `discovery_run_logs`) and return real run ids; the Go worker claims queued runs and performs an ARP scrape + best-effort ICMP sweep (where available) to populate current IP/MAC facts and per-run observations, with optional enrichment (reverse DNS + SNMP) writing `device_name_candidates`, `device_snmp`, interface details, and VLAN PVIDs (`interface_vlans`) when enabled.
-* Traefik + docker-compose bring up UI and PostgreSQL with health checks enabled; **core-go stays private on the Docker network**.
+* Traefik + Docker Compose bring up UI and PostgreSQL with health checks enabled; **core-go stays private on the Docker network**.
 * Prometheus metrics (HTTP request counts/durations and discovery run counts/durations) are exposed at `/metrics`, and `docs/runbooks.md` captures the runbook for scraping, backups, migrations, and secrets rotation while we finish Phase 11.
 * OpenAPI spec exists at `api/openapi.yaml`, and a **Go contract test prevents drift** between the spec and the chi router.
 * Dev DB auth uses a password via env vars (no more `trust` by default); secrets are injected via `.env` (gitignored) or a secret manager.
@@ -131,7 +131,7 @@ GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone|service&focusId=...
 ## Blockers & risks (current)
 
 * **Auth boundary is enforced via UI sessions**: the UI requires login and issues a signed `roller_session` cookie before any API traffic is allowed; admin vs read-only roles are enforced in the UI (Go remains headless).
-* **Discovery inside Docker needs a deployment decision**: ARP/ICMP/SNMP fidelity depends on container networking and capabilities (e.g., `CAP_NET_RAW`, host networking, or a dedicated scanner container deployed on the target network). See [docs/discovery-capabilities.md](discovery-capabilities.md) and [docs/discovery-deployment.md](discovery-deployment.md).
+* **Discovery inside Docker needs a deployment decision**: ARP/ICMP/SNMP fidelity depends on container networking and capabilities (e.g., `CAP_NET_RAW`, host networking, or a dedicated scanner container deployed on the target network). See [docs/discovery-capabilities.md](discovery-capabilities.md) and [docs/discovery-deployment.md](discovery-deployment.md) (Linux host-network example: `docker-compose.hostnet.yml`).
 * **Production secret injection is a deployment responsibility**: keep secrets out of git, inject via env/Docker secrets/secret manager, and follow `docs/runbooks.md` for rotation expectations.
 * **Historical model implemented**: observations, change feed, and run/log APIs now exist; next focus is documenting retention and monitoring query cost.
 
@@ -395,7 +395,7 @@ Make the stack reproducible and boring to run locally and in production via comp
 * No shared state except DB
 * All config via env vars
 
-### docker-compose
+### Docker Compose
 
 * Profiles for dev / prod
 * Named volumes for DB
@@ -415,7 +415,7 @@ Deliverable:
 
 ## MVP exit criteria (Phases 0-5)
 
-* docker compose brings up Traefik, UI, Go API, and PostgreSQL with named volumes; health checks pass.
+* `docker compose up` brings up Traefik, UI, Go API, and PostgreSQL with named volumes; health checks pass.
 * Device CRUD flows work end-to-end (UI → API → DB) with request IDs in logs.
 * OpenAPI spec lives in the repo; API behaviour matches it (via codegen or contract tests).
 * Migrations are repeatable (`golang-migrate`), and a short doc exists for running them in dev/CI.
