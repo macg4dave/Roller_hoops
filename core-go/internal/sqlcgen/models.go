@@ -32,6 +32,16 @@ type DeviceNameCandidate struct {
 	ObservedAt time.Time
 }
 
+type DeviceTag struct {
+	DeviceID    string
+	Tag         string
+	Source      string
+	Confidence  int32
+	Evidence    map[string]any
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
 type DeviceMetadata struct {
 	DeviceID string
 	Owner    *string

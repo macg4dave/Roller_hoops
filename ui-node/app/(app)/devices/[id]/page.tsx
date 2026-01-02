@@ -9,7 +9,9 @@ import { EmptyState } from '@/app/_components/ui/EmptyState';
 
 import { DeviceMetadataEditor } from '../DeviceMetadataEditor';
 import { DeviceNameCandidatesPanel } from '../DeviceNameCandidatesPanel';
+import { DeviceTagsPanel } from '../DeviceTagsPanel';
 import type { Device, DeviceChangeFeed, DeviceFacts } from '../types';
+import { formatTagLabel } from '../tags';
 import { getSessionUser } from '../../../../lib/auth/session';
 import { DeviceHistoryTimeline } from './DeviceHistoryTimeline';
 
@@ -235,6 +237,14 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ i
           {device.primary_ip ? <Badge tone="info">IP {device.primary_ip}</Badge> : null}
           {online ? <Badge tone="success">Online</Badge> : <Badge tone="neutral">Offline</Badge>}
           {changed ? <Badge tone="warning">Changed</Badge> : null}
+          {(device.tags ?? [])
+            .filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0)
+            .slice(0, 6)
+            .map((tag) => (
+              <Badge key={tag} tone="neutral">
+                {formatTagLabel(tag)}
+              </Badge>
+            ))}
         </div>
       </header>
 
@@ -278,6 +288,8 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ i
           <DeviceMetadataEditor device={device} readOnly={isReadOnly} />
         </CardBody>
       </Card>
+
+      <DeviceTagsPanel deviceId={device.id} readOnly={isReadOnly} />
 
       <Card>
         <CardBody>

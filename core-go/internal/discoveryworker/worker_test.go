@@ -26,6 +26,8 @@ type fakeQueries struct {
 	insertMACObs          func(ctx context.Context, arg sqlcgen.InsertMACObservationParams) error
 	insertNameCandidateFn func(ctx context.Context, arg sqlcgen.InsertDeviceNameCandidateParams) error
 	setDisplayNameFn      func(ctx context.Context, arg sqlcgen.SetDeviceDisplayNameIfUnsetParams) (int64, error)
+	upsertTagFn           func(ctx context.Context, arg sqlcgen.UpsertDeviceTagParams) error
+	deleteTagsBySourceFn  func(ctx context.Context, arg sqlcgen.DeleteDeviceTagsBySourceParams) error
 	upsertSNMPFn          func(ctx context.Context, arg sqlcgen.UpsertDeviceSNMPParams) error
 	upsertInterfaceFn     func(ctx context.Context, arg sqlcgen.UpsertInterfaceFromSNMPParams) (string, error)
 	upsertIfaceByNameFn   func(ctx context.Context, arg sqlcgen.UpsertInterfaceByNameParams) (string, error)
@@ -109,6 +111,20 @@ func (f *fakeQueries) SetDeviceDisplayNameIfUnset(ctx context.Context, arg sqlcg
 		return 0, nil
 	}
 	return f.setDisplayNameFn(ctx, arg)
+}
+
+func (f *fakeQueries) UpsertDeviceTag(ctx context.Context, arg sqlcgen.UpsertDeviceTagParams) error {
+	if f.upsertTagFn == nil {
+		return nil
+	}
+	return f.upsertTagFn(ctx, arg)
+}
+
+func (f *fakeQueries) DeleteDeviceTagsBySource(ctx context.Context, arg sqlcgen.DeleteDeviceTagsBySourceParams) error {
+	if f.deleteTagsBySourceFn == nil {
+		return nil
+	}
+	return f.deleteTagsBySourceFn(ctx, arg)
 }
 
 func (f *fakeQueries) UpsertDeviceSNMP(ctx context.Context, arg sqlcgen.UpsertDeviceSNMPParams) error {

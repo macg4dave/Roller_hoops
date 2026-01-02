@@ -11,6 +11,9 @@ vi.mock('./DeviceNameCandidatesPanel', () => ({
 vi.mock('./DeviceMetadataEditor', () => ({
   DeviceMetadataEditor: () => null
 }));
+vi.mock('./DeviceTagsPanel', () => ({
+  DeviceTagsPanel: () => null
+}));
 vi.mock('./DiscoveryPanel', () => ({
   DiscoveryPanel: () => null
 }));

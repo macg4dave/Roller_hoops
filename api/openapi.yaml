@@ -179,6 +179,70 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /v1/devices/{id}/tags:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Devices]
+      summary: List tags for a device
+      description: |
+        Returns both auto-derived and manually applied tags, including confidence and evidence where available.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeviceTag'
+        '400':
+          description: Invalid ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags: [Devices]
+      summary: Replace manual tags for a device
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceTagsUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeviceTag'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /v1/devices/{id}/facts:
     parameters:
       - name: id
@@ -853,6 +917,11 @@ components:
         display_name:
           type: string
           description: Optional human-friendly name.
+        tags:
+          type: array
+          items:
+            type: string
+          description: Effective device tags (manual tags win and appear first).
         primary_ip:
           type: string
           nullable: true
@@ -1123,6 +1192,33 @@ components:
         observed_at:
           type: string
           format: date-time
+    DeviceTag:
+      type: object
+      required: [tag, source, confidence, updated_at]
+      properties:
+        tag:
+          type: string
+        source:
+          type: string
+          enum: [auto, manual]
+        confidence:
+          type: integer
+          minimum: 0
+          maximum: 100
+        evidence:
+          type: object
+          nullable: true
+          additionalProperties: true
+        updated_at:
+          type: string
+          format: date-time
+    DeviceTagsUpdate:
+      type: object
+      properties:
+        tags:
+          type: array
+          items:
+            type: string
     DeviceMetadata:
       type: object
       properties:

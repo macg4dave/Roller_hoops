@@ -38,6 +38,8 @@ type Queries interface {
 	InsertMACObservation(ctx context.Context, arg sqlcgen.InsertMACObservationParams) error
 	InsertDeviceNameCandidate(ctx context.Context, arg sqlcgen.InsertDeviceNameCandidateParams) error
 	SetDeviceDisplayNameIfUnset(ctx context.Context, arg sqlcgen.SetDeviceDisplayNameIfUnsetParams) (int64, error)
+	UpsertDeviceTag(ctx context.Context, arg sqlcgen.UpsertDeviceTagParams) error
+	DeleteDeviceTagsBySource(ctx context.Context, arg sqlcgen.DeleteDeviceTagsBySourceParams) error
 	UpsertDeviceSNMP(ctx context.Context, arg sqlcgen.UpsertDeviceSNMPParams) error
 	UpsertInterfaceFromSNMP(ctx context.Context, arg sqlcgen.UpsertInterfaceFromSNMPParams) (string, error)
 	UpsertInterfaceByName(ctx context.Context, arg sqlcgen.UpsertInterfaceByNameParams) (string, error)
@@ -421,6 +423,23 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 		Level:   "info",
 		Message: fmt.Sprintf("arp scrape: entries=%d devices_seen=%d devices_created=%d", result.ARPEntries, result.DevicesSeen, result.DevicesCreated),
 	})
+
+	// Clear auto tags for devices in this run so the classification result stays fresh.
+	// Manual tags are preserved and always take precedence in the UI.
+	seenDevices := make(map[string]struct{}, len(result.Targets))
+	for _, t := range result.Targets {
+		if t.DeviceID == "" {
+			continue
+		}
+		if _, ok := seenDevices[t.DeviceID]; ok {
+			continue
+		}
+		seenDevices[t.DeviceID] = struct{}{}
+		_ = w.q.DeleteDeviceTagsBySource(execCtx, sqlcgen.DeleteDeviceTagsBySourceParams{
+			DeviceID: t.DeviceID,
+			Source:   "auto",
+		})
+	}
 
 	enrichmentStats := w.runEnrichment(execCtx, result.Targets)
 	if enrichmentStats != nil {

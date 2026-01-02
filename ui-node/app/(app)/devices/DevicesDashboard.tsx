@@ -13,8 +13,10 @@ import { Input, Select } from '@/app/_components/ui/Inputs';
 import { CreateDeviceForm } from './CreateDeviceForm';
 import { DeviceNameCandidatesPanel } from './DeviceNameCandidatesPanel';
 import { DeviceMetadataEditor } from './DeviceMetadataEditor';
+import { DeviceTagsPanel } from './DeviceTagsPanel';
 import { DiscoveryPanel } from './DiscoveryPanel';
 import { ImportExportPanel } from './ImportExportPanel';
+import { formatTagLabel } from './tags';
 import type {
   DeviceChangeEvent,
   DeviceChangeFeed,
@@ -434,6 +436,7 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
               const isSelected = selectedId === device.id;
               const owner = device.metadata?.owner;
               const location = device.metadata?.location;
+              const tags = (device.tags ?? []).filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0);
               const mutedClass = isSelected ? undefined : 'deviceSelectMuted';
               const online = isOnline(device.last_seen_at);
               const changed = isRecentlyChanged(device.last_change_at);
@@ -462,6 +465,12 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
                     {online ? <Badge tone="success">Online</Badge> : <Badge tone="neutral">Offline</Badge>}
                     {changed ? <Badge tone="warning">Changed</Badge> : null}
                     {device.primary_ip ? <Badge tone="info">IP {device.primary_ip}</Badge> : null}
+                    {tags.slice(0, 3).map((tag) => (
+                      <Badge key={tag} tone="neutral">
+                        {formatTagLabel(tag)}
+                      </Badge>
+                    ))}
+                    {tags.length > 3 ? <span className="hint">+{tags.length - 3} tags</span> : null}
                   </div>
 
                   {owner || location ? (
@@ -541,6 +550,14 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
                       {isOnline(selectedDevice.last_seen_at) ? <Badge tone="success">Online</Badge> : <Badge tone="neutral">Offline</Badge>}
                       {isRecentlyChanged(selectedDevice.last_change_at) ? <Badge tone="warning">Changed</Badge> : null}
                       {selectedDevice.primary_ip ? <Badge tone="info">IP {selectedDevice.primary_ip}</Badge> : null}
+                      {(selectedDevice.tags ?? [])
+                        .filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0)
+                        .slice(0, 5)
+                        .map((tag) => (
+                          <Badge key={tag} tone="neutral">
+                            {formatTagLabel(tag)}
+                          </Badge>
+                        ))}
                     </div>
 
                     <div style={{ display: 'grid', gap: 4, fontSize: 13, color: 'var(--muted)' }}>
@@ -763,6 +780,8 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
                   </div>
                 </CardBody>
               </Card>
+
+              <DeviceTagsPanel deviceId={selectedDevice.id} readOnly={isReadOnly} />
 
               <Card>
                 <CardBody>

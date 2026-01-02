@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"roller_hoops/core-go/internal/tagging"
 	"roller_hoops/core-go/internal/sqlcgen"
 )
 
@@ -126,6 +127,7 @@ func (w *Worker) runPortScan(ctx context.Context, targets []enrichmentTarget) ma
 			now := time.Now()
 			source := "nmap"
 			state := "open"
+			openPorts := make([]int32, 0, 8)
 
 			for _, h := range run.Hosts {
 				for _, p := range h.Ports {
@@ -139,6 +141,7 @@ func (w *Worker) runPortScan(ctx context.Context, targets []enrichmentTarget) ma
 					if p.PortID <= 0 || p.PortID > 65535 {
 						continue
 					}
+					openPorts = append(openPorts, int32(p.PortID))
 					var name *string
 					if s := strings.TrimSpace(p.Service.Name); s != "" {
 						name = &s
@@ -155,6 +158,24 @@ func (w *Worker) runPortScan(ctx context.Context, targets []enrichmentTarget) ma
 					}); err == nil {
 						atomic.AddInt32(&servicesWritten, 1)
 					}
+				}
+			}
+
+			if len(openPorts) > 0 {
+				suggestions := tagging.MergeSuggestions(tagging.SuggestFromOpenPorts(openPorts))
+				for _, s := range suggestions {
+					if s.Evidence == nil {
+						s.Evidence = map[string]any{}
+					}
+					s.Evidence["ip"] = t.IP
+					s.Evidence["scanner"] = "nmap"
+					_ = w.q.UpsertDeviceTag(ctx, sqlcgen.UpsertDeviceTagParams{
+						DeviceID:   t.DeviceID,
+						Tag:        s.Tag,
+						Source:     "auto",
+						Confidence: int32(s.Confidence),
+						Evidence:   s.Evidence,
+					})
 				}
 			}
 		}
@@ -213,4 +234,3 @@ func (w *Worker) portScanLogMessage(stats map[string]any) string {
 	}
 	return fmt.Sprintf("port scan: targets=%v attempted=%v succeeded=%v services=%v", stats["targets"], stats["attempted"], stats["succeeded"], stats["services_written"])
 }
-

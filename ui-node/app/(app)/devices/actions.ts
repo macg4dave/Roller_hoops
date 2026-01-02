@@ -6,11 +6,12 @@ import { randomUUID } from 'crypto';
 
 import { Device, DiscoveryRun } from './types';
 
-import { CreateDeviceState, DiscoveryRunState, DeviceMetadataState, DeviceDisplayNameState } from './state';
+import { CreateDeviceState, DiscoveryRunState, DeviceMetadataState, DeviceDisplayNameState, DeviceTagsState } from './state';
 import { getSessionUser } from '../../../lib/auth/session';
 import { writeAuditEvent } from '../../../lib/audit';
 import { normalizeScanPreset } from '../discovery/presets';
 import { normalizeScanTags } from '../discovery/tags';
+import { DEVICE_TAG_OPTIONS, type DeviceTagValue } from './tags';
 
 function apiBase() {
   return process.env.CORE_GO_BASE_URL ?? 'http://localhost:8081';
@@ -320,4 +321,73 @@ export async function updateDeviceDisplayName(
   revalidatePath('/devices');
   const label = device.display_name?.trim() || 'device';
   return { status: 'success', message: `Display name set to ${label}` };
+}
+
+function normalizeDeviceTagValues(values: FormDataEntryValue[]): DeviceTagValue[] {
+  const allowed = new Set<DeviceTagValue>(DEVICE_TAG_OPTIONS.map((opt) => opt.value));
+  const seen = new Set<DeviceTagValue>();
+  const out: DeviceTagValue[] = [];
+
+  for (const raw of values) {
+    if (typeof raw !== 'string') continue;
+    const normalized = raw.trim().toLowerCase();
+    if (!normalized) continue;
+    if (!allowed.has(normalized as DeviceTagValue)) continue;
+    const value = normalized as DeviceTagValue;
+    if (seen.has(value)) continue;
+    seen.add(value);
+    out.push(value);
+  }
+
+  return out;
+}
+
+export async function updateDeviceTags(_prevState: DeviceTagsState, formData: FormData): Promise<DeviceTagsState> {
+  const session = await getSessionUser();
+  if (!session) {
+    return { status: 'error', message: 'Authentication required.' };
+  }
+  if (session.role === 'read-only') {
+    return { status: 'error', message: 'Read-only users cannot modify tags.' };
+  }
+
+  const deviceId = formData.get('device_id');
+  if (typeof deviceId !== 'string' || deviceId.trim().length === 0) {
+    return { status: 'error', message: 'missing device id' };
+  }
+
+  const tags = normalizeDeviceTagValues(formData.getAll('tags'));
+
+  const reqId = (await headers()).get('x-request-id') ?? randomUUID();
+  const res = await fetch(`${apiBase()}/api/v1/devices/${deviceId}/tags`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'X-Request-ID': reqId
+    },
+    cache: 'no-store',
+    body: JSON.stringify({ tags })
+  });
+
+  if (!res.ok) {
+    const message = (await extractErrorMessage(res)) ?? `Request failed (${res.status})`;
+    return { status: 'error', message };
+  }
+
+  await writeAuditEvent(
+    {
+      actor: session.username,
+      actor_role: session.role,
+      action: 'device.tags.update',
+      target_type: 'device',
+      target_id: deviceId,
+      details: { tags }
+    },
+    reqId
+  );
+
+  revalidatePath('/devices');
+  revalidatePath(`/devices/${deviceId}`);
+  return { status: 'success', message: tags.length ? 'Manual tags updated.' : 'Manual tags cleared.' };
 }

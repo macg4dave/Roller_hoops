@@ -283,17 +283,47 @@ func parseNetBIOSNodeStatusResponse(resp []byte, expectedTxID uint16) ([]string,
 	}
 
 	names := make([]string, 0, numNames)
+	preferred := make([]string, 0, numNames)
+	fallback := make([]string, 0, numNames)
+	seen := make(map[string]struct{}, numNames)
 	pos := 0
 	for i := 0; i < numNames; i++ {
 		if pos+18 > len(payload) {
 			break
 		}
 		raw := strings.TrimSpace(string(payload[pos : pos+15]))
-		if raw != "" {
-			names = append(names, raw)
-		}
+		suffix := payload[pos+15]
+		flags := binary.BigEndian.Uint16(payload[pos+16 : pos+18])
 		pos += 18
+
+		if raw == "" {
+			continue
+		}
+
+		normalized := strings.ToLower(raw)
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+
+		// Group names are often things like WORKGROUP or BROWSE lists, not device identities.
+		isGroup := flags&0x8000 != 0
+		if isGroup {
+			continue
+		}
+
+		switch suffix {
+		case 0x20:
+			preferred = append(preferred, raw)
+		case 0x00:
+			fallback = append(fallback, raw)
+		default:
+			// Ignore other suffixes (often services/groups).
+		}
 	}
+
+	names = append(names, preferred...)
+	names = append(names, fallback...)
 	return names, nil
 }
 

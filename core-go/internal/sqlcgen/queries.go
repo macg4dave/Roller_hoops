@@ -468,6 +468,115 @@ func (q *Queries) ListDeviceNameCandidates(ctx context.Context, deviceID string)
 	return items, nil
 }
 
+const upsertDeviceTag = `-- name: UpsertDeviceTag :exec
+INSERT INTO device_tags (device_id, tag, source, confidence, evidence)
+VALUES ($1::uuid, $2, $3, $4, COALESCE($5, '{}'::jsonb))
+ON CONFLICT (device_id, tag, source) DO UPDATE
+SET confidence = GREATEST(device_tags.confidence, EXCLUDED.confidence),
+    evidence = CASE
+                WHEN device_tags.evidence IS NULL THEN EXCLUDED.evidence
+                WHEN EXCLUDED.evidence IS NULL THEN device_tags.evidence
+                ELSE device_tags.evidence || EXCLUDED.evidence
+              END,
+    updated_at = now()
+`
+
+type UpsertDeviceTagParams struct {
+	DeviceID   string
+	Tag        string
+	Source     string
+	Confidence int32
+	Evidence   map[string]any
+}
+
+func (q *Queries) UpsertDeviceTag(ctx context.Context, arg UpsertDeviceTagParams) error {
+	_, err := q.db.Exec(ctx, upsertDeviceTag, arg.DeviceID, arg.Tag, arg.Source, arg.Confidence, arg.Evidence)
+	return err
+}
+
+const deleteDeviceTagsBySource = `-- name: DeleteDeviceTagsBySource :exec
+DELETE FROM device_tags
+WHERE device_id = $1::uuid AND source = $2
+`
+
+type DeleteDeviceTagsBySourceParams struct {
+	DeviceID string
+	Source   string
+}
+
+func (q *Queries) DeleteDeviceTagsBySource(ctx context.Context, arg DeleteDeviceTagsBySourceParams) error {
+	_, err := q.db.Exec(ctx, deleteDeviceTagsBySource, arg.DeviceID, arg.Source)
+	return err
+}
+
+const listDeviceTags = `-- name: ListDeviceTags :many
+SELECT device_id,
+       tag,
+       source,
+       confidence,
+       evidence,
+       created_at,
+       updated_at
+FROM device_tags
+WHERE device_id = $1::uuid
+ORDER BY CASE source WHEN 'manual' THEN 0 ELSE 1 END,
+         confidence DESC,
+         updated_at DESC,
+         tag ASC
+`
+
+func (q *Queries) ListDeviceTags(ctx context.Context, deviceID string) ([]DeviceTag, error) {
+	rows, err := q.db.Query(ctx, listDeviceTags, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []DeviceTag
+	for rows.Next() {
+		var i DeviceTag
+		if err := rows.Scan(&i.DeviceID, &i.Tag, &i.Source, &i.Confidence, &i.Evidence, &i.CreatedAt, &i.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDeviceEffectiveTags = `-- name: ListDeviceEffectiveTags :many
+SELECT tag
+FROM device_tags
+WHERE device_id = $1::uuid
+ORDER BY CASE source WHEN 'manual' THEN 0 ELSE 1 END,
+         confidence DESC,
+         updated_at DESC,
+         tag ASC
+`
+
+func (q *Queries) ListDeviceEffectiveTags(ctx context.Context, deviceID string) ([]string, error) {
+	rows, err := q.db.Query(ctx, listDeviceEffectiveTags, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []string
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			return nil, err
+		}
+		items = append(items, tag)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDeviceIPs = `-- name: ListDeviceIPs :many
 SELECT ia.ip::text,
        ia.interface_id::text,

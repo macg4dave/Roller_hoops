@@ -23,6 +23,8 @@ import (
 
 	"roller_hoops/core-go/internal/db"
 	"roller_hoops/core-go/internal/metrics"
+	"roller_hoops/core-go/internal/naming"
+	"roller_hoops/core-go/internal/tagging"
 	"roller_hoops/core-go/internal/sqlcgen"
 )
 
@@ -43,6 +45,10 @@ type deviceQueries interface {
 	CreateDevice(ctx context.Context, displayName *string) (sqlcgen.Device, error)
 	UpdateDevice(ctx context.Context, arg sqlcgen.UpdateDeviceParams) (sqlcgen.Device, error)
 	UpsertDeviceMetadata(ctx context.Context, arg sqlcgen.UpsertDeviceMetadataParams) (sqlcgen.DeviceMetadata, error)
+	ListDeviceTags(ctx context.Context, deviceID string) ([]sqlcgen.DeviceTag, error)
+	ListDeviceEffectiveTags(ctx context.Context, deviceID string) ([]string, error)
+	DeleteDeviceTagsBySource(ctx context.Context, arg sqlcgen.DeleteDeviceTagsBySourceParams) error
+	UpsertDeviceTag(ctx context.Context, arg sqlcgen.UpsertDeviceTagParams) error
 	ListDeviceNameCandidates(ctx context.Context, deviceID string) ([]sqlcgen.DeviceNameCandidate, error)
 	ListDeviceIPs(ctx context.Context, deviceID string) ([]sqlcgen.DeviceIP, error)
 	ListDeviceMACs(ctx context.Context, deviceID string) ([]sqlcgen.DeviceMAC, error)
@@ -130,6 +136,8 @@ func (h *Handler) Router() http.Handler {
 					r.Get("/", h.handleGetDevice)
 					r.Get("/facts", h.handleGetDeviceFacts)
 					r.Get("/name-candidates", h.handleListDeviceNameCandidates)
+					r.Get("/tags", h.handleListDeviceTags)
+					r.Put("/tags", h.handlePutDeviceTags)
 					r.Get("/history", h.handleDeviceHistory)
 					r.Put("/", h.handleUpdateDevice)
 				})
@@ -287,6 +295,7 @@ type device struct {
 	ID           string          `json:"id"`
 	DisplayName  *string         `json:"display_name,omitempty"`
 	PrimaryIP    *string         `json:"primary_ip,omitempty"`
+	Tags         []string        `json:"tags,omitempty"`
 	Metadata     *deviceMetadata `json:"metadata,omitempty"`
 	LastSeenAt   *time.Time      `json:"last_seen_at,omitempty"`
 	LastChangeAt *time.Time      `json:"last_change_at,omitempty"`
@@ -297,6 +306,14 @@ type deviceNameCandidate struct {
 	Source     string  `json:"source"`
 	Address    *string `json:"address,omitempty"`
 	ObservedAt string  `json:"observed_at"`
+}
+
+type deviceTag struct {
+	Tag        string         `json:"tag"`
+	Source     string         `json:"source"`
+	Confidence int32          `json:"confidence"`
+	Evidence   map[string]any `json:"evidence,omitempty"`
+	UpdatedAt  string         `json:"updated_at"`
 }
 
 type deviceChangeEventResponse struct {
@@ -579,7 +596,11 @@ func (h *Handler) listDevicesPayload(ctx context.Context) ([]device, error) {
 	}
 	resp := make([]device, 0, len(rows))
 	for _, d := range rows {
-		resp = append(resp, toDevice(d))
+		item := toDevice(d)
+		if tags, err := h.devices.ListDeviceEffectiveTags(ctx, d.ID); err == nil && len(tags) > 0 {
+			item.Tags = tags
+		}
+		resp = append(resp, item)
 	}
 	return resp, nil
 }
@@ -931,7 +952,11 @@ func (h *Handler) handleListDevices(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := make([]device, 0, len(rows))
 	for _, row := range rows {
-		resp = append(resp, toDeviceListItem(row))
+		item := toDeviceListItem(row)
+		if tags, err := h.devices.ListDeviceEffectiveTags(r.Context(), row.ID); err == nil && len(tags) > 0 {
+			item.Tags = tags
+		}
+		resp = append(resp, item)
 	}
 	h.writeJSON(w, http.StatusOK, devicePage{Devices: resp, Cursor: cursorOut})
 }
@@ -1325,7 +1350,11 @@ func (h *Handler) handleGetDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.writeJSON(w, http.StatusOK, toDevice(row))
+	resp := toDevice(row)
+	if tags, err := h.devices.ListDeviceEffectiveTags(r.Context(), row.ID); err == nil && len(tags) > 0 {
+		resp.Tags = tags
+	}
+	h.writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) handleGetDeviceFacts(w http.ResponseWriter, r *http.Request) {
@@ -1524,8 +1553,39 @@ func (h *Handler) handleListDeviceNameCandidates(w http.ResponseWriter, r *http.
 		return
 	}
 
-	out := make([]deviceNameCandidate, 0, len(rows))
+	type scored struct {
+		row   sqlcgen.DeviceNameCandidate
+		score int
+		ok    bool
+	}
+
+	scoredRows := make([]scored, 0, len(rows))
 	for _, row := range rows {
+		_, _, score, ok := naming.NormalizeCandidate(row.Source, row.Name)
+		scoredRows = append(scoredRows, scored{row: row, score: score, ok: ok})
+	}
+
+	sort.SliceStable(scoredRows, func(i, j int) bool {
+		a := scoredRows[i]
+		b := scoredRows[j]
+		if a.ok != b.ok {
+			return a.ok
+		}
+		if a.score != b.score {
+			return a.score > b.score
+		}
+		if !a.row.ObservedAt.Equal(b.row.ObservedAt) {
+			return a.row.ObservedAt.After(b.row.ObservedAt)
+		}
+		if a.row.Source != b.row.Source {
+			return a.row.Source < b.row.Source
+		}
+		return a.row.Name < b.row.Name
+	})
+
+	out := make([]deviceNameCandidate, 0, len(scoredRows))
+	for _, item := range scoredRows {
+		row := item.row
 		out = append(out, deviceNameCandidate{
 			Name:       row.Name,
 			Source:     row.Source,
@@ -1534,6 +1594,126 @@ func (h *Handler) handleListDeviceNameCandidates(w http.ResponseWriter, r *http.
 		})
 	}
 	h.writeJSON(w, http.StatusOK, out)
+}
+
+type deviceTagsUpdate struct {
+	Tags []string `json:"tags"`
+}
+
+func validateDeviceTagList(tags []string) ([]string, error) {
+	if len(tags) == 0 {
+		return nil, nil
+	}
+	if len(tags) > 32 {
+		return nil, fmt.Errorf("too many tags (max 32)")
+	}
+
+	seen := make(map[string]struct{}, len(tags))
+	out := make([]string, 0, len(tags))
+	for _, raw := range tags {
+		t := tagging.NormalizeTag(raw)
+		if t == "" {
+			continue
+		}
+		if !tagging.IsValidTag(t) {
+			return nil, fmt.Errorf("unknown tag %q", t)
+		}
+		if _, ok := seen[t]; ok {
+			continue
+		}
+		seen[t] = struct{}{}
+		out = append(out, t)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+func (h *Handler) handleListDeviceTags(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if !h.ensureDeviceQueries(w) {
+		return
+	}
+
+	rows, err := h.devices.ListDeviceTags(r.Context(), id)
+	if err != nil {
+		switch {
+		case isInvalidUUID(err):
+			h.writeError(w, http.StatusBadRequest, "invalid_id", "device id is not a valid uuid", map[string]any{"id": id})
+		default:
+			h.log.Error().Err(err).Str("id", id).Msg("list device tags failed")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to list device tags", nil)
+		}
+		return
+	}
+
+	out := make([]deviceTag, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, deviceTag{
+			Tag:        row.Tag,
+			Source:     row.Source,
+			Confidence: row.Confidence,
+			Evidence:   row.Evidence,
+			UpdatedAt:  row.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	h.writeJSON(w, http.StatusOK, out)
+}
+
+func (h *Handler) handlePutDeviceTags(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req deviceTagsUpdate
+	if r.ContentLength > 0 {
+		if err := decodeJSONStrict(r, &req); err != nil {
+			h.writeError(w, http.StatusBadRequest, "validation_failed", "invalid json body", map[string]any{"error": err.Error()})
+			return
+		}
+	}
+
+	normalized, err := validateDeviceTagList(req.Tags)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "validation_failed", "invalid device tags", map[string]any{"error": err.Error()})
+		return
+	}
+
+	if !h.ensureDeviceQueries(w) {
+		return
+	}
+
+	ctx := r.Context()
+	if _, err := h.devices.GetDevice(ctx, id); err != nil {
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			h.writeError(w, http.StatusNotFound, "not_found", "device not found", map[string]any{"id": id})
+		case isInvalidUUID(err):
+			h.writeError(w, http.StatusBadRequest, "invalid_id", "device id is not a valid uuid", map[string]any{"id": id})
+		default:
+			h.log.Error().Err(err).Str("id", id).Msg("get device before tags update failed")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to update device tags", nil)
+		}
+		return
+	}
+
+	if err := h.devices.DeleteDeviceTagsBySource(ctx, sqlcgen.DeleteDeviceTagsBySourceParams{DeviceID: id, Source: "manual"}); err != nil {
+		if isInvalidUUID(err) {
+			h.writeError(w, http.StatusBadRequest, "invalid_id", "device id is not a valid uuid", map[string]any{"id": id})
+		} else {
+			h.log.Error().Err(err).Str("id", id).Msg("delete manual tags failed")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to update device tags", nil)
+		}
+		return
+	}
+
+	for _, tag := range normalized {
+		_ = h.devices.UpsertDeviceTag(ctx, sqlcgen.UpsertDeviceTagParams{
+			DeviceID:   id,
+			Tag:        tag,
+			Source:     "manual",
+			Confidence: 100,
+			Evidence:   map[string]any{"signal": "manual"},
+		})
+	}
+
+	h.handleListDeviceTags(w, r)
 }
 
 func (h *Handler) handleListDeviceChangeEvents(w http.ResponseWriter, r *http.Request) {
@@ -1702,7 +1882,11 @@ func (h *Handler) handleUpdateDevice(w http.ResponseWriter, r *http.Request) {
 		row.Notes = meta.Notes
 	}
 
-	h.writeJSON(w, http.StatusOK, toDevice(row))
+	resp := toDevice(row)
+	if tags, err := h.devices.ListDeviceEffectiveTags(ctx, row.ID); err == nil && len(tags) > 0 {
+		resp.Tags = tags
+	}
+	h.writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) handleDiscoveryRun(w http.ResponseWriter, r *http.Request) {

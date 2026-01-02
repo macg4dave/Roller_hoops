@@ -35,3 +35,12 @@ export type DeviceDisplayNameState = {
 export function initialDeviceDisplayNameState(): DeviceDisplayNameState {
   return { status: 'idle' };
 }
+
+export type DeviceTagsState = {
+  status: 'idle' | 'success' | 'error';
+  message?: string;
+};
+
+export function initialDeviceTagsState(): DeviceTagsState {
+  return { status: 'idle' };
+}

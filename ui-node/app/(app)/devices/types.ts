@@ -7,6 +7,7 @@ export type DeviceMetadata = {
 export type Device = {
   id: string;
   display_name?: string | null;
+  tags?: string[] | null;
   primary_ip?: string | null;
   last_seen_at?: string | null;
   last_change_at?: string | null;
@@ -115,6 +116,14 @@ export type DeviceNameCandidate = {
   source: string;
   address?: string | null;
   observed_at: string;
+};
+
+export type DeviceTag = {
+  tag: string;
+  source: 'auto' | 'manual';
+  confidence: number;
+  evidence?: Record<string, unknown> | null;
+  updated_at: string;
 };
 
 export type DiscoveryRun = {

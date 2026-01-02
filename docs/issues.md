@@ -23,8 +23,8 @@ This file is the project’s **lightweight issue log**. It’s intentionally Mar
 | ISS-001 | Network discovery doesn’t scan outside Docker | open | core-go/discovery | high | 2025-12-15 |
 | ISS-002 | Map view UX clutter; needs auto-layout | fixed | ui-node/map | medium | 2026-01-02 |
 | ISS-003 | Discovery UX needs presets + automation | fixed | ui-node/discovery | high | 2026-01-02 |
-| ISS-004 | Device naming is low-quality/inconsistent | open | core-go/enrichment | medium | 2026-01-02 |
-| ISS-005 | Devices should be auto-classified + tagged | open | core-go/enrichment | medium | 2026-01-02 |
+| ISS-004 | Device naming is low-quality/inconsistent | fixed | core-go/enrichment | medium | 2026-01-02 |
+| ISS-005 | Devices should be auto-classified + tagged | fixed | core-go/enrichment | medium | 2026-01-02 |
 | ISS-006 | Devices page layout wastes space; lacks detail | open | ui-node/devices | medium | 2026-01-02 |
 
 ---
@@ -88,7 +88,6 @@ One or more of the following is true:
 ### Fix reference
 
 - _Not fixed yet._
-
 
 ## ISS-002 — Map view UX clutter; needs auto-layout
 
@@ -170,12 +169,14 @@ Automatically generated device names are often unhelpful or inconsistent, making
 
 ### Next actions
 
-- [ ] Document current naming behavior and where it’s computed.
-- [ ] Add candidate ordering rules + a “best name” selection strategy.
+- [x] Document current naming behavior and where it’s computed.
+- [x] Add candidate ordering rules + a “best name” selection strategy.
 
 ### Fix reference
 
-- _Not fixed yet._
+- Current naming sources: reverse DNS / mDNS / NetBIOS (`core-go/internal/enrichment/mdns/mdns.go`) + SNMP sysName and neighbor names (`core-go/internal/discoveryworker/enrichment.go`).
+- Best-name scoring/normalization logic: `core-go/internal/naming/naming.go`.
+- Candidate ordering exposed via API: `core-go/internal/httpapi/handler.go` sorts `/api/v1/devices/{id}/name-candidates` by quality.
 
 ---
 
@@ -196,13 +197,16 @@ Discovered devices should be auto-tagged/classified on a best-guess basis (route
 
 ### Next actions
 
-- [ ] Define an initial taxonomy (small, practical set).
-- [ ] Implement “best guess” tagging with transparent signals (explainable heuristics).
-- [ ] Add a manual override flow in the UI (user-applied tags should win).
+- [x] Define an initial taxonomy (small, practical set).
+- [x] Implement “best guess” tagging with transparent signals (explainable heuristics).
+- [x] Add a manual override flow in the UI (user-applied tags should win).
 
 ### Fix reference
 
-- _Not fixed yet._
+- DB: `core-go/migrations/011_device_tags.up.sql` adds `device_tags` (`auto|manual`, confidence, evidence).
+- Heuristics: `core-go/internal/tagging/tagging.go` suggests tags from names/sysDescr/ports; worker stores `auto` tags.
+- API: `core-go/internal/httpapi/handler.go` serves `GET/PUT /api/v1/devices/{id}/tags` and includes `tags` on devices.
+- UI: `ui-node/app/(app)/devices/DeviceTagsPanel.tsx` + list/detail rendering in `ui-node/app/(app)/devices/DevicesDashboard.tsx` and `ui-node/app/(app)/devices/[id]/page.tsx`.
 
 ---
 

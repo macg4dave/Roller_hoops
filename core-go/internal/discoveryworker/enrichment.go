@@ -11,6 +11,8 @@ import (
 	"roller_hoops/core-go/internal/enrichment/mdns"
 	"roller_hoops/core-go/internal/enrichment/snmp"
 	"roller_hoops/core-go/internal/enrichment/vlan"
+	"roller_hoops/core-go/internal/naming"
+	"roller_hoops/core-go/internal/tagging"
 	"roller_hoops/core-go/internal/sqlcgen"
 )
 
@@ -61,6 +63,7 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 	var linksWritten int32
 
 	snmpAttempted := sync.Map{}
+	nameAttempted := sync.Map{}
 
 	jobs := make(chan enrichmentTarget)
 	wg := sync.WaitGroup{}
@@ -74,38 +77,57 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 
 			ipStr := t.IP.String()
 			ipPtr := &ipStr
-
-			if w.nameResolutionEnabled {
-				nameCtx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
-				cands, err := resolver.LookupAddr(nameCtx, t.DeviceID, ipStr)
-				cancel()
-				if err != nil && len(cands) == 0 {
-					w.log.Debug().Err(err).Str("ip", ipStr).Msg("name resolution failed")
-				}
-				if len(cands) > 0 {
-					for _, c := range cands {
-						if c.Name == "" {
-							continue
-						}
-						if err := w.q.InsertDeviceNameCandidate(ctx, sqlcgen.InsertDeviceNameCandidateParams{
-							DeviceID: t.DeviceID,
-							Name:     c.Name,
-							Source:   c.Source,
-							Address:  ipPtr,
-						}); err == nil {
-							atomic.AddInt32(&namesWritten, 1)
-						}
+			deviceCandidates := make([]naming.Candidate, 0, 8)
+			deviceNames := make([]string, 0, 8)
+			upsertSuggestions := func(deviceID string, suggestions []tagging.Suggestion) {
+				for _, s := range suggestions {
+					if s.Evidence == nil {
+						s.Evidence = map[string]any{}
 					}
-					_, _ = w.q.SetDeviceDisplayNameIfUnset(ctx, sqlcgen.SetDeviceDisplayNameIfUnsetParams{
-						ID:          t.DeviceID,
-						DisplayName: cands[0].Name,
+					s.Evidence["ip"] = ipStr
+					_ = w.q.UpsertDeviceTag(ctx, sqlcgen.UpsertDeviceTagParams{
+						DeviceID:   deviceID,
+						Tag:        s.Tag,
+						Source:     "auto",
+						Confidence: int32(s.Confidence),
+						Evidence:   s.Evidence,
 					})
 				}
 			}
 
 			if w.snmpEnabled && snmpClient != nil {
 				if _, loaded := snmpAttempted.LoadOrStore(t.DeviceID, struct{}{}); loaded {
+					// SNMP enrichment (including display name selection) should run once per device.
 					continue
+				}
+
+				if w.nameResolutionEnabled {
+					if _, loaded := nameAttempted.LoadOrStore(t.DeviceID, struct{}{}); !loaded {
+						nameCtx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
+						cands, err := resolver.LookupAddr(nameCtx, t.DeviceID, ipStr)
+						cancel()
+						if err != nil && len(cands) == 0 {
+							w.log.Debug().Err(err).Str("ip", ipStr).Msg("name resolution failed")
+						}
+						if len(cands) > 0 {
+							for _, c := range cands {
+								stored, _, _, ok := naming.NormalizeCandidate(c.Source, c.Name)
+								if !ok {
+									continue
+								}
+								deviceCandidates = append(deviceCandidates, naming.Candidate{Name: stored, Source: c.Source})
+								deviceNames = append(deviceNames, stored)
+								if err := w.q.InsertDeviceNameCandidate(ctx, sqlcgen.InsertDeviceNameCandidateParams{
+									DeviceID: t.DeviceID,
+									Name:     stored,
+									Source:   c.Source,
+									Address:  ipPtr,
+								}); err == nil {
+									atomic.AddInt32(&namesWritten, 1)
+								}
+							}
+						}
+					}
 				}
 
 				target := snmp.Target{ID: t.DeviceID, Address: ipStr}
@@ -119,6 +141,15 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 						LastSuccessAt: nil,
 						LastError:     &msg,
 					})
+
+					if displayName, ok := naming.ChooseBestDisplayName(deviceCandidates); ok {
+						_, _ = w.q.SetDeviceDisplayNameIfUnset(ctx, sqlcgen.SetDeviceDisplayNameIfUnsetParams{
+							ID:          t.DeviceID,
+							DisplayName: displayName,
+						})
+					}
+					upsertSuggestions(t.DeviceID, tagging.MergeSuggestions(tagging.SuggestFromNames(deviceNames)))
+
 					continue
 				}
 
@@ -135,16 +166,33 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 					LastError:     nil,
 				})
 
-				if system.SysName != nil && *system.SysName != "" {
-					_ = w.q.InsertDeviceNameCandidate(ctx, sqlcgen.InsertDeviceNameCandidateParams{
-						DeviceID: t.DeviceID,
-						Name:     *system.SysName,
-						Source:   "snmp",
-						Address:  ipPtr,
-					})
+				if system.SysName != nil && strings.TrimSpace(*system.SysName) != "" {
+					stored, _, _, ok := naming.NormalizeCandidate("snmp", *system.SysName)
+					if ok {
+						deviceCandidates = append(deviceCandidates, naming.Candidate{Name: stored, Source: "snmp"})
+						deviceNames = append(deviceNames, stored)
+						_ = w.q.InsertDeviceNameCandidate(ctx, sqlcgen.InsertDeviceNameCandidateParams{
+							DeviceID: t.DeviceID,
+							Name:     stored,
+							Source:   "snmp",
+							Address:  ipPtr,
+						})
+					}
+				}
+
+				if system.SysDescr != nil && strings.TrimSpace(*system.SysDescr) != "" {
+					upsertSuggestions(t.DeviceID, tagging.MergeSuggestions(
+						tagging.SuggestFromSNMP(*system.SysDescr),
+						tagging.SuggestFromNames(deviceNames),
+					))
+				} else {
+					upsertSuggestions(t.DeviceID, tagging.MergeSuggestions(tagging.SuggestFromNames(deviceNames)))
+				}
+
+				if displayName, ok := naming.ChooseBestDisplayName(deviceCandidates); ok {
 					_, _ = w.q.SetDeviceDisplayNameIfUnset(ctx, sqlcgen.SetDeviceDisplayNameIfUnsetParams{
 						ID:          t.DeviceID,
-						DisplayName: *system.SysName,
+						DisplayName: displayName,
 					})
 				}
 
@@ -266,16 +314,22 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 							})
 						}
 						if n.RemoteDeviceName != nil && strings.TrimSpace(*n.RemoteDeviceName) != "" {
+							stored, display, score, ok := naming.NormalizeCandidate(n.Source, strings.TrimSpace(*n.RemoteDeviceName))
+							if !ok || score < 70 {
+								continue
+							}
 							_ = w.q.InsertDeviceNameCandidate(ctx, sqlcgen.InsertDeviceNameCandidateParams{
 								DeviceID: remoteDeviceID,
-								Name:     strings.TrimSpace(*n.RemoteDeviceName),
+								Name:     stored,
 								Source:   n.Source,
 								Address:  nil,
 							})
-							_, _ = w.q.SetDeviceDisplayNameIfUnset(ctx, sqlcgen.SetDeviceDisplayNameIfUnsetParams{
-								ID:          remoteDeviceID,
-								DisplayName: strings.TrimSpace(*n.RemoteDeviceName),
-							})
+							if display != "" {
+								_, _ = w.q.SetDeviceDisplayNameIfUnset(ctx, sqlcgen.SetDeviceDisplayNameIfUnsetParams{
+									ID:          remoteDeviceID,
+									DisplayName: display,
+								})
+							}
 						}
 
 						var localInterfaceID *string
@@ -313,6 +367,44 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 						}
 					}
 				}
+			}
+
+			// If SNMP is disabled, still attempt to auto-name from reverse DNS / mDNS / NetBIOS.
+			if w.nameResolutionEnabled {
+				if _, loaded := nameAttempted.LoadOrStore(t.DeviceID, struct{}{}); loaded {
+					continue
+				}
+				nameCtx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
+				cands, err := resolver.LookupAddr(nameCtx, t.DeviceID, ipStr)
+				cancel()
+				if err != nil && len(cands) == 0 {
+					w.log.Debug().Err(err).Str("ip", ipStr).Msg("name resolution failed")
+				}
+				if len(cands) > 0 {
+					for _, c := range cands {
+						stored, _, _, ok := naming.NormalizeCandidate(c.Source, c.Name)
+						if !ok {
+							continue
+						}
+						deviceCandidates = append(deviceCandidates, naming.Candidate{Name: stored, Source: c.Source})
+						deviceNames = append(deviceNames, stored)
+						if err := w.q.InsertDeviceNameCandidate(ctx, sqlcgen.InsertDeviceNameCandidateParams{
+							DeviceID: t.DeviceID,
+							Name:     stored,
+							Source:   c.Source,
+							Address:  ipPtr,
+						}); err == nil {
+							atomic.AddInt32(&namesWritten, 1)
+						}
+					}
+				}
+				if displayName, ok := naming.ChooseBestDisplayName(deviceCandidates); ok {
+					_, _ = w.q.SetDeviceDisplayNameIfUnset(ctx, sqlcgen.SetDeviceDisplayNameIfUnsetParams{
+						ID:          t.DeviceID,
+						DisplayName: displayName,
+					})
+				}
+				upsertSuggestions(t.DeviceID, tagging.MergeSuggestions(tagging.SuggestFromNames(deviceNames)))
 			}
 		}
 	}
