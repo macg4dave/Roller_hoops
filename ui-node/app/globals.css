@@ -436,22 +436,42 @@ pre {
 
 .devicesDashboardMain {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
+  grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
   gap: 16px;
+  align-items: start;
 }
 
 .devicesList {
   display: grid;
-  gap: 12px;
+  gap: 10px;
+}
+
+.devicesCompactHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) 140px 140px minmax(0, 1fr) 160px;
+  gap: 10px;
+  padding: 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .deviceSelect {
-  padding: 16px 18px;
+  appearance: none;
+  padding: 12px 12px;
   display: grid;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
   text-align: left;
   cursor: pointer;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  color: inherit;
+  font: inherit;
 }
 
 .deviceSelectActive {
@@ -464,10 +484,78 @@ pre {
   color: var(--muted-2);
 }
 
+.devicesCompactRow {
+  grid-template-columns: minmax(0, 1.6fr) 140px 140px minmax(0, 1fr) 160px;
+  gap: 10px;
+  align-items: start;
+}
+
+.devicesCompactName {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.devicesCompactMeta {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.devicesCompactStatus {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.devicesCompactTags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.devicesCompactSeen {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: right;
+}
+
+.devicesCompactIp {
+  display: flex;
+  align-items: center;
+}
+
+.devicesCompactRow:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.45);
+  outline-offset: 2px;
+}
+
 .deviceId {
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+  .devicesDashboardMain {
+    grid-template-columns: 1fr;
+  }
+
+  .devicesCompactHeader {
+    display: none;
+  }
+
+  .devicesCompactRow {
+    grid-template-columns: 1fr;
+  }
+
+  .devicesCompactSeen {
+    text-align: left;
+  }
 }
 
 .fileInput {

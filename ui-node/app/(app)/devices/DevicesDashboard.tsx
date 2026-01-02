@@ -354,6 +354,38 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
     return nowMs-ts <= changedWithinSeconds * 1000;
   };
 
+  const truncate = (value: string, max: number) => {
+    const normalized = value.trim();
+    if (normalized.length <= max) return normalized;
+    return `${normalized.slice(0, Math.max(0, max - 1))}…`;
+  };
+
+  const primaryMac = (() => {
+    const macs = facts?.macs ?? [];
+    if (macs.length === 0) return null;
+    const sorted = [...macs].sort((a, b) => a.mac.localeCompare(b.mac));
+    return sorted[0]?.mac ?? null;
+  })();
+
+  const openServiceCount = (() => {
+    const services = facts?.services ?? [];
+    return services.filter((svc) => (svc.state ?? 'open') === 'open').length;
+  })();
+
+  const vlanSummary = (() => {
+    const ifaces = facts?.interfaces ?? [];
+    const vlans = new Set<number>();
+    for (const iface of ifaces) {
+      if (typeof iface.pvid === 'number') vlans.add(iface.pvid);
+    }
+    const list = Array.from(vlans).sort((a, b) => a - b);
+    if (list.length === 0) return null;
+    const shown = list.slice(0, 4).join(', ');
+    return list.length > 4 ? `VLANs ${shown}, +${list.length - 4}` : `VLANs ${shown}`;
+  })();
+
+  const platformHint = facts?.snmp?.sys_descr?.trim() ?? null;
+
   return (
     <section className="devicesDashboard">
       <div className="devicesDashboardTop">
@@ -425,99 +457,81 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
         with metadata
       </div>
 
-      <div className="devicesDashboardMain">
+        <div className="devicesDashboardMain">
         <div className="devicesList">
           {devices.length === 0 ? (
             <EmptyState title="No devices match these filters">
               Try adjusting the search, status, or sort options.
             </EmptyState>
           ) : (
-            devices.map((device) => {
-              const isSelected = selectedId === device.id;
-              const owner = device.metadata?.owner;
-              const location = device.metadata?.location;
-              const tags = (device.tags ?? []).filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0);
-              const mutedClass = isSelected ? undefined : 'deviceSelectMuted';
-              const online = isOnline(device.last_seen_at);
-              const changed = isRecentlyChanged(device.last_change_at);
+            <>
+              <div className="devicesCompactHeader" aria-hidden="true">
+                <div>Name</div>
+                <div>Status</div>
+                <div>Primary IP</div>
+                <div>Tags</div>
+                <div style={{ textAlign: 'right' }}>Last seen</div>
+              </div>
 
-              return (
-                <div
-                  key={device.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setSelectedId(device.id)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      setSelectedId(device.id);
-                    }
-                  }}
-                  aria-pressed={isSelected}
-                  className={isSelected ? 'card deviceSelect deviceSelectActive' : 'card deviceSelect'}
-                >
-                  <div className="split" style={{ alignItems: 'baseline' }}>
-                    <span style={{ fontSize: 16, fontWeight: 800 }}>{device.display_name ?? '(unnamed device)'}</span>
-                    <span className={mutedClass ? `deviceId ${mutedClass}` : 'deviceId'}>{device.id.slice(0, 8)}</span>
-                  </div>
+              {devices.map((device) => {
+                const isSelected = selectedId === device.id;
+                const owner = device.metadata?.owner?.trim();
+                const location = device.metadata?.location?.trim();
+                const notes = device.metadata?.notes?.trim();
+                const tags = (device.tags ?? []).filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0);
+                const online = isOnline(device.last_seen_at);
+                const changed = isRecentlyChanged(device.last_change_at);
 
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                    {online ? <Badge tone="success">Online</Badge> : <Badge tone="neutral">Offline</Badge>}
-                    {changed ? <Badge tone="warning">Changed</Badge> : null}
-                    {device.primary_ip ? <Badge tone="info">IP {device.primary_ip}</Badge> : null}
-                    {tags.slice(0, 3).map((tag) => (
-                      <Badge key={tag} tone="neutral">
-                        {formatTagLabel(tag)}
-                      </Badge>
-                    ))}
-                    {tags.length > 3 ? <span className="hint">+{tags.length - 3} tags</span> : null}
-                  </div>
-
-                  {owner || location ? (
-                    <div style={{ display: 'grid', gap: 4, fontSize: 14, marginTop: 8 }}>
-                      {owner ? <div>Owner: {owner}</div> : null}
-                      {location ? <div>Location: {location}</div> : null}
+                return (
+                  <button
+                    key={device.id}
+                    type="button"
+                    onClick={() => setSelectedId(device.id)}
+                    aria-pressed={isSelected}
+                    className={isSelected ? 'deviceSelect devicesCompactRow deviceSelectActive' : 'deviceSelect devicesCompactRow'}
+                    title={device.id}
+                  >
+                    <div className="devicesCompactName">
+                      <div className="split" style={{ alignItems: 'baseline', gap: 10 }}>
+                        <span style={{ fontWeight: 850 }}>{device.display_name ?? '(unnamed device)'}</span>
+                        <span className="deviceId">{device.id.slice(0, 8)}</span>
+                      </div>
+                      {owner || location ? (
+                        <div className="devicesCompactMeta">
+                          {owner ? `Owner: ${owner}` : 'Owner: —'}
+                          {location ? ` · Location: ${location}` : ' · Location: —'}
+                        </div>
+                      ) : null}
+                      {notes ? <div className="devicesCompactMeta">Notes: {notes}</div> : null}
                     </div>
-                  ) : (
-                    <div className={mutedClass ? mutedClass : undefined} style={{ fontSize: 13, marginTop: 8 }}>
-                      No metadata yet.
-                    </div>
-                  )}
 
-                  {device.metadata?.notes ? (
-                    <div className={mutedClass ? mutedClass : undefined} style={{ fontSize: 13, marginTop: 8 }}>
-                      Notes: {device.metadata.notes}
+                    <div className="devicesCompactStatus">
+                      {online ? <Badge tone="success">Online</Badge> : <Badge tone="neutral">Offline</Badge>}
+                      {changed ? <Badge tone="warning">Changed</Badge> : null}
                     </div>
-                  ) : null}
 
-                  <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                    <Button type="button" className="btnPill" onClick={(e: MouseEvent<HTMLButtonElement>) => {
-                      e.stopPropagation();
-                      router.push(`/devices/${device.id}`);
-                    }}>
-                      Open
-                    </Button>
-                    <Button type="button" className="btnPill" onClick={(e: MouseEvent<HTMLButtonElement>) => {
-                      e.stopPropagation();
-                      void copyText(device.id);
-                    }}>
-                      Copy ID
-                    </Button>
-                    <Button
-                      type="button"
-                      className="btnPill"
-                      disabled={!device.primary_ip}
-                      onClick={(e: MouseEvent<HTMLButtonElement>) => {
-                        e.stopPropagation();
-                        if (device.primary_ip) void copyText(device.primary_ip);
-                      }}
-                    >
-                      Copy IP
-                    </Button>
-                  </div>
-                </div>
-              );
-            })
+                    <div className="devicesCompactIp">{device.primary_ip ? <Badge tone="info">{device.primary_ip}</Badge> : '—'}</div>
+
+                    <div className="devicesCompactTags">
+                      {tags.length === 0 ? (
+                        <span className="hint">—</span>
+                      ) : (
+                        <>
+                          {tags.slice(0, 2).map((tag) => (
+                            <Badge key={tag} tone="neutral">
+                              {formatTagLabel(tag)}
+                            </Badge>
+                          ))}
+                          {tags.length > 2 ? <span className="hint">+{tags.length - 2}</span> : null}
+                        </>
+                      )}
+                    </div>
+
+                    <div className="devicesCompactSeen">{formatDateTime(device.last_seen_at)}</div>
+                  </button>
+                );
+              })}
+            </>
           )}
 
           <div className="devicesListFooter" style={{ padding: '8px 0', gap: 8, display: 'flex', alignItems: 'center' }}>
@@ -572,6 +586,13 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
                           ? `Facts refreshed ${formatDateTime(facts?.snmp?.updated_at ?? selectedDevice.last_change_at)}`
                           : 'Facts will sync shortly.'}
                       </div>
+                      <div>Primary MAC: {factsStatus === 'success' ? primaryMac ?? '—' : '—'}</div>
+                      <div>
+                        Interfaces: {factsStatus === 'success' ? facts?.interfaces.length ?? 0 : '—'}
+                        {factsStatus === 'success' && vlanSummary ? ` · ${vlanSummary}` : null}
+                      </div>
+                      <div>Open ports: {factsStatus === 'success' ? openServiceCount : '—'}</div>
+                      {factsStatus === 'success' && platformHint ? <div>Platform: {truncate(platformHint, 120)}</div> : null}
                     </div>
 
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>

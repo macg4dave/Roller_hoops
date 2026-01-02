@@ -24,18 +24,23 @@ import (
 	"roller_hoops/core-go/internal/db"
 	"roller_hoops/core-go/internal/metrics"
 	"roller_hoops/core-go/internal/naming"
-	"roller_hoops/core-go/internal/tagging"
 	"roller_hoops/core-go/internal/sqlcgen"
+	"roller_hoops/core-go/internal/tagging"
 )
 
 type Handler struct {
-	log       zerolog.Logger
-	pool      *db.Pool
-	devices   deviceQueries
-	discovery discoveryQueries
-	inventory inventoryQueries
-	audit     auditQueries
-	metrics   *metrics.Metrics
+	log                   zerolog.Logger
+	pool                  *db.Pool
+	devices               deviceQueries
+	discovery             discoveryQueries
+	inventory             inventoryQueries
+	audit                 auditQueries
+	metrics               *metrics.Metrics
+	discoveryDefaultScope *string
+}
+
+type Options struct {
+	DiscoveryDefaultScope *string
 }
 
 type deviceQueries interface {
@@ -83,14 +88,18 @@ type auditQueries interface {
 }
 
 func NewHandler(log zerolog.Logger, pool *db.Pool) *Handler {
-	return newHandler(log, pool, nil)
+	return newHandler(log, pool, nil, Options{})
 }
 
 func NewHandlerWithMetrics(log zerolog.Logger, pool *db.Pool, m *metrics.Metrics) *Handler {
-	return newHandler(log, pool, m)
+	return newHandler(log, pool, m, Options{})
 }
 
-func newHandler(log zerolog.Logger, pool *db.Pool, m *metrics.Metrics) *Handler {
+func NewHandlerWithOptions(log zerolog.Logger, pool *db.Pool, m *metrics.Metrics, opts Options) *Handler {
+	return newHandler(log, pool, m, opts)
+}
+
+func newHandler(log zerolog.Logger, pool *db.Pool, m *metrics.Metrics, opts Options) *Handler {
 	var dq deviceQueries
 	var drq discoveryQueries
 	var iq inventoryQueries
@@ -102,7 +111,16 @@ func newHandler(log zerolog.Logger, pool *db.Pool, m *metrics.Metrics) *Handler 
 		iq = q
 		aq = q
 	}
-	return &Handler{log: log, pool: pool, devices: dq, discovery: drq, inventory: iq, audit: aq, metrics: m}
+	return &Handler{
+		log:                   log,
+		pool:                  pool,
+		devices:               dq,
+		discovery:             drq,
+		inventory:             iq,
+		audit:                 aq,
+		metrics:               m,
+		discoveryDefaultScope: normalizeScope(opts.DiscoveryDefaultScope),
+	}
 }
 
 func (h *Handler) Router() http.Handler {
@@ -1902,6 +1920,9 @@ func (h *Handler) handleDiscoveryRun(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	req.Scope = normalizeScope(req.Scope)
+	if req.Scope == nil && h.discoveryDefaultScope != nil {
+		req.Scope = h.discoveryDefaultScope
+	}
 	var err error
 	req.Scope, err = validateAndCanonicalizeScope(req.Scope)
 	if err != nil {

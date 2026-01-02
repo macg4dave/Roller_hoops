@@ -3,7 +3,11 @@ package discoveryworker
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -465,5 +469,37 @@ func TestWorker_RunOnce_ARPEntryReusesDeviceByIP(t *testing.T) {
 	}
 	if upsertIPs != 1 || upsertMACs != 1 {
 		t.Fatalf("expected 1 ip upsert + 1 mac upsert, got ip=%d mac=%d", upsertIPs, upsertMACs)
+	}
+}
+
+func TestWorker_PingSweep_ErrorsWhenPingNotFound(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	w := New(zerolog.Nop(), nil, Options{MaxTargets: 8, PingTimeout: 100 * time.Millisecond}, nil)
+	scope := netip.MustParsePrefix("192.168.1.0/30")
+
+	_, err := w.pingSweep(context.Background(), scope)
+	if err == nil || !strings.Contains(err.Error(), "ping not found") {
+		t.Fatalf("expected ping not found error, got %v", err)
+	}
+}
+
+func TestWorker_PingSweep_ErrorsWhenPingNeedsPrivileges(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires an executable script")
+	}
+
+	dir := t.TempDir()
+	pingPath := filepath.Join(dir, "ping")
+	if err := os.WriteFile(pingPath, []byte("#!/bin/sh\necho \"ping: socket: Operation not permitted\" 1>&2\nexit 2\n"), 0o755); err != nil {
+		t.Fatalf("failed to write fake ping: %v", err)
+	}
+	t.Setenv("PATH", dir)
+
+	w := New(zerolog.Nop(), nil, Options{MaxTargets: 8, PingTimeout: 100 * time.Millisecond}, nil)
+	scope := netip.MustParsePrefix("192.168.1.0/30")
+
+	_, err := w.pingSweep(context.Background(), scope)
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "cap_net_raw") {
+		t.Fatalf("expected CAP_NET_RAW error, got %v", err)
 	}
 }

@@ -117,6 +117,8 @@ Common settings:
 
 The discovery worker can do ARP/ICMP/SNMP and optional port scanning. In Docker, discovery fidelity depends on container networking and privileges (e.g. `CAP_NET_RAW` and/or host networking on Linux). See [docs/discovery-capabilities.md](docs/discovery-capabilities.md) (what works where) and [docs/discovery-deployment.md](docs/discovery-deployment.md) (deployment patterns) before enabling scanning in production.
 
+Discovery runs are scoped. The UI can suggest scopes based on the scanner’s local interfaces; you can also set `DISCOVERY_DEFAULT_SCOPE` to provide a default CIDR/IP when a run omits `scope`.
+
 ## Health checks
 
 - Go (core-go):

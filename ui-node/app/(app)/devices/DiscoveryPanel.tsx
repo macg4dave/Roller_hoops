@@ -325,8 +325,8 @@ export function DiscoveryPanel({ status, readOnly = false }: Props) {
                   </div>
                 ) : null}
                 <Hint>
-                  Leave blank to run with the default scope. Suggestions come from the scanner’s local interfaces—pick one you can route to.
-                  While a run is active, a new trigger will queue another run.
+                  Leave blank to use the server default scope (`DISCOVERY_DEFAULT_SCOPE`). Without a scope, discovery relies on the current ARP cache and may return zero results.
+                  Suggestions come from the scanner’s local interfaces—pick one you can route to. While a run is active, a new trigger will queue another run.
                 </Hint>
               </Field>
               <Button type="submit" variant="primary" disabled={readOnly}>

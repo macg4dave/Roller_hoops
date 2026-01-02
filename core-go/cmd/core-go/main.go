@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/netip"
 	"os"
@@ -71,7 +72,13 @@ func main() {
 		go worker.Run(ctx)
 	}
 
-	h := httpapi.NewHandlerWithMetrics(logger, pool, sharedMetrics)
+	defaultDiscoveryScope, err := parseDiscoveryDefaultScope(envOr("DISCOVERY_DEFAULT_SCOPE", ""))
+	if err != nil {
+		logger.Fatal().Err(err).Msg("invalid DISCOVERY_DEFAULT_SCOPE")
+	}
+	h := httpapi.NewHandlerWithOptions(logger, pool, sharedMetrics, httpapi.Options{
+		DiscoveryDefaultScope: defaultDiscoveryScope,
+	})
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           h.Router(),
@@ -189,4 +196,22 @@ func envOrPortList(key string, fallback []int) []int {
 		return fallback
 	}
 	return out
+}
+
+func parseDiscoveryDefaultScope(raw string) (*string, error) {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return nil, nil
+	}
+
+	if p, err := netip.ParsePrefix(s); err == nil {
+		c := p.String()
+		return &c, nil
+	}
+	if a, err := netip.ParseAddr(s); err == nil {
+		c := a.String()
+		return &c, nil
+	}
+
+	return nil, fmt.Errorf("must be a CIDR prefix or a single IP (got %q)", s)
 }

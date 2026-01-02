@@ -790,9 +790,13 @@ func (w *Worker) pingSweep(ctx context.Context, scope netip.Prefix) (pingSweepRe
 
 	pingPath, err := exec.LookPath("ping")
 	if err != nil {
-		return pingSweepResult{Available: false}, nil
+		return pingSweepResult{Available: false}, fmt.Errorf("ping not found in PATH")
 	}
 	result := pingSweepResult{Available: true}
+
+	if err := pingPreflight(ctx, pingPath, w.pingTimeout); err != nil {
+		return result, err
+	}
 
 	targetCount, err := countScopeTargets(scope, w.maxTargets)
 	if err != nil {
@@ -854,4 +858,36 @@ func (w *Worker) pingSweep(ctx context.Context, scope netip.Prefix) (pingSweepRe
 	result.Attempted = int(attempted)
 	result.Succeeded = int(succeeded)
 	return result, nil
+}
+
+func pingPreflight(ctx context.Context, pingPath string, timeout time.Duration) error {
+	if strings.TrimSpace(pingPath) == "" {
+		return fmt.Errorf("ping not found in PATH")
+	}
+	if timeout <= 0 {
+		timeout = 800 * time.Millisecond
+	}
+
+	pingCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	out, err := exec.CommandContext(pingCtx, pingPath, "-c", "1", "-W", "1", "127.0.0.1").CombinedOutput()
+	if pingCtx.Err() != nil {
+		return pingCtx.Err()
+	}
+	if err == nil {
+		return nil
+	}
+
+	msg := strings.TrimSpace(string(out))
+	if msg == "" {
+		msg = err.Error()
+	}
+
+	lower := strings.ToLower(msg)
+	if strings.Contains(lower, "operation not permitted") || strings.Contains(lower, "permission denied") {
+		return fmt.Errorf("ping not permitted (missing CAP_NET_RAW?): %s", msg)
+	}
+
+	return fmt.Errorf("ping failed: %s", msg)
 }

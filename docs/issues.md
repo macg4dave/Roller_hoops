@@ -20,12 +20,12 @@ This file is the project’s **lightweight issue log**. It’s intentionally Mar
 
 | ID | Title | Status | Area | Severity | Last updated |
 |---|---|---|---|---|---|
-| ISS-001 | Network discovery doesn’t scan outside Docker | open | core-go/discovery | high | 2025-12-15 |
+| ISS-001 | Network discovery doesn’t scan outside Docker | fixed | core-go/discovery | high | 2026-01-02 |
 | ISS-002 | Map view UX clutter; needs auto-layout | fixed | ui-node/map | medium | 2026-01-02 |
 | ISS-003 | Discovery UX needs presets + automation | fixed | ui-node/discovery | high | 2026-01-02 |
 | ISS-004 | Device naming is low-quality/inconsistent | fixed | core-go/enrichment | medium | 2026-01-02 |
 | ISS-005 | Devices should be auto-classified + tagged | fixed | core-go/enrichment | medium | 2026-01-02 |
-| ISS-006 | Devices page layout wastes space; lacks detail | open | ui-node/devices | medium | 2026-01-02 |
+| ISS-006 | Devices page layout wastes space; lacks detail | fixed | ui-node/devices | medium | 2026-01-02 |
 
 ---
 
@@ -87,7 +87,9 @@ One or more of the following is true:
 
 ### Fix reference
 
-- _Not fixed yet._
+- Default scope support (optional): `DISCOVERY_DEFAULT_SCOPE` is parsed in `core-go/cmd/core-go/main.go` and applied when runs omit `scope` via `core-go/internal/httpapi/handler.go`.
+- Clear failure mode when ICMP is unavailable: `core-go/internal/discoveryworker/worker.go` preflights `ping` and fails runs with actionable errors when raw-socket privileges are missing.
+- UI guidance: `ui-node/app/(app)/devices/DiscoveryPanel.tsx` clarifies how blank scope behaves and how to configure a default.
 
 ## ISS-002 — Map view UX clutter; needs auto-layout
 
@@ -229,11 +231,12 @@ The Devices page has poor information density: most of the page is unused space,
 ### Next actions
 
 - [ ] Capture screenshots and list the top 10 fields operators want visible.
-- [ ] Define the “compact” table view (defaults + optional columns).
+- [x] Define the “compact” table view (defaults + optional columns).
 
 ### Fix reference
 
-- _Not fixed yet._
+- `ui-node/app/globals.css` swaps the Devices layout to list-left/detail-right, adds responsive stacking, and introduces compact list styles.
+- `ui-node/app/(app)/devices/DevicesDashboard.tsx` implements a compact table-style list and surfaces at-a-glance facts (MAC, VLANs, open ports, platform).
 
 ---
 

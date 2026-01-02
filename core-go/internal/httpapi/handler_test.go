@@ -23,6 +23,10 @@ type fakeDeviceQueries struct {
 	createFn             func(ctx context.Context, displayName *string) (sqlcgen.Device, error)
 	updateFn             func(ctx context.Context, arg sqlcgen.UpdateDeviceParams) (sqlcgen.Device, error)
 	upsertFn             func(ctx context.Context, arg sqlcgen.UpsertDeviceMetadataParams) (sqlcgen.DeviceMetadata, error)
+	listTagsFn           func(ctx context.Context, deviceID string) ([]sqlcgen.DeviceTag, error)
+	listEffectiveTagsFn  func(ctx context.Context, deviceID string) ([]string, error)
+	deleteTagsBySourceFn func(ctx context.Context, arg sqlcgen.DeleteDeviceTagsBySourceParams) error
+	upsertTagFn          func(ctx context.Context, arg sqlcgen.UpsertDeviceTagParams) error
 	listNameCandidatesFn func(ctx context.Context, deviceID string) ([]sqlcgen.DeviceNameCandidate, error)
 	listIPsFn            func(ctx context.Context, deviceID string) ([]sqlcgen.DeviceIP, error)
 	listMACsFn           func(ctx context.Context, deviceID string) ([]sqlcgen.DeviceMAC, error)
@@ -85,6 +89,34 @@ func (f fakeDeviceQueries) UpsertDeviceMetadata(ctx context.Context, arg sqlcgen
 		return sqlcgen.DeviceMetadata{}, nil
 	}
 	return f.upsertFn(ctx, arg)
+}
+
+func (f fakeDeviceQueries) ListDeviceTags(ctx context.Context, deviceID string) ([]sqlcgen.DeviceTag, error) {
+	if f.listTagsFn == nil {
+		return nil, nil
+	}
+	return f.listTagsFn(ctx, deviceID)
+}
+
+func (f fakeDeviceQueries) ListDeviceEffectiveTags(ctx context.Context, deviceID string) ([]string, error) {
+	if f.listEffectiveTagsFn == nil {
+		return nil, nil
+	}
+	return f.listEffectiveTagsFn(ctx, deviceID)
+}
+
+func (f fakeDeviceQueries) DeleteDeviceTagsBySource(ctx context.Context, arg sqlcgen.DeleteDeviceTagsBySourceParams) error {
+	if f.deleteTagsBySourceFn == nil {
+		return nil
+	}
+	return f.deleteTagsBySourceFn(ctx, arg)
+}
+
+func (f fakeDeviceQueries) UpsertDeviceTag(ctx context.Context, arg sqlcgen.UpsertDeviceTagParams) error {
+	if f.upsertTagFn == nil {
+		return nil
+	}
+	return f.upsertTagFn(ctx, arg)
 }
 
 func (f fakeDeviceQueries) ListDeviceNameCandidates(ctx context.Context, deviceID string) ([]sqlcgen.DeviceNameCandidate, error) {
@@ -732,6 +764,34 @@ func TestDiscovery_Run_AllowsEmptyBody(t *testing.T) {
 	body := decodeBody(t, rr)
 	if body["status"] != "queued" {
 		t.Fatalf("expected queued status, got %v", body["status"])
+	}
+}
+
+func TestDiscovery_Run_DefaultsScopeWhenConfigured(t *testing.T) {
+	defaultScope := "10.0.0.0/24"
+	h := NewHandlerWithOptions(NewLogger("debug"), nil, nil, Options{DiscoveryDefaultScope: &defaultScope})
+	now := time.Now()
+
+	h.discovery = fakeDiscoveryQueries{
+		insertFn: func(ctx context.Context, arg sqlcgen.InsertDiscoveryRunParams) (sqlcgen.DiscoveryRun, error) {
+			if arg.Scope == nil || *arg.Scope != defaultScope {
+				t.Fatalf("expected default scope %q, got %v", defaultScope, arg.Scope)
+			}
+			return sqlcgen.DiscoveryRun{ID: "run-default-scope", Status: arg.Status, Scope: arg.Scope, Stats: arg.Stats, StartedAt: now}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/discovery/run", nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	body := decodeBody(t, rr)
+	if body["scope"] != defaultScope {
+		t.Fatalf("expected scope %q, got %v", defaultScope, body["scope"])
 	}
 }
 
