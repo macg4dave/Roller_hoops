@@ -9,6 +9,7 @@ import { Device, DiscoveryRun } from './types';
 import { CreateDeviceState, DiscoveryRunState, DeviceMetadataState, DeviceDisplayNameState } from './state';
 import { getSessionUser } from '../../../lib/auth/session';
 import { writeAuditEvent } from '../../../lib/audit';
+import { normalizeScanPreset } from '../discovery/presets';
 
 function apiBase() {
   return process.env.CORE_GO_BASE_URL ?? 'http://localhost:8081';
@@ -132,10 +133,12 @@ export async function triggerDiscovery(
   }
 
   const scopeRaw = formData.get('scope');
+  const preset = normalizeScanPreset(formData.get('preset'));
   const payload: Record<string, unknown> = {};
   if (typeof scopeRaw === 'string' && scopeRaw.trim().length > 0) {
     payload.scope = scopeRaw.trim();
   }
+  payload.preset = preset;
 
   const reqId = (await headers()).get('x-request-id') ?? randomUUID();
   const res = await fetch(`${apiBase()}/api/v1/discovery/run`, {
@@ -172,7 +175,7 @@ export async function triggerDiscovery(
       action: 'discovery.trigger',
       target_type: 'discovery_run',
       target_id: run.id,
-      details: { scope: run.scope ?? null }
+      details: { scope: run.scope ?? null, preset }
     },
     reqId
   );

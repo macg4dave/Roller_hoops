@@ -12,12 +12,13 @@ import { triggerDiscovery } from './actions';
 import { api } from '../../../lib/api-client';
 import { Card, CardBody } from '../../_components/ui/Card';
 import { Field, Hint, Label } from '../../_components/ui/Field';
-import { Input } from '../../_components/ui/Inputs';
+import { Input, Select } from '../../_components/ui/Inputs';
 import { Button } from '../../_components/ui/Button';
 import { Badge } from '../../_components/ui/Badge';
 import { Alert } from '../../_components/ui/Alert';
 import { getDiscoveryStatusBadgeTone } from '../discovery/status';
 import { ConfirmDialog } from '../../_components/ui/ConfirmDialog';
+import { getScanPresetLabel, SCAN_PRESET_OPTIONS } from '../discovery/presets';
 
 type Props = {
   status: DiscoveryStatus;
@@ -86,6 +87,12 @@ export function DiscoveryPanel({ status, readOnly = false }: Props) {
   });
 
   const latest = statusQuery.data.latest_run ?? undefined;
+  const latestPreset = latest?.stats && typeof latest.stats === 'object'
+    ? (latest.stats as Record<string, unknown>).preset
+    : undefined;
+  const defaultPreset = typeof latestPreset === 'string' && ['fast', 'normal', 'deep'].includes(latestPreset.trim().toLowerCase())
+    ? latestPreset.trim().toLowerCase()
+    : 'normal';
 
   const inProgress = liveStatus.status === 'queued' || liveStatus.status === 'running';
   const canTrigger = !readOnly;
@@ -139,6 +146,7 @@ export function DiscoveryPanel({ status, readOnly = false }: Props) {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <Badge tone={badgeTone}>{liveStatus.status}</Badge>
                 {latest?.scope ? <span className="hint">Scope: {latest.scope}</span> : null}
+                {latestPreset ? <span className="hint">Preset: {getScanPresetLabel(latestPreset)}</span> : null}
               </div>
 
               <div className="hint" aria-live="polite">
@@ -177,6 +185,19 @@ export function DiscoveryPanel({ status, readOnly = false }: Props) {
               className="stack"
               style={{ gap: 8, justifyItems: 'end' }}
             >
+              <Field>
+                <Label htmlFor="preset">Preset</Label>
+                <Select id="preset" name="preset" defaultValue={defaultPreset} disabled={readOnly}>
+                  {SCAN_PRESET_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </Select>
+                <Hint>
+                  {SCAN_PRESET_OPTIONS.map((opt) => `${opt.label}: ${opt.description}`).join(' ')}
+                </Hint>
+              </Field>
               <Field>
                 <Label htmlFor="scope">Scope (optional)</Label>
                 <Input

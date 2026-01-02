@@ -266,11 +266,7 @@ func backoffDuration(base time.Duration, failures int) time.Duration {
 func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 	// Claim a run.
 	run, err := w.q.ClaimNextDiscoveryRun(ctx, map[string]any{
-		"stage":             "running",
-		"max_targets":       w.maxTargets,
-		"runtime_budget_ms": int(w.maxRuntime.Milliseconds()),
-		"ping_timeout_ms":   int(w.pingTimeout.Milliseconds()),
-		"ping_workers":      w.pingWorkers,
+		"stage": "running",
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -292,6 +288,13 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 
 	w.log.Info().Str("run_id", run.ID).Msg("discovery run claimed")
 
+	preset := ScanPresetNormal
+	if run.Stats != nil {
+		preset = canonicalizeScanPreset(run.Stats["preset"])
+	}
+	restorePreset := applyScanPreset(w, preset)
+	defer restorePreset()
+
 	// Execute (ARP scrape to seed IP/MAC facts; other methods are Phase 8+).
 	execCtx, cancel := context.WithTimeout(ctx, w.maxRuntime)
 	defer cancel()
@@ -302,6 +305,14 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 		Message: "discovery run started",
 	}); err != nil {
 		w.log.Warn().Err(err).Str("run_id", run.ID).Msg("failed to write discovery start log")
+	}
+
+	if err := w.q.InsertDiscoveryRunLog(execCtx, sqlcgen.InsertDiscoveryRunLogParams{
+		RunID:   run.ID,
+		Level:   "info",
+		Message: fmt.Sprintf("scan preset: %s", preset),
+	}); err != nil {
+		w.log.Warn().Err(err).Str("run_id", run.ID).Msg("failed to write preset log")
 	}
 
 	if w.runDelay > 0 {
@@ -410,6 +421,7 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 	completedAt := time.Now()
 	stats := map[string]any{
 		"stage":             "completed",
+		"preset":            preset,
 		"method":            discoveryMethod(ping),
 		"scope":             scopePrefixOrNil(scopePrefix),
 		"scope_targets":     scopeTargets,

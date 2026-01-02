@@ -553,6 +553,9 @@ func TestDiscovery_Run_StartsRun(t *testing.T) {
 			if arg.Status != "queued" {
 				t.Fatalf("expected queued status on insert, got %q", arg.Status)
 			}
+			if arg.Stats == nil || arg.Stats["stage"] != "queued" || arg.Stats["preset"] != "fast" {
+				t.Fatalf("expected queued stage + fast preset, got %#v", arg.Stats)
+			}
 			return sqlcgen.DiscoveryRun{
 				ID:        "run-1",
 				Status:    arg.Status,
@@ -577,7 +580,7 @@ func TestDiscovery_Run_StartsRun(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/discovery/run", strings.NewReader(`{"scope":"10.0.0.0/24"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/discovery/run", strings.NewReader(`{"scope":"10.0.0.0/24","preset":"fast"}`))
 	req.Header.Set("Content-Type", "application/json")
 	h.Router().ServeHTTP(rr, req)
 
@@ -591,6 +594,10 @@ func TestDiscovery_Run_StartsRun(t *testing.T) {
 	}
 	if body["scope"] != "10.0.0.0/24" {
 		t.Fatalf("expected scope to round-trip, got %v", body["scope"])
+	}
+	stats, ok := body["stats"].(map[string]any)
+	if !ok || stats["preset"] != "fast" {
+		t.Fatalf("expected preset to round-trip via stats, got %v", body["stats"])
 	}
 	if _, ok := body["id"]; !ok {
 		t.Fatalf("expected a run id, got %v", body)
@@ -623,6 +630,31 @@ func TestDiscovery_Run_RejectsUnknownFields(t *testing.T) {
 	}
 }
 
+func TestDiscovery_Run_RejectsInvalidPreset(t *testing.T) {
+	h := NewHandler(NewLogger("debug"), nil)
+	h.discovery = fakeDiscoveryQueries{
+		insertFn: func(ctx context.Context, arg sqlcgen.InsertDiscoveryRunParams) (sqlcgen.DiscoveryRun, error) {
+			t.Fatalf("expected request validation to fail before insert")
+			return sqlcgen.DiscoveryRun{}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/discovery/run", strings.NewReader(`{"preset":"turbo"}`))
+	req.Header.Set("Content-Type", "application/json")
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	body := decodeBody(t, rr)
+	errObj := body["error"].(map[string]any)
+	if errObj["code"] != "validation_failed" {
+		t.Fatalf("expected validation_failed, got %v", errObj["code"])
+	}
+}
+
 func TestDiscovery_Run_AllowsEmptyBody(t *testing.T) {
 	h := NewHandler(NewLogger("debug"), nil)
 	now := time.Now()
@@ -631,6 +663,9 @@ func TestDiscovery_Run_AllowsEmptyBody(t *testing.T) {
 		insertFn: func(ctx context.Context, arg sqlcgen.InsertDiscoveryRunParams) (sqlcgen.DiscoveryRun, error) {
 			if arg.Scope != nil {
 				t.Fatalf("expected nil scope when body omitted, got %v", *arg.Scope)
+			}
+			if arg.Stats == nil || arg.Stats["preset"] != "normal" {
+				t.Fatalf("expected normal preset, got %#v", arg.Stats)
 			}
 			return sqlcgen.DiscoveryRun{ID: "run-empty", Status: arg.Status, Scope: arg.Scope, Stats: arg.Stats, StartedAt: now}, nil
 		},
@@ -658,6 +693,9 @@ func TestDiscovery_Run_TrimsScope(t *testing.T) {
 		insertFn: func(ctx context.Context, arg sqlcgen.InsertDiscoveryRunParams) (sqlcgen.DiscoveryRun, error) {
 			if arg.Scope == nil || *arg.Scope != "10.0.0.0/24" {
 				t.Fatalf("expected trimmed scope 10.0.0.0/24, got %v", arg.Scope)
+			}
+			if arg.Stats == nil || arg.Stats["preset"] != "normal" {
+				t.Fatalf("expected normal preset, got %#v", arg.Stats)
 			}
 			return sqlcgen.DiscoveryRun{ID: "run-trim", Status: arg.Status, Scope: arg.Scope, Stats: arg.Stats, StartedAt: now}, nil
 		},

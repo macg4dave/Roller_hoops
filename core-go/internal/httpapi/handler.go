@@ -613,7 +613,8 @@ type discoveryStatus struct {
 }
 
 type discoveryRunRequest struct {
-	Scope *string `json:"scope,omitempty"`
+	Scope  *string `json:"scope,omitempty"`
+	Preset *string `json:"preset,omitempty"`
 }
 
 func (h *Handler) ensureDiscoveryQueries(w http.ResponseWriter) bool {
@@ -667,6 +668,32 @@ func validateAndCanonicalizeScope(scope *string) (*string, error) {
 	}
 
 	return nil, errors.New("scope must be a CIDR prefix (e.g. 10.0.0.0/24) or a single IP (e.g. 10.0.0.5)")
+}
+
+func normalizeScanPreset(preset *string) *string {
+	if preset == nil {
+		return nil
+	}
+	s := strings.ToLower(strings.TrimSpace(*preset))
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func validateScanPreset(preset *string) (*string, error) {
+	preset = normalizeScanPreset(preset)
+	if preset == nil {
+		defaultPreset := "normal"
+		return &defaultPreset, nil
+	}
+
+	switch *preset {
+	case "fast", "normal", "deep":
+		return preset, nil
+	default:
+		return nil, fmt.Errorf("preset must be one of: fast, normal, deep")
+	}
 }
 
 func isInvalidUUID(err error) bool {
@@ -1650,10 +1677,16 @@ func (h *Handler) handleDiscoveryRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	req.Preset, err = validateScanPreset(req.Preset)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "validation_failed", "invalid scan preset", map[string]any{"error": err.Error()})
+		return
+	}
+
 	run, err := h.discovery.InsertDiscoveryRun(r.Context(), sqlcgen.InsertDiscoveryRunParams{
 		Status: "queued",
 		Scope:  req.Scope,
-		Stats:  map[string]any{"stage": "queued"},
+		Stats:  map[string]any{"stage": "queued", "preset": *req.Preset},
 	})
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to create discovery run")

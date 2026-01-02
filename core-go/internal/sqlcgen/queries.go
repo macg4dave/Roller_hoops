@@ -942,7 +942,7 @@ WITH next AS (
 )
 UPDATE discovery_runs dr
 SET status = 'running',
-    stats = COALESCE($1, dr.stats),
+    stats = COALESCE(dr.stats, '{}'::jsonb) || COALESCE($1, '{}'::jsonb),
     completed_at = NULL,
     last_error = NULL
 FROM next
@@ -968,7 +968,7 @@ func (q *Queries) ClaimNextDiscoveryRun(ctx context.Context, stats map[string]an
 const updateDiscoveryRun = `-- name: UpdateDiscoveryRun :one
 UPDATE discovery_runs
 SET status = $2,
-    stats = COALESCE($3, stats),
+    stats = COALESCE(stats, '{}'::jsonb) || COALESCE($3, '{}'::jsonb),
     completed_at = $4,
     last_error = $5
 WHERE id = $1

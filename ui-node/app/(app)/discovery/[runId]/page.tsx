@@ -8,6 +8,7 @@ import { getDiscoveryStatusBadgeTone } from '../status';
 import { DiscoveryRunLogViewer } from '../DiscoveryRunLogViewer';
 import { fetchDiscoveryRun, fetchDiscoveryRunLogs } from '../api';
 import type { DiscoveryRunLogPage } from '@/app/(app)/devices/types';
+import { getScanPresetLabel } from '../presets';
 
 type Props = {
   params: Promise<{
@@ -47,7 +48,9 @@ function computeDurationLabel(run: { started_at: string; completed_at?: string |
 }
 
 function renderStats(run: { stats?: Record<string, unknown> | null }) {
-  const entries = run.stats ? Object.entries(run.stats) : [];
+  const entries = run.stats
+    ? Object.entries(run.stats).filter(([key]) => key !== 'preset' && key !== 'stage')
+    : [];
   if (!entries.length) {
     return null;
   }
@@ -66,6 +69,7 @@ function renderStats(run: { stats?: Record<string, unknown> | null }) {
 export default async function DiscoveryRunPage({ params }: Props) {
   const { runId } = await params;
   const run = await fetchDiscoveryRun(runId);
+  const presetLabel = getScanPresetLabel(run.stats?.preset);
   const durationLabel = computeDurationLabel(run);
   let initialLogs: DiscoveryRunLogPage = { logs: [], cursor: null };
   let logError: string | null = null;
@@ -81,7 +85,7 @@ export default async function DiscoveryRunPage({ params }: Props) {
         <p className="kicker">Discovery</p>
         <h1 className="pageTitle">Run {run.id}</h1>
         <p className="hint">
-          Scope: {run.scope ?? 'default'}. Use this view to diagnose failures, review logs, and confirm completion status.
+          Scope: {run.scope ?? 'default'}. Preset: {presetLabel}. Use this view to diagnose failures, review logs, and confirm completion status.
         </p>
       </header>
 

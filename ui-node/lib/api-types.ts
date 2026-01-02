@@ -1317,6 +1317,8 @@ export interface components {
             };
         };
         DiscoveryRunRequest: {
+            /** @description Scan preset controlling runtime budget and enrichment depth. */
+            preset?: "fast" | "normal" | "deep";
             /** @description Optional scope hint for the discovery engine. */
             scope?: string;
         };

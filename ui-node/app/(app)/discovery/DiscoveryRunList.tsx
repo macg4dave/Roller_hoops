@@ -13,6 +13,7 @@ import { EmptyState } from '@/app/_components/ui/EmptyState';
 import { Hint } from '@/app/_components/ui/Field';
 import { getDiscoveryStatusBadgeTone } from './status';
 import type { DiscoveryRun, DiscoveryRunPage } from '@/app/(app)/devices/types';
+import { getScanPresetLabel } from './presets';
 
 const PAGE_LIMIT = 8;
 
@@ -132,7 +133,9 @@ export function DiscoveryRunList({ initialPage, limit = PAGE_LIMIT, errorMessage
 
   const renderStats = (run: DiscoveryRun) => {
     const entries = run.stats ? Object.entries(run.stats) : [];
-    const trimmed = entries.filter(([, value]) => value !== undefined && value !== null).slice(0, 3);
+    const trimmed = entries
+      .filter(([key, value]) => key !== 'preset' && key !== 'stage' && value !== undefined && value !== null)
+      .slice(0, 3);
     if (!trimmed.length) {
       return null;
     }
@@ -179,7 +182,7 @@ export function DiscoveryRunList({ initialPage, limit = PAGE_LIMIT, errorMessage
                         <Badge tone={getDiscoveryStatusBadgeTone(run.status)}>{run.status}</Badge>
                       </div>
                       <div className="hint" style={{ marginTop: 4 }}>
-                        Scope: {run.scope ?? 'default'}
+                        Scope: {run.scope ?? 'default'} • Preset: {getScanPresetLabel(run.stats?.preset)}
                       </div>
                       <div className="hint" style={{ marginTop: 2 }}>
                         Started {formatTimestamp(run.started_at)}

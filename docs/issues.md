@@ -137,7 +137,7 @@ Discovery is not working well in practice: it needs more “auto-search” behav
 
 ### Next actions
 
-- [ ] Define initial presets and map each to concrete scan settings.
+- [x] Define initial presets and map each to concrete scan settings (UI preset + `preset` request field; stored in run stats).
 - [ ] Decide where “tags” live (config file vs DB vs UI-only constants).
 - [ ] Add basic guidance text in the UI for what each preset/tag changes.
 

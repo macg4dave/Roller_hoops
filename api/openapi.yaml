@@ -1196,6 +1196,10 @@ components:
     DiscoveryRunRequest:
       type: object
       properties:
+        preset:
+          type: string
+          enum: [fast, normal, deep]
+          description: Scan preset controlling runtime budget and enrichment depth.
         scope:
           type: string
           description: Optional scope hint for the discovery engine.
