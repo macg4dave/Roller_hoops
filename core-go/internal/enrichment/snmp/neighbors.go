@@ -206,8 +206,8 @@ func (c *Client) WalkCDPNeighbors(ctx context.Context, target Target) ([]Neighbo
 	defer s.Conn.Close()
 
 	type key struct {
-		IfIndex    int
-		DeviceIdx  int
+		IfIndex   int
+		DeviceIdx int
 	}
 	rows := map[key]*Neighbor{}
 

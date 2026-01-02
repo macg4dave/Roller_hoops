@@ -33,13 +33,13 @@ type DeviceNameCandidate struct {
 }
 
 type DeviceTag struct {
-	DeviceID    string
-	Tag         string
-	Source      string
-	Confidence  int32
-	Evidence    map[string]any
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	DeviceID   string
+	Tag        string
+	Source     string
+	Confidence int32
+	Evidence   map[string]any
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 type DeviceMetadata struct {

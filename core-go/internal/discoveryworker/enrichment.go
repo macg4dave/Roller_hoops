@@ -12,8 +12,8 @@ import (
 	"roller_hoops/core-go/internal/enrichment/snmp"
 	"roller_hoops/core-go/internal/enrichment/vlan"
 	"roller_hoops/core-go/internal/naming"
-	"roller_hoops/core-go/internal/tagging"
 	"roller_hoops/core-go/internal/sqlcgen"
+	"roller_hoops/core-go/internal/tagging"
 )
 
 type enrichmentTarget struct {
@@ -423,14 +423,14 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 		case <-ctx.Done():
 			close(jobs)
 			wg.Wait()
-	return map[string]any{
-		"targets":       len(targets),
-		"snmp_ok":       int(snmpOK),
-		"names_written": int(namesWritten),
-		"vlans_written": int(vlansWritten),
-		"links_written": int(linksWritten),
-		"canceled":      true,
-	}
+			return map[string]any{
+				"targets":       len(targets),
+				"snmp_ok":       int(snmpOK),
+				"names_written": int(namesWritten),
+				"vlans_written": int(vlansWritten),
+				"links_written": int(linksWritten),
+				"canceled":      true,
+			}
 		case jobs <- t:
 		}
 	}

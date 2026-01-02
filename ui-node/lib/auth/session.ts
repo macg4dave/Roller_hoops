@@ -12,7 +12,58 @@ type SessionPayload = SessionUser & { expiresAt: number };
 
 const SESSION_COOKIE_NAME = 'roller_session';
 const SESSION_DURATION_SECONDS = 60 * 60 * 24; // 24 hours
-const SESSION_SECRET = process.env.AUTH_SESSION_SECRET ?? 'dev-session-secret';
+const SESSION_SECRET = (process.env.AUTH_SESSION_SECRET ?? '').trim() || 'dev-session-secret';
+
+function parseBooleanEnv(value: string): boolean | undefined {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+  if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) {
+    return true;
+  }
+  if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) {
+    return false;
+  }
+  return undefined;
+}
+
+function cookieSecureOverride(): boolean | undefined {
+  const raw = process.env.AUTH_COOKIE_SECURE ?? '';
+  return parseBooleanEnv(raw);
+}
+
+function isRequestSecure(request: Request): boolean {
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  if (forwardedProto) {
+    const proto = forwardedProto.split(',')[0]?.trim().toLowerCase();
+    if (proto === 'https') {
+      return true;
+    }
+    if (proto === 'http') {
+      return false;
+    }
+  }
+
+  try {
+    return new URL(request.url).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function cookieSecureForRequest(request?: Request): boolean {
+  const override = cookieSecureOverride();
+  if (override !== undefined) {
+    return override;
+  }
+
+  if (request) {
+    return isRequestSecure(request);
+  }
+
+  return process.env.NODE_ENV === 'production';
+}
 
 function makeSignature(payload: string) {
   return createHmac('sha256', SESSION_SECRET).update(payload).digest();
@@ -76,30 +127,30 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   return { username: session.username, role: session.role };
 }
 
-function makeCookie(value: string, options: { maxAge: number; expires: string }) {
+function makeCookie(value: string, options: { maxAge: number; expires: string; secure: boolean }) {
   const parts = [`${SESSION_COOKIE_NAME}=${encodeURIComponent(value)}`, `Path=/`, `HttpOnly`, `SameSite=Lax`, `Max-Age=${options.maxAge}`, `Expires=${options.expires}`];
-  if (process.env.NODE_ENV === 'production') {
+  if (options.secure) {
     parts.push('Secure');
   }
   return parts.join('; ');
 }
 
-function makeExpiredCookie() {
+function makeExpiredCookie(options: { secure: boolean }) {
   const expires = new Date(0).toUTCString();
   const parts = [`${SESSION_COOKIE_NAME}=`, `Path=/`, `HttpOnly`, `SameSite=Lax`, `Max-Age=0`, `Expires=${expires}`];
-  if (process.env.NODE_ENV === 'production') {
+  if (options.secure) {
     parts.push('Secure');
   }
   return parts.join('; ');
 }
 
-export function createSessionCookie(token: string) {
+export function createSessionCookie(token: string, request?: Request) {
   const expires = new Date(Date.now() + SESSION_DURATION_SECONDS * 1000).toUTCString();
-  return makeCookie(token, { maxAge: SESSION_DURATION_SECONDS, expires });
+  return makeCookie(token, { maxAge: SESSION_DURATION_SECONDS, expires, secure: cookieSecureForRequest(request) });
 }
 
-export function clearSessionCookie() {
-  return makeExpiredCookie();
+export function clearSessionCookie(request?: Request) {
+  return makeExpiredCookie({ secure: cookieSecureForRequest(request) });
 }
 
 export { SESSION_COOKIE_NAME, SESSION_DURATION_SECONDS };

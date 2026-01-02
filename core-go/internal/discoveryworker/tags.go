@@ -94,4 +94,3 @@ func applyScanTags(w *Worker, tags []string) func() {
 		w.portScanEnabled = prev.portScanEnabled
 	}
 }
-

@@ -560,11 +560,48 @@ func toDeviceListItem(d sqlcgen.DeviceListItem) device {
 	return device{
 		ID:           d.ID,
 		DisplayName:  d.DisplayName,
-		PrimaryIP:    d.PrimaryIP,
+		PrimaryIP:    normalizeInetPointer(d.PrimaryIP),
 		Metadata:     meta,
 		LastSeenAt:   d.LastSeenAt,
 		LastChangeAt: &lastChangeAt,
 	}
+}
+
+func normalizeInet(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+
+	// postgres inet::text renders host addresses as "<ip>/<fullmask>" (e.g. "192.0.2.20/32").
+	// For UI convenience, strip the fullmask suffix when present, while preserving non-host CIDRs.
+	if parsed, network, err := net.ParseCIDR(trimmed); err == nil && network != nil {
+		ones, bits := network.Mask.Size()
+		if ones == bits {
+			return parsed.String()
+		}
+		return trimmed
+	}
+
+	if parsed := net.ParseIP(trimmed); parsed != nil {
+		return parsed.String()
+	}
+
+	return trimmed
+}
+
+func normalizeInetPointer(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	normalized := normalizeInet(*value)
+	if normalized == "" {
+		return nil
+	}
+	if normalized == *value {
+		return value
+	}
+	return &normalized
 }
 
 func normalizeMetadataBody(body *deviceMetadataBody) *deviceMetadataBody {
@@ -1478,7 +1515,7 @@ func (h *Handler) handleGetDeviceFacts(w http.ResponseWriter, r *http.Request) {
 	ipFacts := make([]deviceIPFact, 0, len(ips))
 	for _, row := range ips {
 		ipFacts = append(ipFacts, deviceIPFact{
-			IP:            row.IP,
+			IP:            normalizeInet(row.IP),
 			InterfaceID:   row.InterfaceID,
 			InterfaceName: row.InterfaceName,
 			CreatedAt:     row.CreatedAt,

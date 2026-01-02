@@ -233,6 +233,29 @@ func TestHandler_Postgres_DeviceCRUD(t *testing.T) {
 	if !found {
 		t.Fatalf("expected created device %s to appear in list", created.ID)
 	}
+
+	rrFacts := httptest.NewRecorder()
+	router.ServeHTTP(rrFacts, httptest.NewRequest(http.MethodGet, "/api/v1/devices/"+created.ID+"/facts", nil))
+	if rrFacts.Code != http.StatusOK {
+		t.Fatalf("facts expected 200, got %d: %s", rrFacts.Code, rrFacts.Body.String())
+	}
+
+	var facts deviceFacts
+	if err := json.NewDecoder(rrFacts.Body).Decode(&facts); err != nil {
+		t.Fatalf("decode facts response: %v", err)
+	}
+	if facts.DeviceID != created.ID {
+		t.Fatalf("expected facts.device_id %s, got %s", created.ID, facts.DeviceID)
+	}
+	if len(facts.IPs) < 2 {
+		t.Fatalf("expected at least 2 ip facts, got %d", len(facts.IPs))
+	}
+	gotIPs := []string{facts.IPs[0].IP, facts.IPs[1].IP}
+	sort.Strings(gotIPs)
+	wantIPs := []string{"192.0.2.10", "192.0.2.20"}
+	if strings.Join(gotIPs, ",") != strings.Join(wantIPs, ",") {
+		t.Fatalf("expected facts ips %v, got %v", wantIPs, gotIPs)
+	}
 }
 
 func TestHandler_Postgres_MapL3_DeviceFocus(t *testing.T) {

@@ -40,4 +40,3 @@ func TestChooseBestDisplayName_RejectsGarbage(t *testing.T) {
 		t.Fatalf("expected ok=false, got name=%q", name)
 	}
 }
-

@@ -47,6 +47,6 @@ export async function POST(request: Request) {
 
   const token = createSessionToken(user);
   const response = NextResponse.json({ ok: true });
-  response.headers.append('Set-Cookie', createSessionCookie(token));
+  response.headers.append('Set-Cookie', createSessionCookie(token, request));
   return response;
 }

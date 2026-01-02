@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"roller_hoops/core-go/internal/tagging"
 	"roller_hoops/core-go/internal/sqlcgen"
+	"roller_hoops/core-go/internal/tagging"
 )
 
 type nmapRun struct {
@@ -24,9 +24,9 @@ type nmapHost struct {
 }
 
 type nmapPort struct {
-	Protocol string     `xml:"protocol,attr"`
-	PortID   int        `xml:"portid,attr"`
-	State    nmapState  `xml:"state"`
+	Protocol string      `xml:"protocol,attr"`
+	PortID   int         `xml:"portid,attr"`
+	State    nmapState   `xml:"state"`
 	Service  nmapService `xml:"service"`
 }
 
@@ -196,13 +196,13 @@ func (w *Worker) runPortScan(ctx context.Context, targets []enrichmentTarget) ma
 			close(jobs)
 			wg.Wait()
 			return map[string]any{
-				"enabled":         true,
-				"available":       true,
-				"targets":         len(scanTargets),
-				"attempted":       int(attempted),
-				"succeeded":       int(succeeded),
+				"enabled":          true,
+				"available":        true,
+				"targets":          len(scanTargets),
+				"attempted":        int(attempted),
+				"succeeded":        int(succeeded),
 				"services_written": int(servicesWritten),
-				"canceled":        true,
+				"canceled":         true,
 			}
 		case jobs <- t:
 		}
@@ -211,14 +211,14 @@ func (w *Worker) runPortScan(ctx context.Context, targets []enrichmentTarget) ma
 	wg.Wait()
 
 	return map[string]any{
-		"enabled":         true,
-		"available":       true,
-		"targets":         len(scanTargets),
-		"attempted":       int(attempted),
-		"succeeded":       int(succeeded),
+		"enabled":          true,
+		"available":        true,
+		"targets":          len(scanTargets),
+		"attempted":        int(attempted),
+		"succeeded":        int(succeeded),
 		"services_written": int(servicesWritten),
-		"ports":           portArg,
-		"timeout":         w.portScanTimeout.String(),
+		"ports":            portArg,
+		"timeout":          w.portScanTimeout.String(),
 	}
 }
 

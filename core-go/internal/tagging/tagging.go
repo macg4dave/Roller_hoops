@@ -235,4 +235,3 @@ func truncate(value string, limit int) string {
 	}
 	return value[:limit-1] + "…"
 }
-

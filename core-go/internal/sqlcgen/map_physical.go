@@ -75,4 +75,3 @@ func (q *Queries) ListDeviceLinkPeers(ctx context.Context, deviceID string, limi
 	}
 	return items, nil
 }
-

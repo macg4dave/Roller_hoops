@@ -46,4 +46,3 @@ func TestApplyScanTags_Restores(t *testing.T) {
 		t.Fatalf("expected restore to reset flags, got %+v", w)
 	}
 }
-

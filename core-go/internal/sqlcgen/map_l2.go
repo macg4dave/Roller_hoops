@@ -99,4 +99,3 @@ func (q *Queries) ListDevicePeersInVLAN(ctx context.Context, vlanID int32, exclu
 	}
 	return items, nil
 }
-

@@ -162,4 +162,3 @@ func applyScanPreset(w *Worker, preset string) func() {
 		w.portScanMaxTargets = prev.portScanMaxTargets
 	}
 }
-
