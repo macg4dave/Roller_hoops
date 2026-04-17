@@ -98,6 +98,42 @@ describe('MapPage URL contract', () => {
     expect(screen.getByRole('link', { name: /view in l2/i })).toHaveAttribute('href', expect.stringContaining('layer=l2'));
   });
 
+  test('renders security zone inspector details from projection response', async () => {
+    const zoneId = '550e8400-e29b-41d4-a716-446655440010';
+    stubProjectionFetch({
+      layer: 'security',
+      focus: { type: 'zone', id: zoneId, label: 'DMZ' },
+      guidance: null,
+      regions: [{ id: zoneId, kind: 'zone', label: 'DMZ', parent_region_id: null, meta: null }],
+      nodes: [],
+      edges: [],
+      inspector: {
+        title: 'DMZ',
+        identity: [
+          { label: 'Type', value: 'Zone' },
+          { label: 'Description', value: 'Internet-facing services' }
+        ],
+        status: [{ label: 'Members', value: '0' }],
+        relationships: []
+      },
+      truncation: {
+        regions: { returned: 1, limit: 8, truncated: false, total: null, warning: null },
+        nodes: { returned: 0, limit: 120, truncated: false, total: null, warning: null },
+        edges: { returned: 0, limit: 80, truncated: false, total: null, warning: null }
+      }
+    });
+
+    const ui = await MapPage({
+      searchParams: Promise.resolve({ layer: 'security', focusType: 'zone', focusId: zoneId })
+    });
+    renderWithClient(ui);
+
+    expect(screen.getByRole('link', { name: /security zones/i })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getAllByText('DMZ').length).toBeGreaterThan(0);
+    expect(screen.getByText('Internet-facing services')).toBeInTheDocument();
+    expect(screen.getByText('Members')).toBeInTheDocument();
+  });
+
   test('defaults to pinned focus and lets the operator toggle live updates', async () => {
     const focusId = '550e8400-e29b-41d4-a716-446655440000';
     stubProjectionFetch({

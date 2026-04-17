@@ -189,6 +189,35 @@ Minimum columns (v1):
 - `mac` (macaddr)
 - `observed_at` (timestamptz)
 
+## Retention and cleanup policy
+
+Current state tables (`devices`, `interfaces`, `ip_addresses`,
+`mac_addresses`, `services`, metadata, tags, links, and zones) are not pruned by
+the retention policy. They represent the latest known or operator-curated truth.
+
+Append-only and operational history tables are retained for bounded history and
+query cost control:
+
+| Table | Default retention | Cleanup rule |
+| --- | --- | --- |
+| `ip_observations` | 90 days | Prune observations older than 90 days, but preserve the latest row for each `(device_id, ip)` pair. |
+| `mac_observations` | 90 days | Prune observations older than 90 days, but preserve the latest row for each `(device_id, mac)` pair. |
+| `discovery_run_logs` | 30 days | Prune log rows older than 30 days. Keep `discovery_runs` metadata for historical run summaries. |
+| `audit_events` | 365 days | Prune audit events older than 365 days only after backup/export requirements are satisfied. |
+
+No automatic cleanup job currently runs in the application. Operators should use
+the manual SQL in `docs/runbooks.md` from a maintenance window, after taking a
+backup. Automating the same SQL later is acceptable if volume justifies it.
+
+Index support:
+
+- `ip_observations_observed_at_idx` and
+  `mac_observations_observed_at_idx` support time-range cleanup and change-feed
+  queries.
+- `discovery_run_logs_created_at_idx` (migration `013_retention_indexes`) supports
+  global log cleanup by timestamp.
+- `audit_events_created_at_idx` supports audit retention cleanup.
+
 ## Network map (planned)
 
 This section documents **planned** entities needed for the Layered Network Explorer (`docs/network_map/network_map_ideas.md`).

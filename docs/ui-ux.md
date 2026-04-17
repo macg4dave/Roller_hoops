@@ -199,7 +199,44 @@ but available actions and visual emphasis change.
   coming soon" notice.
 - **Operate**: Reserved for operational overlays (status badges, health
   indicators, alert markers). In v1, selecting Operate mode shows an
-  "operational overlays coming soon" notice.## “Invented but in-scope” enhancements (Phase 12)
+  "operational overlays coming soon" notice.
+
+### Operate overlay contract (planned)
+
+Operate mode is an overlay on the currently selected layer, not a separate
+layer. It must keep the same `layer`, `focusType`, and `focusId` URL contract
+as Explore mode.
+
+Data sources:
+
+- Map projection node metadata should carry render-ready operational fields for
+  visible device nodes: `last_seen_at`, `last_change_at`, and any bounded
+  rollup counts needed for regions.
+- `GET /api/v1/devices/changes?since=...` powers the recent-change window and
+  global "what changed" count. The UI must not infer diffs from raw facts.
+- `GET /api/v1/devices/{id}/history?limit=...` powers the selected device's
+  compact Inspector history in Operate mode.
+
+Rendering rules:
+
+- Show status badges on device nodes only when Operate mode is active.
+- Default recency thresholds match the Devices page: online when last seen
+  within 1 hour; changed when last changed within 24 hours.
+- Region overlays show small rollups such as `3 changed` or `2 stale`, never a
+  dense list of every event.
+- Provide a legend whenever overlays are visible. Do not rely on color alone.
+- Alerts/incidents and timeline scrubbing are deferred until there is a
+  dedicated source of truth for them.
+
+Update rules:
+
+- Polling follows the existing map pinning model. When focus is pinned,
+  refreshed overlay data queues behind the "apply updates" action instead of
+  reflowing the canvas.
+- Operators can toggle `status` and `changes` overlays independently. The
+  default in Operate mode is both on.
+
+## “Invented but in-scope” enhancements (Phase 12)
 
 These are intentionally scoped so they don’t require new architecture.
 

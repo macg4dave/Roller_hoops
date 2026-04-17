@@ -33,7 +33,7 @@ const DEFAULT_MODE: MapMode = 'explore';
 
 const MODE_NOTICES: Record<Exclude<MapMode, 'explore'>, string> = {
   build: 'Build actions are not available yet. Explore the map read-only until Build-mode APIs are implemented.',
-  secure: 'Security overlays are not available yet. Explore the map read-only until security projection data is implemented.',
+  secure: 'Security overlays are not available yet. Use the Security layer to inspect zones until policy overlays exist.',
   operate: 'Operational overlays are not available yet. Explore the map read-only until Operate-mode overlays are implemented.'
 };
 

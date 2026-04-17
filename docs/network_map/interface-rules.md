@@ -117,9 +117,41 @@ Rules:
    - Mode controls which actions and overlays are available on the canvas.
    - Modes: `explore` (default), `build`, `secure`, `operate`.
    - Invalid or missing mode resolves to `explore`.
-   - Mode persists across layer and focus changes.
-   - Build mode does not expose write actions until Build-mode APIs exist.
-   - See `docs/ui-ux.md` § "Map modes" for full semantics.
+- Mode persists across layer and focus changes.
+- Build mode does not expose write actions until Build-mode APIs exist.
+- See `docs/ui-ux.md` § "Map modes" for full semantics.
+
+### Operate mode overlay contract
+
+Operate mode overlays operational state on the active projection. It does not
+change layer semantics and must not blend layers.
+
+Data rules:
+
+- The projection remains the base payload. Device nodes should include
+  render-ready operational metadata in `meta`, including `last_seen_at` and
+  `last_change_at`, so the canvas can draw badges without extra device-list
+  joins.
+- The recent-change feed is `GET /api/v1/devices/changes?since=...`; the
+  selected device history source is `GET /api/v1/devices/{id}/history`.
+- The UI may filter returned change events to currently visible device IDs for
+  display, but it must not reconstruct diffs from raw facts.
+
+Visual rules:
+
+- Status and changed badges are small overlays on nodes or region summaries.
+- Region rollups are counts only. Full event lists live in the Inspector or
+  device history page.
+- A visible legend is required when Operate overlays are enabled.
+- Timeline scrubber, incident markers, and alert severity are out of v1 scope.
+
+Update rules:
+
+- Pinned focus still wins. Overlay refreshes should use the existing pending
+  update/apply semantics instead of reflowing the canvas while an operator is
+  working.
+- Default thresholds match the Devices page: last seen within 1 hour means
+  online; last changed within 24 hours means changed.
 
 ---
 
@@ -369,7 +401,9 @@ The Security layer renders manual zones as regions with devices as occupants.
 4. **Region identity**:
    - How we generate stable IDs for derived containers (e.g., subnet keying, VLAN keying) so URLs remain stable.
 5. **Update semantics**:
-   - How to present “data changed” without reflowing the canvas (badge + “apply updates” action vs live update).
+   - Resolved for v1: Operate overlays use the existing pinned-focus pending
+     update/apply action. Live updates are allowed only when the map is
+     unpinned.
 
 ---
 

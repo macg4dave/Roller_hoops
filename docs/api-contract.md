@@ -224,7 +224,7 @@ Container guidance (important for “objects that contain other objects”):
 - Unknown focus resources return `404 not_found`.
 - Unknown layer returns `400 validation_failed` (or a specific `invalid_layer` if introduced).
 
-### Security layer projection (planned)
+### Security layer projection
 
 The Security layer uses manual zones as regions. The projection follows the
 same `regions[]/nodes[]/edges[]` shape as other layers.
@@ -242,6 +242,7 @@ Projection rules:
 - Multi-zone devices appear in each zone region they belong to.
 - Empty zones (no members) are valid and should render as empty regions.
 - Inspector should show zone name, description, and member count.
+- `GET /api/v1/map/security` is implemented for `zone` and `device` focus.
 
 ### Zone management endpoints
 

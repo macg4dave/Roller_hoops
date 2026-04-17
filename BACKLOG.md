@@ -236,18 +236,21 @@ Only rows with `Status` = `Ready` are startable without more planning unless the
 | T004 | Next | Phase 16 | P1 | Security layer v1 planning slice | Done | T002 | manual docs consistency review + OpenAPI draft review if API shape changes |
 | T005 | Next | Phase 16 | P1 | Build-mode map editing parent issue | Done | T002 | parent/child cards written + feature matrix synced |
 | T006 | Next | Ops | P1 | Local validation toolchain/runbook cleanup | Done | None | runbook update + one confirmed Docker-only validation path |
-| T007 | Next | Discovery | P1 | Discovery deployment smoke matrix | Ready | T006 | documented Docker bridge, host-network, and native-host smoke commands |
-| T011 | Next | Phase 16 | P1 | Operate overlays planning slice | Ready | T002, T003 | manual docs consistency review + child task validation |
-| T012 | Next | Ops | P2 | Data retention and cleanup policy | Ready | None | manual docs review + Go tests if migrations added |
+| T007 | Next | Discovery | P1 | Discovery deployment smoke matrix | Done | T006 | documented Docker bridge, host-network, and native-host smoke commands |
+| T011 | Next | Phase 16 | P1 | Operate overlays planning slice | Done | T002, T003 | manual docs consistency review + child task validation |
+| T012 | Next | Ops | P2 | Data retention and cleanup policy | Done | None | manual docs review + Go tests if migrations added |
 | T013 | Now | Process | P2 | Create backlog archive file | Done | None | `git diff --check` + cross-reference review |
 | T014 | Now | Process | P1 | Phase 12 roadmap status correction | Done | None | manual docs consistency review |
 | T008 | Later | Docs | P2 | Markdown encoding and typography cleanup | Ready | None | `git diff --check` + spot-check rendered docs |
 | T015 | Next | Phase 16 | P1 | Security zones DB migration | Done | T004 | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
 | T016 | Next | Phase 16 | P1 | Security zone CRUD API (Go) | Done | T015 | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
-| T017 | Next | Phase 16 | P1 | Security layer map projection (Go) | Ready | T015 | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
-| T018 | Next | Phase 16 | P1 | Security layer UI renderer | Ready | T017 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
+| T017 | Next | Phase 16 | P1 | Security layer map projection (Go) | Done | T015 | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T018 | Next | Phase 16 | P1 | Security layer UI renderer | Done | T017 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
 | T019 | Next | Phase 16 | P1 | Link CRUD API (Go) | Ready | T005 | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
 | T020 | Next | Phase 16 | P2 | Build-mode UI controls | Ready | T016, T019 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
+| T021 | Next | Phase 16 | P1 | Operate overlay projection metadata (Go) | Ready | T011 | `docker build -f docker/validate/core-go.Dockerfile --target test .` + OpenAPI type generation if schema descriptions change |
+| T022 | Next | Phase 16 | P1 | Operate overlay canvas and legend UI | Ready | T021 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
+| T023 | Next | Phase 16 | P1 | Operate inspector history and change feed UI | Ready | T021 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
 
 ## Dev Runbook
 
@@ -672,7 +675,7 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
 
 ### T007 - Discovery Deployment Smoke Matrix
 
-- Status: Ready
+- Status: Done
 - Queue: Next
 - Phase: Discovery
 - Priority: P1
@@ -699,7 +702,9 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
   - operators and agents know which discovery behaviors should pass in each deployment mode
   - failure modes are actionable from logs
 - Handoff Notes:
-  - Keep all examples narrow and explicitly scoped; do not recommend broad network scans.
+  - Added deployment smoke checks for Docker bridge, Linux host-network, and native-host runs in `docs/discovery-deployment.md` and `docs/runbooks.md`.
+  - Added smoke expectations and run-log triage signals in `docs/discovery-capabilities.md`.
+  - Validation passed: `git diff --check`; manual docs consistency review confirmed the smoke sections are present in all owning docs.
 
 ### T008 - Markdown Encoding And Typography Cleanup
 
@@ -733,7 +738,7 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
 
 ### T011 - Operate Overlays Planning Slice
 
-- Status: Ready
+- Status: Done
 - Queue: Next
 - Phase: Phase 16
 - Priority: P1
@@ -761,11 +766,14 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
   - Operate overlays have concrete child cards with files, validation, and blockers
   - Phase 9 API dependencies are confirmed as sufficient or gaps are documented
 - Handoff Notes:
-  - Operate mode is an overlay on any layer, not a separate layer. Keep it distinct from the Explore default.
+  - Operate mode contract documented in `docs/ui-ux.md` and `docs/network_map/interface-rules.md`: it is an overlay on the active layer, not a separate layer.
+  - Phase 9 API usage documented: projection metadata supplies node timestamps, `/api/v1/devices/changes` supplies the recent-change window, and `/api/v1/devices/{id}/history` supplies compact Inspector history.
+  - Feature matrix now tracks Map Operate overlays as `planned`.
+  - Child tasks created: T021 (Go projection metadata), T022 (canvas overlays + legend), T023 (Inspector history + change feed).
 
 ### T012 - Data Retention And Cleanup Policy
 
-- Status: Ready
+- Status: Done
 - Queue: Next
 - Phase: Ops
 - Priority: P2
@@ -793,8 +801,10 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
   - retention policy is documented with specific windows and cleanup approach
   - operators know how to prune old data or have an automated path
 - Handoff Notes:
-  - Phase 7 blockers and Phase 9 shared tasks both mention this need but no implementation exists yet.
-  - Start with documentation and manual SQL; automate later if volume justifies it.
+  - Defined conservative retention windows: 90 days for IP/MAC observations while preserving latest fact per device/value, 30 days for discovery run logs, and 365 days for audit events.
+  - Added manual dry-run and cleanup SQL to `docs/runbooks.md`; no automatic deletion job was added.
+  - Added migration `013_retention_indexes` for `discovery_run_logs(created_at DESC)`; existing indexes already covered observation and audit cleanup.
+  - Validation passed: `git diff --check`; `docker build -f docker/validate/core-go.Dockerfile --target test .`.
 
 ### T013 - Create Backlog Archive File
 
@@ -940,7 +950,7 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
 
 ### T017 - Security Layer Map Projection (Go)
 
-- Status: Ready
+- Status: Done
 - Queue: Next
 - Phase: Phase 16
 - Priority: P1
@@ -971,11 +981,14 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
   - multi-zone devices appear in each zone
   - unit tests verify both focus types
 - Handoff Notes:
-  - Follow the existing map projection patterns (L3/L2/physical/services). Security is region-based like L3/L2. No inter-zone edges in v1. See `docs/network_map/interface-rules.md` "Security layer contract (v1)".
+  - Security projection implementation already existed in `core-go/internal/httpapi/map.go` and `core-go/internal/sqlcgen/map_security.go`; this task added focused tests and synchronized status docs.
+  - Added tests for zone focus with members, empty zone rendering, and device focus with multi-zone membership.
+  - Updated `docs/api-contract.md`, `docs/feature-matrix.md`, and `docs/roadmap.md` to mark the read-side Go projection implemented; UI rendering was completed immediately after under T018.
+  - Validation passed: `git diff --check`; `docker build -f docker/validate/core-go.Dockerfile --target test .`.
 
 ### T018 - Security Layer UI Renderer
 
-- Status: Ready
+- Status: Done
 - Queue: Next
 - Phase: Phase 16
 - Priority: P1
@@ -1004,7 +1017,10 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
   - inspector shows zone details
   - UI tests cover security layer rendering
 - Handoff Notes:
-  - The security layer is region-based like L3 (subnets) and L2 (VLANs). Zone regions should follow the same visual pattern. No special edges in v1.
+  - Existing generic region rendering already supports `zone` regions; added UI tests for Security layer zone rendering and zone Inspector details.
+  - Updated Secure-mode notice copy so it no longer implies security projection data is missing.
+  - Updated feature matrix and roadmap M16.3 UI checkbox to reflect the Security layer renderer is complete.
+  - Validation passed: `git diff --check`; `docker build -f docker/validate/ui-node.Dockerfile --target test .`; `docker build -f docker/validate/ui-node.Dockerfile --target build .`.
 
 ### T019 - Link CRUD API (Go)
 
@@ -1083,12 +1099,123 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
 - Handoff Notes:
   - Build mode is already defined by T003 (mode selector exists in the UI). This task wires actual editing functionality to it. Start with link and zone management; service dependencies are deferred.
 
+### T021 - Operate Overlay Projection Metadata (Go)
+
+- Status: Ready
+- Queue: Next
+- Phase: Phase 16
+- Priority: P1
+- Owner Role: Backend owner
+- Parent: T011
+- Goal: Add render-ready operational timestamps to visible map device nodes so Operate mode overlays do not reconstruct history in the UI.
+- Scope:
+  - add a map operational facts query for device IDs that returns `last_seen_at` and `last_change_at` using the same semantics as the Devices API
+  - enrich every `kind=device` map node across physical, l2, l3, services host/device, and security projections with `meta.last_seen_at` and `meta.last_change_at` when known
+  - keep projection sorting and caps deterministic
+  - document the `MapNode.meta` operational keys in `docs/api-contract.md` and, if useful, the `api/openapi.yaml` `MapNode.meta` description
+  - add focused map projection tests for at least one region layer and one edge/device layer
+- Files to Touch:
+  - `core-go/internal/sqlcgen/map_operate.go` (new, if a dedicated query is clearer)
+  - `core-go/internal/httpapi/map.go`
+  - `core-go/internal/httpapi/map_test.go`
+  - `docs/api-contract.md`
+  - `api/openapi.yaml` (description-only if formalizing `meta` keys)
+  - `ui-node/lib/api-types.ts` (only if OpenAPI generation changes output)
+- Do Not Touch:
+  - UI rendering
+  - discovery worker behavior
+- Dependencies:
+  - T011
+- Validation:
+  - `docker build -f docker/validate/core-go.Dockerfile --target test .`
+  - OpenAPI type generation if `api/openapi.yaml` changes
+- Definition of Done:
+  - visible device nodes expose operational timestamps in `meta`
+  - tests prove the timestamps are present and deterministic
+  - API docs name the fields Operate UI may consume
+- Handoff Notes:
+  - Use timestamps rather than API-computed badge labels so the UI can apply the documented 1-hour online and 24-hour changed thresholds consistently with the Devices page.
+
+### T022 - Operate Overlay Canvas And Legend UI
+
+- Status: Ready
+- Queue: Next
+- Phase: Phase 16
+- Priority: P1
+- Owner Role: UI owner
+- Parent: T011
+- Goal: Render status and change overlays on the active map projection when `mode=operate`.
+- Scope:
+  - in Operate mode, show status and changed badges on device nodes using `MapNode.meta.last_seen_at` and `MapNode.meta.last_change_at`
+  - add status/change overlay toggles, defaulting both on in Operate mode
+  - add a visible legend explaining online, stale/offline, and changed states without relying on color alone
+  - compute region rollups from visible node metadata and show counts only, not full event lists
+  - respect the existing pinned-focus pending update/apply semantics
+  - add UI tests for mode gating, toggles, legend, and region rollup rendering
+- Files to Touch:
+  - `ui-node/app/(app)/map/MapCanvas.tsx`
+  - `ui-node/app/(app)/map/MapCanvas.test.tsx`
+  - `ui-node/app/(app)/map/MapPollingControls.tsx` or a new Operate controls component
+  - `ui-node/app/(app)/map/page.tsx`
+  - `ui-node/app/globals.css`
+- Do Not Touch:
+  - Go API code
+  - topology editing controls
+- Dependencies:
+  - T021
+- Validation:
+  - `docker build -f docker/validate/ui-node.Dockerfile --target test .`
+  - `docker build -f docker/validate/ui-node.Dockerfile --target build .`
+- Definition of Done:
+  - Explore mode remains visually unchanged
+  - Operate mode shows bounded, legended overlays with toggles
+  - pinned map updates do not reflow the canvas until the operator applies updates
+- Handoff Notes:
+  - Thresholds are documented in `docs/ui-ux.md`: online is last seen within 1 hour; changed is last changed within 24 hours.
+
+### T023 - Operate Inspector History And Change Feed UI
+
+- Status: Ready
+- Queue: Next
+- Phase: Phase 16
+- Priority: P1
+- Owner Role: UI owner
+- Parent: T011
+- Goal: Add compact Operate-mode change context to the Inspector using Phase 9 APIs.
+- Scope:
+  - fetch `/api/v1/devices/{id}/history?limit=5` for the selected/focused device when Operate mode is active
+  - fetch `/api/v1/devices/changes?since=...&limit=100` for the recent-change window and filter to visible device IDs for a bounded "visible changes" count
+  - show concise event summaries in the Inspector with a link to the full device history page
+  - handle empty, loading, error, and read-only states
+  - do not reconstruct diffs from raw facts; render server-provided `summary` and `kind`
+  - add UI tests for history success, empty state, and API failure
+- Files to Touch:
+  - `ui-node/app/(app)/map/MapInspectorDetails.tsx`
+  - `ui-node/app/(app)/map/MapInspectorDetails.test.tsx` (new if needed)
+  - `ui-node/app/(app)/map/MapProjectionContext.tsx` or a new Operate data provider
+  - `ui-node/app/(app)/map/page.tsx`
+  - `ui-node/app/globals.css`
+- Do Not Touch:
+  - Go API code
+  - device detail history components except for small shared helpers if needed
+- Dependencies:
+  - T021
+- Validation:
+  - `docker build -f docker/validate/ui-node.Dockerfile --target test .`
+  - `docker build -f docker/validate/ui-node.Dockerfile --target build .`
+- Definition of Done:
+  - Operate Inspector shows recent server-provided change summaries for selected devices
+  - visible graph change count uses the Phase 9 change feed without diff reconstruction
+  - failures are shown as operator-grade inline messages
+- Handoff Notes:
+  - Keep the Inspector compact; the full timeline remains on the device detail page.
+
 ## Immediate Open Decisions
 
 | ID | Decision | Needed By | Owner | Status |
 | --- | --- | --- | --- | --- |
 | OD-001 | Should Services layer M16.2 tasks be checked off (read-side projection done under Phase 15) or do they remain open for dependency-editing work? | T002 | Tech lead | Open |
-| OD-002 | What is the retention window for `ip_observations` and `mac_observations`? (30 days? 90 days? configurable?) | T012 | Data owner | Open |
+| OD-002 | What is the retention window for `ip_observations` and `mac_observations`? Resolved by T012: default is 90 days while preserving the latest row per device/fact. | T012 | Data owner | Resolved |
 | OD-003 | T001 has been in `Review` since creation — does it need a human review pass, or can a follow-up agent validate and close it? | T001 | Security owner | Open |
 
 ## Agent Execution Rules

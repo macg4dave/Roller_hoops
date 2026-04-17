@@ -114,6 +114,119 @@ Cons:
   - Prefer SNMP/TCP checks where possible.
   - Add raw-socket capabilities only when required.
 
+## Deployment smoke matrix
+
+Use these checks when validating a new deployment mode or debugging "discovery found nothing" reports. Replace `<CIDR>` with a narrow allowed scope before running any command.
+
+### Docker bridge smoke
+
+This is the default compose mode and the safest first smoke because `core-go` stays private on the Docker network.
+
+```powershell
+$env:DISCOVERY_DEFAULT_SCOPE="<CIDR>"
+docker compose --profile dev up -d --build
+```
+
+Trigger a scoped fast run from the UI Discovery panel, or from inside the private `core-go` container:
+
+```powershell
+docker compose exec -T core-go wget -qO- --header='Content-Type: application/json' --post-data='{"scope":"<CIDR>","preset":"fast"}' http://127.0.0.1:8081/api/v1/discovery/run
+docker compose exec -T core-go wget -qO- http://127.0.0.1:8081/api/v1/discovery/status
+docker compose logs --tail 100 core-go
+```
+
+Expected result:
+
+- The run reaches `succeeded` or fails with an actionable message.
+- `ping sweep: attempted=...` appears when a scope is provided.
+- Real LAN MAC addresses are not expected. If ping finds devices but ARP cannot see them, logs should include `ARP found no in-scope devices; falling back...` and created devices will be IP-only.
+
+### Linux host-network smoke
+
+Use this when ARP/MAC visibility matters and the Docker host is Linux.
+
+```powershell
+$env:CORE_GO_HTTP_ADDR="127.0.0.1:8081"
+$env:DISCOVERY_DEFAULT_SCOPE="<CIDR>"
+docker compose -f docker-compose.yml -f docker-compose.hostnet.yml --profile dev up -d --build
+```
+
+In a POSIX shell, the equivalent start command is:
+
+```sh
+CORE_GO_HTTP_ADDR=127.0.0.1:8081 DISCOVERY_DEFAULT_SCOPE=<CIDR> \
+  sudo docker compose -f docker-compose.yml -f docker-compose.hostnet.yml --profile dev up -d --build
+```
+
+Trigger and inspect directly through the loopback-bound Go API:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8081/api/v1/discovery/run -ContentType 'application/json' -Body '{"scope":"<CIDR>","preset":"fast"}'
+Invoke-RestMethod -Uri http://127.0.0.1:8081/api/v1/discovery/status
+docker compose -f docker-compose.yml -f docker-compose.hostnet.yml logs --tail 100 core-go
+```
+
+Expected result:
+
+- The run reaches `succeeded`.
+- Logs include `scope targets`, `ping sweep`, `arp scrape`, and `discovery run completed`.
+- `arp scrape` can only report what the Linux host can see in its neighbor/ARP table. Generate normal traffic to known targets first if the table is empty.
+
+### Native-host smoke
+
+Use this when testing outside Docker or when Docker Desktop cannot provide the needed network namespace. This path requires a local Go toolchain or prebuilt `core-go` binary.
+
+Start Postgres and migrations with a host port for the native process:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.hostnet.yml up -d db migrate
+```
+
+Run `core-go` natively from the repo:
+
+```powershell
+Set-Location core-go
+$env:DATABASE_URL="postgres://postgres:postgres@127.0.0.1:15432/roller_hoops?sslmode=disable"
+$env:HTTP_ADDR="127.0.0.1:8081"
+$env:DISCOVERY_DEFAULT_SCOPE="<CIDR>"
+go run ./cmd/core-go
+```
+
+In another shell, trigger and inspect:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8081/api/v1/discovery/run -ContentType 'application/json' -Body '{"scope":"<CIDR>","preset":"fast"}'
+Invoke-RestMethod -Uri http://127.0.0.1:8081/api/v1/discovery/status
+```
+
+Expected result:
+
+- The run reaches `succeeded` with host-level routing and ARP behavior.
+- If logs say `ping not permitted (missing CAP_NET_RAW?)`, fix host ping permissions or run in a mode where ICMP is permitted.
+- If logs say `ping not found in PATH`, install/provide `ping` for the native runtime.
+
+### Optional enrichment smoke
+
+Only run this against explicitly allowed targets with known credentials:
+
+```powershell
+$env:DISCOVERY_SNMP_ENABLED="true"
+$env:DISCOVERY_SNMP_COMMUNITY="<community>"
+$env:DISCOVERY_TOPOLOGY_ALLOWLIST="<CIDR>"
+```
+
+Use the `snmp` or `topology` scan tag from the UI. Expected logs include `enrichment: targets=... snmp_ok=...`. If `snmp_ok=0`, check UDP/161 reachability, credentials, target SNMP support, and allowlists before changing code.
+
+For port-scan smoke, keep active scanning disabled unless the target is explicitly approved:
+
+```powershell
+$env:DISCOVERY_PORT_SCAN_ENABLED="true"
+$env:DISCOVERY_PORT_SCAN_ALLOWLIST="<CIDR>"
+$env:DISCOVERY_PORT_SCAN_PORTS="22,80,443"
+```
+
+Expected logs include either `port scan: targets=...` or a clear `port scan skipped: ...` reason.
+
 ## What “done” looks like
 
 A deployment is considered correct when:

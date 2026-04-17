@@ -927,3 +927,246 @@ func TestMapProjection_ServiceFocus_ServicesIncludesHostRegion(t *testing.T) {
 		t.Fatalf("expected host region kind device, got %v", region["kind"])
 	}
 }
+
+type fakeDeviceQueriesWithSecurity struct {
+	fakeDeviceQueries
+	getMapZoneFn          func(ctx context.Context, zoneID string) (sqlcgen.MapSecurityZone, error)
+	listZonesForDeviceFn  func(ctx context.Context, deviceID string, limit int32) ([]sqlcgen.MapSecurityZone, error)
+	listDevicesInZoneFn   func(ctx context.Context, zoneID string, limit int32) ([]sqlcgen.MapDevicePeer, error)
+	listZonePeersFn       func(ctx context.Context, zoneID string, excludeDeviceID string, limit int32) ([]sqlcgen.MapDevicePeer, error)
+}
+
+func (f fakeDeviceQueriesWithSecurity) GetMapZone(ctx context.Context, zoneID string) (sqlcgen.MapSecurityZone, error) {
+	if f.getMapZoneFn == nil {
+		return sqlcgen.MapSecurityZone{}, pgx.ErrNoRows
+	}
+	return f.getMapZoneFn(ctx, zoneID)
+}
+
+func (f fakeDeviceQueriesWithSecurity) ListZonesForDevice(ctx context.Context, deviceID string, limit int32) ([]sqlcgen.MapSecurityZone, error) {
+	if f.listZonesForDeviceFn == nil {
+		return nil, nil
+	}
+	return f.listZonesForDeviceFn(ctx, deviceID, limit)
+}
+
+func (f fakeDeviceQueriesWithSecurity) ListDevicesInZone(ctx context.Context, zoneID string, limit int32) ([]sqlcgen.MapDevicePeer, error) {
+	if f.listDevicesInZoneFn == nil {
+		return nil, nil
+	}
+	return f.listDevicesInZoneFn(ctx, zoneID, limit)
+}
+
+func (f fakeDeviceQueriesWithSecurity) ListZonePeers(ctx context.Context, zoneID string, excludeDeviceID string, limit int32) ([]sqlcgen.MapDevicePeer, error) {
+	if f.listZonePeersFn == nil {
+		return nil, nil
+	}
+	return f.listZonePeersFn(ctx, zoneID, excludeDeviceID, limit)
+}
+
+func TestMapProjection_ZoneFocus_SecurityIncludesZoneRegionAndMembers(t *testing.T) {
+	zoneID := "00000000-0000-0000-0000-00000000aa01"
+	memberAID := "00000000-0000-0000-0000-00000000bb01"
+	memberBID := "00000000-0000-0000-0000-00000000bb02"
+	zoneName := "DMZ"
+	memberAName := "web-1"
+	memberBName := "web-2"
+
+	h := NewHandler(NewLogger("debug"), nil)
+	h.devices = fakeDeviceQueriesWithSecurity{
+		getMapZoneFn: func(ctx context.Context, targetZoneID string) (sqlcgen.MapSecurityZone, error) {
+			if targetZoneID != zoneID {
+				return sqlcgen.MapSecurityZone{}, pgx.ErrNoRows
+			}
+			return sqlcgen.MapSecurityZone{ID: zoneID, Name: zoneName, MemberCount: 2}, nil
+		},
+		listDevicesInZoneFn: func(ctx context.Context, targetZoneID string, limit int32) ([]sqlcgen.MapDevicePeer, error) {
+			if targetZoneID != zoneID {
+				return nil, nil
+			}
+			return []sqlcgen.MapDevicePeer{
+				{ID: memberBID, DisplayName: &memberBName},
+				{ID: memberAID, DisplayName: &memberAName},
+			}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/map/security?focusType=zone&focusId="+zoneID, nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	body := decodeBody(t, rr)
+	if body["layer"] != "security" {
+		t.Fatalf("expected layer security, got %v", body["layer"])
+	}
+
+	regionsAny := body["regions"].([]any)
+	if len(regionsAny) != 1 {
+		t.Fatalf("expected one zone region, got %d", len(regionsAny))
+	}
+	region := regionsAny[0].(map[string]any)
+	if region["id"] != zoneID || region["kind"] != "zone" || region["label"] != zoneName {
+		t.Fatalf("unexpected zone region: %v", region)
+	}
+
+	nodesAny := body["nodes"].([]any)
+	if len(nodesAny) != 2 {
+		t.Fatalf("expected two member nodes, got %d", len(nodesAny))
+	}
+	for _, nodeAny := range nodesAny {
+		node := nodeAny.(map[string]any)
+		if node["kind"] != "device" {
+			t.Fatalf("expected device node, got %v", node)
+		}
+		if node["primary_region_id"] != zoneID {
+			t.Fatalf("expected primary region %s, got %v", zoneID, node["primary_region_id"])
+		}
+		regionIDs := node["region_ids"].([]any)
+		if len(regionIDs) != 1 || regionIDs[0].(string) != zoneID {
+			t.Fatalf("expected region_ids=[%s], got %v", zoneID, node["region_ids"])
+		}
+	}
+
+	inspector := body["inspector"].(map[string]any)
+	if inspector["title"] != zoneName {
+		t.Fatalf("expected inspector title %s, got %v", zoneName, inspector["title"])
+	}
+}
+
+func TestMapProjection_ZoneFocus_SecurityRendersEmptyZone(t *testing.T) {
+	zoneID := "00000000-0000-0000-0000-00000000aa02"
+	zoneName := "Empty"
+
+	h := NewHandler(NewLogger("debug"), nil)
+	h.devices = fakeDeviceQueriesWithSecurity{
+		getMapZoneFn: func(ctx context.Context, targetZoneID string) (sqlcgen.MapSecurityZone, error) {
+			if targetZoneID != zoneID {
+				return sqlcgen.MapSecurityZone{}, pgx.ErrNoRows
+			}
+			return sqlcgen.MapSecurityZone{ID: zoneID, Name: zoneName, MemberCount: 0}, nil
+		},
+		listDevicesInZoneFn: func(ctx context.Context, targetZoneID string, limit int32) ([]sqlcgen.MapDevicePeer, error) {
+			return nil, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/map/security?focusType=zone&focusId="+zoneID, nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	body := decodeBody(t, rr)
+	regionsAny := body["regions"].([]any)
+	nodesAny := body["nodes"].([]any)
+	if len(regionsAny) != 1 {
+		t.Fatalf("expected empty zone to still render one region, got %d", len(regionsAny))
+	}
+	if len(nodesAny) != 0 {
+		t.Fatalf("expected no member nodes, got %d", len(nodesAny))
+	}
+	if guidance, ok := body["guidance"].(string); !ok || guidance == "" {
+		t.Fatalf("expected empty-zone guidance, got %T %v", body["guidance"], body["guidance"])
+	}
+}
+
+func TestMapProjection_DeviceFocus_SecurityIncludesZonesAndMultiZonePeers(t *testing.T) {
+	deviceID := "00000000-0000-0000-0000-00000000cc01"
+	zoneAID := "00000000-0000-0000-0000-00000000aa01"
+	zoneBID := "00000000-0000-0000-0000-00000000aa02"
+	peerID := "00000000-0000-0000-0000-00000000dd01"
+	deviceName := "firewall-1"
+	peerName := "app-1"
+
+	h := NewHandler(NewLogger("debug"), nil)
+	h.devices = fakeDeviceQueriesWithSecurity{
+		fakeDeviceQueries: fakeDeviceQueries{
+			getFn: func(ctx context.Context, id string) (sqlcgen.Device, error) {
+				return sqlcgen.Device{ID: deviceID, DisplayName: &deviceName}, nil
+			},
+		},
+		listZonesForDeviceFn: func(ctx context.Context, targetDeviceID string, limit int32) ([]sqlcgen.MapSecurityZone, error) {
+			if targetDeviceID != deviceID {
+				return nil, nil
+			}
+			return []sqlcgen.MapSecurityZone{
+				{ID: zoneAID, Name: "DMZ", MemberCount: 2},
+				{ID: zoneBID, Name: "Internal", MemberCount: 2},
+			}, nil
+		},
+		listZonePeersFn: func(ctx context.Context, zoneID string, excludeDeviceID string, limit int32) ([]sqlcgen.MapDevicePeer, error) {
+			if excludeDeviceID != deviceID {
+				t.Fatalf("expected excluded device %s, got %s", deviceID, excludeDeviceID)
+			}
+			switch zoneID {
+			case zoneAID, zoneBID:
+				return []sqlcgen.MapDevicePeer{{ID: peerID, DisplayName: &peerName}}, nil
+			default:
+				return nil, nil
+			}
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/map/security?focusType=device&focusId="+deviceID, nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	body := decodeBody(t, rr)
+	regionsAny := body["regions"].([]any)
+	if len(regionsAny) != 2 {
+		t.Fatalf("expected two zone regions, got %d", len(regionsAny))
+	}
+
+	nodesAny := body["nodes"].([]any)
+	if len(nodesAny) != 2 {
+		t.Fatalf("expected focus + peer nodes, got %d", len(nodesAny))
+	}
+
+	foundFocus := false
+	foundPeer := false
+	for _, nodeAny := range nodesAny {
+		node := nodeAny.(map[string]any)
+		regionIDs := node["region_ids"].([]any)
+		if len(regionIDs) != 2 {
+			t.Fatalf("expected node %v in two zones, got %v", node["id"], node["region_ids"])
+		}
+		if regionIDs[0].(string) != zoneAID || regionIDs[1].(string) != zoneBID {
+			t.Fatalf("expected sorted zone ids [%s %s], got %v", zoneAID, zoneBID, node["region_ids"])
+		}
+		switch node["id"] {
+		case deviceID:
+			foundFocus = true
+		case peerID:
+			foundPeer = true
+		}
+	}
+	if !foundFocus || !foundPeer {
+		t.Fatalf("expected focus and peer nodes, foundFocus=%v foundPeer=%v", foundFocus, foundPeer)
+	}
+
+	inspector := body["inspector"].(map[string]any)
+	statusAny := inspector["status"].([]any)
+	foundProjection := false
+	for _, fieldAny := range statusAny {
+		field := fieldAny.(map[string]any)
+		if field["label"] == "Projection" {
+			foundProjection = true
+			if field["value"] != "security (device focus)" {
+				t.Fatalf("expected security projection status, got %v", field["value"])
+			}
+		}
+	}
+	if !foundProjection {
+		t.Fatalf("expected inspector status to include Projection")
+	}
+}

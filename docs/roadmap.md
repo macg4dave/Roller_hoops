@@ -118,9 +118,6 @@ GET /healthz
 ```text
 Phase 16 — map editing (Build mode)
 POST/PUT /api/v1/map/... or /api/v1/topology/... (write endpoints for links/zones/service deps)
-
-Phase 16 — security projection (data model not yet implemented)
-GET    /api/v1/map/security
 ```
 
 ---
@@ -142,7 +139,7 @@ GET    /api/v1/map/security
 * **Auth boundary is enforced via UI sessions**: the UI requires login and issues a signed `roller_session` cookie before any API traffic is allowed; admin vs read-only roles are enforced in the UI (Go remains headless).
 * **Discovery inside Docker needs a deployment decision**: ARP/ICMP/SNMP fidelity depends on container networking and capabilities (e.g., `CAP_NET_RAW`, host networking, or a dedicated scanner container deployed on the target network). See [docs/discovery-capabilities.md](discovery-capabilities.md) and [docs/discovery-deployment.md](discovery-deployment.md) (Linux host-network example: `docker-compose.hostnet.yml`).
 * **Production secret injection is a deployment responsibility**: keep secrets out of git, inject via env/Docker secrets/secret manager, and follow `docs/runbooks.md` for rotation expectations.
-* **Historical model implemented**: observations, change feed, and run/log APIs now exist; next focus is documenting retention and monitoring query cost.
+* **Historical model implemented**: observations, change feed, and run/log APIs now exist; retention policy/manual cleanup is documented, and the next focus is monitoring query cost.
 
 ---
 
@@ -1376,11 +1373,11 @@ Acceptance criteria:
 Tasks:
 
 * Data model
-  * [ ] Add `zones` (+ membership) migrations when Build mode editing begins.
+  * [x] Add `zones` (+ membership) migrations when Build mode editing begins.
 * API
-  * [ ] Add `GET /api/v1/map/security` projection.
+  * [x] Add `GET /api/v1/map/security` projection.
 * UI
-  * [ ] Render zones as regions; show only zone-level edges.
+  * [x] Render zones as regions; show only zone-level edges.
 
 Blockers:
 

@@ -185,4 +185,61 @@ describe('MapCanvas', () => {
 
     expect(screen.getByText('lldp')).toBeInTheDocument();
   });
+
+  test('renders security zones as regions with device occupants', () => {
+    const projection: MapProjection = {
+      layer: 'security',
+      focus: { type: 'zone', id: 'zone-1', label: 'DMZ' },
+      guidance: null,
+      regions: [{ id: 'zone-1', kind: 'zone', label: 'DMZ', parent_region_id: null, meta: null }],
+      nodes: [
+        {
+          id: 'device-a',
+          kind: 'device',
+          label: 'web-1',
+          primary_region_id: 'zone-1',
+          region_ids: ['zone-1'],
+          meta: null
+        },
+        {
+          id: 'device-b',
+          kind: 'device',
+          label: 'firewall-1',
+          primary_region_id: 'zone-1',
+          region_ids: ['zone-1'],
+          meta: null
+        }
+      ],
+      edges: [],
+      inspector: {
+        title: 'DMZ',
+        identity: [{ label: 'Type', value: 'Zone' }],
+        status: [{ label: 'Members', value: '2' }],
+        relationships: []
+      },
+      truncation: {
+        regions: { returned: 1, limit: 8, truncated: false, total: null, warning: null },
+        nodes: { returned: 2, limit: 120, truncated: false, total: null, warning: null },
+        edges: { returned: 0, limit: 80, truncated: false, total: null, warning: null }
+      }
+    };
+
+    render(
+      <MapSelectionProvider>
+        <MapLayoutProvider>
+          <MapCanvas projection={projection} activeLayerId="security" currentParams="layer=security&focusType=zone&focusId=zone-1" />
+        </MapLayoutProvider>
+      </MapSelectionProvider>
+    );
+
+    expect(screen.getByText('DMZ')).toBeInTheDocument();
+    expect(screen.getByText(/members: 2/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'web-1' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand' }));
+
+    expect(screen.getByRole('button', { name: 'web-1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'firewall-1' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Drill in' })).toHaveAttribute('href', expect.stringContaining('layer=security'));
+  });
 });
