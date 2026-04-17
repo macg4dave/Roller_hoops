@@ -107,6 +107,19 @@ function resolveEdgeMetaString(edge: MapEdge, key: string): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function resolveNodeMetaString(node: MapNode, key: string): string | undefined {
+  const meta = node.meta;
+  if (!meta || typeof meta !== 'object') {
+    return undefined;
+  }
+  const value = (meta as Record<string, unknown>)[key];
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 export function MapCanvas({
   projection: projectionProp,
   activeLayerId,
@@ -344,7 +357,20 @@ export function MapCanvas({
                 onClick={() => setSelection({ kind: 'node', id: focusId })}
                 title={nodeById.get(focusId) ? resolveNodeHoverTitle(nodeById.get(focusId)!) : focusId}
               >
-                {nodeById.get(focusId) ? resolveNodeTitle(nodeById.get(focusId)!) : focusId}
+                <span className="mapPhysicalFocusLabel">{nodeById.get(focusId) ? resolveNodeTitle(nodeById.get(focusId)!) : focusId}</span>
+                {(() => {
+                  const focusNodeData = nodeById.get(focusId);
+                  if (!focusNodeData) return null;
+                  const ip = resolveNodeMetaString(focusNodeData, 'primary_ip');
+                  const mac = resolveNodeMetaString(focusNodeData, 'primary_mac');
+                  if (!ip && !mac) return null;
+                  return (
+                    <span className="mapPhysicalFocusFacts">
+                      {ip ? <span className="mapPhysicalFact">IP {ip}</span> : null}
+                      {mac ? <span className="mapPhysicalFact">MAC {mac}</span> : null}
+                    </span>
+                  );
+                })()}
               </button>
             ) : (
               <p className="mapRegionEmpty">No focus returned.</p>
@@ -361,8 +387,11 @@ export function MapCanvas({
                   const selected = selection?.kind === 'node' && selection.id === link.peerId;
                   const meta: string[] = [];
                   if (link.linkType) meta.push(link.linkType);
-                  if (link.source) meta.push(link.source);
                   if (link.linkKey) meta.push(link.linkKey);
+
+                  const peerNode = nodeById.get(link.peerId);
+                  const peerIP = peerNode ? resolveNodeMetaString(peerNode, 'primary_ip') : undefined;
+                  const peerMAC = peerNode ? resolveNodeMetaString(peerNode, 'primary_mac') : undefined;
 
                   return (
                     <li key={link.edge.id} className="mapPhysicalLinkListItem">
@@ -370,10 +399,21 @@ export function MapCanvas({
                         type="button"
                         className={`mapPhysicalLinkRow${selected ? ' mapPhysicalLinkRowSelected' : ''}`}
                         onClick={() => setSelection({ kind: 'node', id: link.peerId })}
-                        title={nodeById.get(link.peerId) ? resolveNodeHoverTitle(nodeById.get(link.peerId)!) : link.peerLabel}
+                        title={peerNode ? resolveNodeHoverTitle(peerNode) : link.peerLabel}
                       >
-                        <span className="mapPhysicalLinkLabel">{link.peerLabel}</span>
-                        {meta.length > 0 ? <span className="mapPhysicalLinkMeta">{meta.join(' • ')}</span> : null}
+                        <span className="mapPhysicalLinkBody">
+                          <span className="mapPhysicalLinkLabel">{link.peerLabel}</span>
+                          {(peerIP || peerMAC) ? (
+                            <span className="mapPhysicalLinkFacts">
+                              {peerIP ? <span className="mapPhysicalFact">IP {peerIP}</span> : null}
+                              {peerMAC ? <span className="mapPhysicalFact">MAC {peerMAC}</span> : null}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="mapPhysicalLinkRight">
+                          {link.source ? <span className="mapPhysicalLinkSource">{link.source}</span> : null}
+                          {meta.length > 0 ? <span className="mapPhysicalLinkMeta">{meta.join(' • ')}</span> : null}
+                        </span>
                       </button>
                     </li>
                   );

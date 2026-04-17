@@ -229,23 +229,25 @@ Only rows with `Status` = `Ready` are startable without more planning unless the
 
 | ID | Queue | Phase | Priority | Task | Status | Depends On | Validation |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| T000 | Now | Process | P1 | AI backlog and runbook foundation | Done | None | `git diff --check` + docs consistency review |
-| T009 | Now | Process | P1 | VS Code AI workspace scaffolding | Done | T000 | `git diff --check` + JSON parse check + docs consistency review |
 | T001 | Now | Hardening | P0 | Auth and OpenAPI drift hardening | Review | None | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .`; Go tests via Docker validator |
-| T002 | Now | Process | P1 | Planning-doc drift reconciliation | Ready | T000 | manual roadmap/feature-matrix/API docs consistency review |
-| T010 | Now | Phase 15/16 | P1 | Basic focused network diagram MVP | Ready | T002 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .`; Go/API tests if projection shape changes |
-| T003 | Now | Phase 16 | P1 | Map modes contract and UI selector | Ready | T002 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
-| T004 | Next | Phase 16 | P1 | Security layer v1 planning slice | Ready | T002 | manual docs consistency review + OpenAPI draft review if API shape changes |
-| T005 | Next | Phase 16 | P1 | Build-mode map editing parent issue | Ready | T002 | parent/child cards written + feature matrix synced |
-| T006 | Next | Ops | P1 | Local validation toolchain/runbook cleanup | Done | T000 | runbook update + one confirmed Docker-only validation path |
+| T002 | Done | Process | P1 | Planning-doc drift reconciliation | Done | None | manual roadmap/feature-matrix/API docs consistency review |
+| T010 | Now | Phase 15/16 | P1 | Basic focused network diagram MVP | Done | T002 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .`; `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T003 | Now | Phase 16 | P1 | Map modes contract and UI selector | Done | T002 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
+| T004 | Next | Phase 16 | P1 | Security layer v1 planning slice | Done | T002 | manual docs consistency review + OpenAPI draft review if API shape changes |
+| T005 | Next | Phase 16 | P1 | Build-mode map editing parent issue | Done | T002 | parent/child cards written + feature matrix synced |
+| T006 | Next | Ops | P1 | Local validation toolchain/runbook cleanup | Done | None | runbook update + one confirmed Docker-only validation path |
 | T007 | Next | Discovery | P1 | Discovery deployment smoke matrix | Ready | T006 | documented Docker bridge, host-network, and native-host smoke commands |
 | T011 | Next | Phase 16 | P1 | Operate overlays planning slice | Ready | T002, T003 | manual docs consistency review + child task validation |
 | T012 | Next | Ops | P2 | Data retention and cleanup policy | Ready | None | manual docs review + Go tests if migrations added |
-| T013 | Now | Process | P2 | Create backlog archive file | Ready | None | `git diff --check` + cross-reference review |
-| T014 | Now | Process | P1 | Phase 12 roadmap status correction | Ready | None | manual docs consistency review |
-| T015 | Now | Ops | P1 | End-user startup scripts | Done | None | Windows launcher smoke + `git diff --check` + PowerShell parse check |
-| T016 | Now | Discovery | P0 | Discovery ping fallback for Docker bridge | Done | None | Go fmt + vet + test via Docker validator |
-| T008 | Later | Docs | P2 | Markdown encoding and typography cleanup | Ready | T000 | `git diff --check` + spot-check rendered docs |
+| T013 | Now | Process | P2 | Create backlog archive file | Done | None | `git diff --check` + cross-reference review |
+| T014 | Now | Process | P1 | Phase 12 roadmap status correction | Done | None | manual docs consistency review |
+| T008 | Later | Docs | P2 | Markdown encoding and typography cleanup | Ready | None | `git diff --check` + spot-check rendered docs |
+| T015 | Next | Phase 16 | P1 | Security zones DB migration | Done | T004 | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T016 | Next | Phase 16 | P1 | Security zone CRUD API (Go) | Done | T015 | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T017 | Next | Phase 16 | P1 | Security layer map projection (Go) | Ready | T015 | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T018 | Next | Phase 16 | P1 | Security layer UI renderer | Ready | T017 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
+| T019 | Next | Phase 16 | P1 | Link CRUD API (Go) | Ready | T005 | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T020 | Next | Phase 16 | P2 | Build-mode UI controls | Ready | T016, T019 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
 
 ## Dev Runbook
 
@@ -374,39 +376,7 @@ Before changing operator workflows:
 
 ## Detailed Task Cards
 
-Closed task cards that no longer coordinate active work are archived to `docs/backlog-archive.md`.
-
-### T000 - AI Backlog And Runbook Foundation
-
-- Status: Done
-- Queue: Now
-- Phase: Process
-- Priority: P1
-- Owner Role: Docs owner
-- Goal: Establish `BACKLOG.md` as the AI-facing execution board and developer runbook.
-- Scope:
-  - add root backlog with status model, queue model, templates, ready queue, validation runbook, and initial task cards
-  - update agent/docs references so future sessions use this file
-- Files to Touch:
-  - `BACKLOG.md`
-  - `AGENTS.md`
-  - `.github/copilot-instructions.md`
-  - `docs/conventions.md`
-  - `docs/feature-matrix.md`
-  - `readme.md`
-- Do Not Touch:
-  - runtime code unless needed for validation
-- Dependencies:
-  - None
-- Validation:
-  - `git diff --check`
-  - manual docs consistency review
-- Definition of Done:
-  - agents have a single root execution board
-  - task templates and validation commands are present
-  - backlog is discoverable from agent instructions and docs index
-- Handoff Notes:
-  - created from the `text-game` backlog format and adapted to Roller_hoops service boundaries
+Closed task cards that no longer coordinate active work are archived to [docs/backlog-archive.md](docs/backlog-archive.md).
 
 ### T001 - Auth And OpenAPI Drift Hardening
 
@@ -450,52 +420,10 @@ Closed task cards that no longer coordinate active work are archived to `docs/ba
   - UI validation passed in the current working tree
   - Go validation now runs through the Docker validator when the daemon is available
 
-### T009 - VS Code AI Workspace Scaffolding
-
-- Status: Done
-- Queue: Now
-- Phase: Process
-- Priority: P1
-- Owner Role: Docs owner
-- Goal: Make VS Code a safer default workspace for Codex/Copilot agents working from this repo.
-- Scope:
-  - add shared VS Code extension recommendations, settings, tasks, and backlog snippets
-  - add Copilot prompt files for backlog-task starts, drift review, and API changes
-  - document the VS Code AI workflow and UNC workspace caveat
-  - update docs indexes and feature matrix so the workflow is discoverable
-- Files to Touch:
-  - `.gitignore`
-  - `.vscode/extensions.json`
-  - `.vscode/settings.json`
-  - `.vscode/tasks.json`
-  - `.vscode/roller-hoops.code-snippets`
-  - `.github/prompts/*.prompt.md`
-  - `docs/vscode-ai-workflow.md`
-  - `BACKLOG.md`
-  - `AGENTS.md`
-  - `.github/copilot-instructions.md`
-  - `docs/conventions.md`
-  - `docs/feature-matrix.md`
-  - `readme.md`
-- Do Not Touch:
-  - product runtime code
-- Dependencies:
-  - T000
-- Validation:
-  - `git diff --check`
-  - JSON parse check for `.vscode/*.json` and `.vscode/*.code-snippets`
-  - manual docs consistency review
-- Definition of Done:
-  - VS Code exposes repeatable validation tasks for UI, Go, Docker, and agent workflow
-  - Copilot prompt files point agents at backlog and contract discipline
-  - `.vscode` tracks only shared safe files, not user-local state
-- Handoff Notes:
-  - Windows tasks use `pushd` to avoid UNC current-directory failures in npm/cmd wrappers.
-
 ### T002 - Planning-Doc Drift Reconciliation
 
-- Status: Ready
-- Queue: Now
+- Status: Done
+- Queue: Done
 - Phase: Process
 - Priority: P1
 - Owner Role: Tech lead
@@ -527,14 +455,18 @@ Closed task cards that no longer coordinate active work are archived to `docs/ba
   - feature matrix statuses match the current code and backlog
   - any open product gaps are represented by backlog cards
 - Handoff Notes:
-  - Feature matrix currently says some Services map work is complete while roadmap Phase 16 still has unchecked Services tasks; reconcile before implementing more map work.
-  - Phase 12 is fully done (all milestones checked, all feature matrix entries `complete`) but roadmap at-a-glance still says `Planned` and section header says `In progress`. Fix all three (table, header, next-milestone checklist).
-  - Phase 8 section header has a blank `**Status:**` line — set to `Done`.
-  - Phase 3 still shows `[ ] Add auth + sessions (Phase 11)` and `[ ] Add richer operator workflows (Phase 10)` as unchecked — both are `Done`.
+  - All items resolved:
+    - Phase 12 status fixed to Done (T014, prior session).
+    - Phase 8 section header status set to Done.
+    - Phase 3 stale checkboxes checked (auth + sessions, operator workflows).
+    - Phase 16 M16.2 Services API/UI tasks checked to match feature matrix `complete` status; only optional dependency modeling remains unchecked.
+    - Implemented APIs list updated to include all 19 OpenAPI endpoints plus `/metrics`; Planned APIs trimmed to only truly unimplemented items (Build mode write endpoints, Security data model).
+    - `docs/issues.md` now references `BACKLOG.md` as the execution board.
+    - No new product gaps found; existing backlog cards cover all open work.
 
 ### T003 - Map Modes Contract And UI Selector
 
-- Status: Ready
+- Status: Done
 - Queue: Now
 - Phase: Phase 16
 - Priority: P1
@@ -565,11 +497,17 @@ Closed task cards that no longer coordinate active work are archived to `docs/ba
   - invalid modes fall back safely
   - Build mode does not expose writes without authorized APIs
 - Handoff Notes:
-  - Treat mode as UI behavior first; do not blend map layers or add global graph behavior.
+  - Implemented mode selector (Explore/Build/Secure/Operate) in map sidebar with URL-driven `mode` param.
+  - Mode persists across layer/focus navigation. Invalid modes fall back to `explore` with console warning.
+  - Non-explore modes show an informational notice (no write actions exposed yet).
+  - Docs updated: `docs/ui-ux.md` (mode semantics table), `docs/network_map/interface-rules.md` (non-negotiable #6).
+  - CSS: `.mapModeSection`, `.mapModeList`, `.mapModeItem*` classes in `globals.css`.
+  - 9 tests in `page.test.tsx` covering default, URL parse, fallback, notices, and link persistence.
+  - All validation passed: tests + production build via Docker.
 
 ### T010 - Basic Focused Network Diagram MVP
 
-- Status: Ready
+- Status: Done
 - Queue: Now
 - Phase: Phase 15/16
 - Priority: P1
@@ -609,11 +547,19 @@ Closed task cards that no longer coordinate active work are archived to `docs/ba
   - the diagram makes relationship source/confidence visible and does not imply certainty for inferred links
   - caps and focus rules still prevent an accidental whole-network render
 - Handoff Notes:
-  - This is the product floor for the map. The layered explorer remains the long-term model, but users must first get the simple diagram they expect: device, router/switch/peer, IPs, MACs, and visible connections.
+  - Physical layer device focus now renders a basic focused diagram: focus device + linked peers, each showing display name, primary IP, and primary MAC.
+  - New `core-go/internal/sqlcgen/map_facts.go`: batch query `ListDevicePrimaryFacts` fetches primary IP and MAC for a list of device IDs in one query. Uses correlated subqueries against `ip_addresses` and `mac_addresses` tables, ordered by `updated_at DESC`.
+  - `core-go/internal/httpapi/map.go`: physical layer projection now batch-fetches facts and populates `meta.primary_ip` / `meta.primary_mac` on all nodes (focus + peers). The batch facts call is a soft dependency — if the interface method is missing, the diagram renders without facts.
+  - `ui-node/app/(app)/map/MapCanvas.tsx`: physical view now shows IP/MAC below the focus device name and below each peer link name. Added `resolveNodeMetaString` helper (mirrors `resolveEdgeMetaString`). Link source (`lldp`, `manual`, etc.) is now rendered as a separate prominent badge, not buried in the meta string.
+  - CSS: new classes for `.mapPhysicalFocusLabel`, `.mapPhysicalFocusFacts`, `.mapPhysicalFact`, `.mapPhysicalLinkBody`, `.mapPhysicalLinkFacts`, `.mapPhysicalLinkRight`, `.mapPhysicalLinkSource`. Layout shifted from `align-items: baseline` to `align-items: flex-start` to accommodate multi-line node cards.
+  - Go test added: `TestMapProjection_DeviceFocus_PhysicalIncludesNodeFacts` verifies focus and peer nodes carry `primary_ip`/`primary_mac` in meta.
+  - UI test added: `renders primary IP and MAC facts on physical diagram nodes` verifies fact labels render in the DOM.
+  - `docs/network_map/interface-rules.md`: added "Implementation status" section under "Basic diagram floor" documenting the current state.
+  - No schema/migration changes. No OpenAPI changes (meta is already `additionalProperties`). No changes to L3/L2/services projections (those continue as region-based views).
 
 ### T004 - Security Layer V1 Planning Slice
 
-- Status: Ready
+- Status: Done
 - Queue: Next
 - Phase: Phase 16
 - Priority: P1
@@ -641,11 +587,20 @@ Closed task cards that no longer coordinate active work are archived to `docs/ba
   - Security layer has concrete child cards with files, validation, and blockers
   - open decisions are explicit instead of hidden in prose
 - Handoff Notes:
+  - **Decisions resolved:**
+    - v1 uses manual zones only. No auto-derived zones from tags or discovery.
+    - `zones` + `device_zones` tables (schema finalized in `docs/data-model.md`).
+    - No `zone_policies` in v1 — no inter-zone edges.
+    - Device tags remain orthogonal to zones.
+    - Zone CRUD endpoints under `/api/v1/topology/zones` (documented in `docs/api-contract.md`).
+    - Projection: zone-focused and device-focused views, region-based like L3/L2.
+  - **Child tasks created:** T015 (migration), T016 (CRUD API), T017 (map projection), T018 (UI renderer).
+  - **Docs updated:** `docs/data-model.md` (zones schema approved), `docs/api-contract.md` (zone endpoints + projection contract), `docs/network_map/interface-rules.md` (Security layer contract section), `docs/feature-matrix.md` (no change needed; already lists planned).
   - Avoid creating inconsistent truth between discovered tags, manual zones, and future policy edges.
 
 ### T005 - Build-Mode Map Editing Parent Issue
 
-- Status: Ready
+- Status: Done
 - Queue: Next
 - Phase: Phase 16
 - Priority: P1
@@ -674,6 +629,13 @@ Closed task cards that no longer coordinate active work are archived to `docs/ba
   - Build-mode editing has implementation-ready child cards
   - no write behavior is implemented without auth and audit requirements
 - Handoff Notes:
+  - **Decisions resolved:**
+    - User-authored truth objects: `links` (manual create/update/delete), `zones` + `device_zones` (covered by T016 from T004), and `service_dependencies` (deferred — not v1).
+    - Endpoint namespace: `/api/v1/topology/` for all write operations on curated map objects.
+    - Role requirements: `admin` role required for all `/api/v1/topology/` writes. The existing UI proxy rejects POST/PUT/PATCH/DELETE for `read-only` sessions. Go API should also check an `X-User-Role` header (forwarded by UI proxy) and reject non-admin writes with `403`.
+    - Audit: all writes to topology objects must create an `audit_events` row with `target_type` matching the object type (e.g., `link`, `zone`).
+    - `service_dependencies` deferred: the data model allows either service-to-service or host-to-host edges. Decision deferred until the Services layer has more operator validation.
+  - **Child tasks created:** T019 (link CRUD API), T020 (Build-mode UI controls). T016 (zone CRUD) already created by T004.
   - UI must never write directly to the DB; all curated map truth goes through Go APIs.
 
 ### T006 - Local Validation Toolchain And Runbook Cleanup
@@ -836,7 +798,7 @@ Closed task cards that no longer coordinate active work are archived to `docs/ba
 
 ### T013 - Create Backlog Archive File
 
-- Status: Ready
+- Status: Done
 - Queue: Now
 - Phase: Process
 - Priority: P2
@@ -861,11 +823,13 @@ Closed task cards that no longer coordinate active work are archived to `docs/ba
   - main backlog no longer carries cards that are Done with no active dependents
   - archive file is linked from the BACKLOG.md Archive Policy section
 - Handoff Notes:
-  - The BACKLOG.md Detailed Task Cards header already references this file. Just create it.
+  - Created `docs/backlog-archive.md` with T000, T009, T015, and T016 archived.
+  - Updated the Detailed Task Cards header to link the archive file.
+  - Removed archived Done rows from the Ready Queue table.
 
 ### T014 - Phase 12 Roadmap Status Correction
 
-- Status: Ready
+- Status: Done
 - Queue: Now
 - Phase: Process
 - Priority: P1
@@ -888,90 +852,236 @@ Closed task cards that no longer coordinate active work are archived to `docs/ba
   - Phase 12 status is `Done` everywhere in the roadmap
   - feature matrix is consistent
 - Handoff Notes:
-  - This is a documentation-only fix. All Phase 12 milestones (M12.1–M12.5) have every task checked off and all feature matrix entries are `complete`.
+  - All three roadmap locations (at-a-glance table, section header, next-milestone checklist) updated to Done.
+  - Feature matrix Phase 12 entries confirmed as `complete`.
 
-### T015 - End-User Startup Scripts
+### T015 - Security Zones DB Migration
 
 - Status: Done
-- Queue: Now
-- Phase: Ops
+- Queue: Next
+- Phase: Phase 16
 - Priority: P1
-- Owner Role: Operations owner
-- Goal: Provide per-OS launcher scripts that start the Docker stack and open the web UI for end users.
+- Owner Role: Backend owner
+- Parent: T004
+- Goal: Create the `zones` and `device_zones` tables via migration.
 - Scope:
-  - add Windows, macOS, and Linux/WSL startup scripts
-  - start the Compose stack in detached mode so the browser can open after startup
-  - wait for the UI health check before opening `http://localhost/`
-  - document usage in `readme.md`
-  - add the capability to `docs/feature-matrix.md`
+  - add migration `012_zones.up.sql` and `012_zones.down.sql`
+  - `zones` table: `id` uuid PK, `name` text unique not null, `description` text nullable, `created_at`/`updated_at` timestamptz
+  - `device_zones` join table: `device_id` uuid FK → devices, `zone_id` uuid FK → zones, `created_at` timestamptz, unique `(device_id, zone_id)`, index on `zone_id`
+  - update `docs/data-model.md` migration reference if needed
+  - add seed data in `docker/dev/dev-seed.sql` for at least two zones with member devices
 - Files to Touch:
-  - `scripts/start-windows.ps1`
-  - `scripts/start-windows.cmd`
-  - `scripts/start-macos.command`
-  - `scripts/start-linux.sh`
-  - `readme.md`
-  - `docs/feature-matrix.md`
-  - `BACKLOG.md`
+  - `core-go/migrations/012_zones.up.sql`
+  - `core-go/migrations/012_zones.down.sql`
+  - `docker/dev/dev-seed.sql`
+  - `docs/data-model.md` (migration reference)
 - Do Not Touch:
-  - runtime service code
-  - API contracts
-  - database migrations
-- Dependencies:
-  - None
-- Validation:
-  - `git diff --check`
-  - shell syntax/command review
-  - PowerShell parse check if available
-- Definition of Done:
-  - each supported OS has an obvious launcher script
-  - launchers start the Docker Compose stack and open the UI
-  - README points end users to the scripts
-- Handoff Notes:
-  - User requested "same scripts that start the program for each supported OS" and that the webpage opens automatically.
-  - Added Windows, macOS, and Linux/WSL launchers that run Compose detached, wait on `/healthz`, then open `http://localhost/`; documented `--dev` and `--logs` usage in the README.
-  - Verified `scripts\start-windows.cmd` on Windows: Compose started successfully, UI health returned `200 {"ok":true}`, and `http://localhost/` returned the `Roller_hoops` page.
-
-### T016 - Discovery Ping Fallback For Docker Bridge Networking
-
-- Status: Done
-- Queue: Now
-- Phase: Discovery
-- Priority: P0
-- Owner Role: Core owner
-- Goal: Fix discovery only seeing Docker-internal devices when running on Docker bridge networking (the default).
-- Scope:
-  - modify `pingSweep` to collect responding IPs (not just counts)
-  - add ping-based device creation fallback when ARP yields no in-scope results but ping finds responders
-  - detect Docker bridge ARP (all entries share one MAC) and log a warning
-  - update discovery deployment and capabilities docs with Windows/bridge guidance
-  - update `.env.example` to emphasize `DISCOVERY_DEFAULT_SCOPE`
-- Files to Touch:
-  - `core-go/internal/discoveryworker/worker.go`
-  - `docs/discovery-deployment.md`
-  - `docs/discovery-capabilities.md`
-  - `.env.example`
-  - `BACKLOG.md`
-  - `docs/issues.md`
-- Do Not Touch:
+  - Go application code (separate task)
   - UI code
-  - database migrations
-  - API contracts
 - Dependencies:
-  - None
+  - T004
 - Validation:
   - `docker build -f docker/validate/core-go.Dockerfile --target test .`
-  - `docker build -f docker/validate/core-go.Dockerfile --target vet .`
-  - `docker build -f docker/validate/core-go.Dockerfile --target fmtcheck .`
+  - migration up/down should be idempotent (IF NOT EXISTS patterns)
 - Definition of Done:
-  - discovery worker falls back to ping-based device creation when ARP is ineffective
-  - bridge-mode ARP is detected and logged as a warning
-  - run stats include `ping_fallback_used` flag
-  - docs explain Windows/Docker Desktop limitations and recommend `DISCOVERY_DEFAULT_SCOPE`
+  - migration files exist and pass Go validation
+  - dev-seed includes zone test data
+  - data-model.md references the migration
 - Handoff Notes:
-  - Root cause: `/proc/net/arp` inside a Docker bridge container only shows Docker-internal entries. The ping sweep was pinging real hosts but discarding the list of responders.
-  - Fix: ping sweep now collects responding IPs; when ARP finds 0 in-scope devices but ping found responders, devices are created from ping IPs (IP-only, no MAC). Bridge-mode ARP is auto-detected (all MACs identical) and warned.
-  - Limitation: ping-based devices have no MAC address. For full ARP/MAC fidelity, users should use `docker-compose.hostnet.yml` (Linux) or run `core-go` natively.
-  - The user must still set `DISCOVERY_DEFAULT_SCOPE` to their real subnet or provide scope per run. Without a scope, there are no targets to ping.
+  - Schema is defined in `docs/data-model.md` under "zones + membership". Follow the exact column spec there.
+  - Migration 012 created with `IF NOT EXISTS` for tables and indexes. Down migration drops in correct dependency order (device_zones before zones).
+  - Dev-seed creates two zones (DMZ, Internal) and assigns the seeded Office Router to both (router spanning zones pattern).
+  - Go validation passed (exit 0). data-model.md updated to note zones exist as of migration 012.
+
+### T016 - Security Zone CRUD API (Go)
+
+- Status: Done
+- Queue: Next
+- Phase: Phase 16
+- Priority: P1
+- Owner Role: Backend owner
+- Parent: T004
+- Goal: Implement Go API endpoints for zone CRUD and membership management.
+- Scope:
+  - add sqlcgen queries for zones: list, get, create, update, delete
+  - add sqlcgen queries for device_zones: list members, add member, remove member, set members
+  - add HTTP handlers under `/api/v1/topology/zones` (see `docs/api-contract.md` "Zone management endpoints")
+  - audit-log zone writes via existing `audit_events` pattern
+  - add unit tests for CRUD handlers
+  - update `api/openapi.yaml` with zone CRUD endpoint definitions
+  - regenerate `ui-node/lib/api-types.ts`
+- Files to Touch:
+  - `core-go/internal/sqlcgen/zones.go` (new)
+  - `core-go/internal/httpapi/zones.go` (new)
+  - `core-go/internal/httpapi/zones_test.go` (new)
+  - `core-go/internal/httpapi/handler.go` (register routes)
+  - `api/openapi.yaml`
+  - `ui-node/lib/api-types.ts` (regenerated)
+- Do Not Touch:
+  - map projection code (separate task T017)
+  - UI rendering (separate task T018)
+- Dependencies:
+  - T015
+- Validation:
+  - `docker build -f docker/validate/core-go.Dockerfile --target test .`
+  - OpenAPI types regeneration: `npm run gen:openapi` in ui-node
+- Definition of Done:
+  - zone CRUD endpoints work with standard error envelope
+  - membership endpoints allow adding/removing devices from zones
+  - unit tests cover happy path and error cases
+  - OpenAPI is updated and types are regenerated
+- Handoff Notes:
+  - Implemented `core-go/internal/sqlcgen/zones.go` with manual query methods for zone CRUD, membership management, and device existence validation.
+  - Added `/api/v1/topology/zones` routes in `handler.go` and implemented handlers in `core-go/internal/httpapi/zones.go`.
+  - Topology writes now require `X-User-Role: admin` in the Go API and write audit rows via the existing `audit_events` path.
+  - Added unit coverage in `core-go/internal/httpapi/zones_test.go` for list, create, get-not-found, membership replacement, and device-not-found cases.
+  - Updated `api/openapi.yaml`, regenerated `ui-node/lib/api-types.ts`, and updated docs (`docs/api-contract.md`, `docs/feature-matrix.md`).
+  - Validation passed: `docker build -f docker/validate/core-go.Dockerfile --target test .`, OpenAPI type regeneration, and `docker build -f docker/validate/ui-node.Dockerfile --target build .`.
+
+### T017 - Security Layer Map Projection (Go)
+
+- Status: Ready
+- Queue: Next
+- Phase: Phase 16
+- Priority: P1
+- Owner Role: Backend owner
+- Parent: T004
+- Goal: Implement the `GET /api/v1/map/security` projection handler in Go.
+- Scope:
+  - add sqlcgen map queries for security layer: zone-focused (zone as region, members as nodes), device-focused (device's zones as regions)
+  - add projection logic in `core-go/internal/httpapi/map.go` for `layer == "security"`
+  - zone focus: single zone region, member devices as nodes, inspector with zone details
+  - device focus: zones the device belongs to as regions, inspector with zone navigation
+  - no-focus: guidance message suggesting zone or device focus
+  - add unit tests following existing map test patterns
+- Files to Touch:
+  - `core-go/internal/sqlcgen/map_security.go` (new)
+  - `core-go/internal/httpapi/map.go`
+  - `core-go/internal/httpapi/map_test.go`
+- Do Not Touch:
+  - zone CRUD endpoints (T016)
+  - UI rendering (T018)
+- Dependencies:
+  - T015
+- Validation:
+  - `docker build -f docker/validate/core-go.Dockerfile --target test .`
+- Definition of Done:
+  - security layer returns zone-focused and device-focused projections
+  - empty zones render as empty regions
+  - multi-zone devices appear in each zone
+  - unit tests verify both focus types
+- Handoff Notes:
+  - Follow the existing map projection patterns (L3/L2/physical/services). Security is region-based like L3/L2. No inter-zone edges in v1. See `docs/network_map/interface-rules.md` "Security layer contract (v1)".
+
+### T018 - Security Layer UI Renderer
+
+- Status: Ready
+- Queue: Next
+- Phase: Phase 16
+- Priority: P1
+- Owner Role: UI owner
+- Parent: T004
+- Goal: Render the security layer projection in the map canvas and layer panel.
+- Scope:
+  - security layer rendering in `MapCanvas.tsx`: zone regions with device occupant nodes (follow L3/L2 region rendering pattern)
+  - layer panel should show security layer as selectable
+  - inspector should display zone details (name, description, member count) and cross-layer navigation
+  - add UI tests for security layer rendering
+- Files to Touch:
+  - `ui-node/app/(app)/map/MapCanvas.tsx`
+  - `ui-node/app/(app)/map/MapCanvas.test.tsx`
+  - `ui-node/app/(app)/map/LayerPanel.tsx` (if security not already listed)
+- Do Not Touch:
+  - Go API code
+  - Zone CRUD UI (future Build-mode task)
+- Dependencies:
+  - T017
+- Validation:
+  - `docker build -f docker/validate/ui-node.Dockerfile --target test .`
+  - `docker build -f docker/validate/ui-node.Dockerfile --target build .`
+- Definition of Done:
+  - security layer renders zones as regions with device nodes
+  - inspector shows zone details
+  - UI tests cover security layer rendering
+- Handoff Notes:
+  - The security layer is region-based like L3 (subnets) and L2 (VLANs). Zone regions should follow the same visual pattern. No special edges in v1.
+
+### T019 - Link CRUD API (Go)
+
+- Status: Ready
+- Queue: Next
+- Phase: Phase 16
+- Priority: P1
+- Owner Role: Backend owner
+- Parent: T005
+- Goal: Implement Go API endpoints for manual link CRUD (create, update, delete physical links).
+- Scope:
+  - add HTTP handlers under `/api/v1/topology/links` for manual link management
+  - `POST /api/v1/topology/links` — create a manual link between two devices
+  - `PUT /api/v1/topology/links/{id}` — update link metadata (type, notes)
+  - `DELETE /api/v1/topology/links/{id}` — delete a link
+  - `GET /api/v1/topology/links` — list links (optional filter by device)
+  - enforce `source=manual` for user-created links; enrichment-created links (`lldp`, `cdp`) should not be deletable via this endpoint
+  - audit-log all writes via `audit_events`
+  - check `X-User-Role` header; reject non-admin with 403
+  - add unit tests
+  - update `api/openapi.yaml` and regenerate UI types
+- Files to Touch:
+  - `core-go/internal/httpapi/links.go` (new)
+  - `core-go/internal/httpapi/links_test.go` (new)
+  - `core-go/internal/httpapi/handler.go` (register routes)
+  - `core-go/internal/sqlcgen/links.go` (new queries)
+  - `api/openapi.yaml`
+  - `ui-node/lib/api-types.ts` (regenerated)
+- Do Not Touch:
+  - existing enrichment link upsert logic (topology.sql)
+  - UI rendering (separate task)
+- Dependencies:
+  - T005
+- Validation:
+  - `docker build -f docker/validate/core-go.Dockerfile --target test .`
+- Definition of Done:
+  - link CRUD endpoints work with role gating and audit logging
+  - enrichment-sourced links cannot be deleted via manual CRUD
+  - unit tests cover happy path, role rejection, and source protection
+- Handoff Notes:
+  - Links already exist in the DB (`links` table). The upsert pattern is in `core-go/queries/topology.sql`. This task adds manual CRUD on top, not replacing the enrichment path.
+
+### T020 - Build-Mode UI Controls
+
+- Status: Ready
+- Queue: Next
+- Phase: Phase 16
+- Priority: P2
+- Owner Role: UI owner
+- Parent: T005
+- Goal: Add Build-mode editing controls to the map UI.
+- Scope:
+  - in Build mode, show "Add link", "Create zone", "Assign to zone" controls on the map canvas/inspector
+  - wire controls to `/api/v1/topology/links` and `/api/v1/topology/zones` endpoints
+  - disable editing controls for `read-only` sessions
+  - show audit confirmation after writes (toast/notification)
+  - add UI tests for build-mode controls (visible/hidden based on mode and role)
+- Files to Touch:
+  - `ui-node/app/(app)/map/MapCanvas.tsx`
+  - `ui-node/app/(app)/map/MapCanvas.test.tsx`
+  - `ui-node/app/(app)/map/` (possible new components for editing dialogs)
+  - `ui-node/lib/` (API client helpers if needed)
+- Do Not Touch:
+  - Go API code
+  - Database schema
+- Dependencies:
+  - T016, T019
+- Validation:
+  - `docker build -f docker/validate/ui-node.Dockerfile --target test .`
+  - `docker build -f docker/validate/ui-node.Dockerfile --target build .`
+- Definition of Done:
+  - Build mode shows editing controls; Explore mode hides them
+  - read-only sessions cannot see editing controls
+  - writes go through Go API with audit logging
+  - UI tests verify mode/role gating
+- Handoff Notes:
+  - Build mode is already defined by T003 (mode selector exists in the UI). This task wires actual editing functionality to it. Start with link and zone management; service dependencies are deferred.
 
 ## Immediate Open Decisions
 
@@ -997,8 +1107,7 @@ Closed task cards that no longer coordinate active work are archived to `docs/ba
 - UNC workdir validation through npm may fail because `cmd.exe` defaults to `C:\Windows`; use the mapped `G:\Roller_hoops` path.
 - The backlog and issue log now coexist: use this file for execution cards and `docs/issues.md` for historical issue records or user-facing bug reports.
 - T001 (Auth hardening) has been in `Review` since creation. See OD-003 in Open Decisions.
-- Phase 12 is done but the roadmap still says `Planned`/`In progress`. T014 fixes this; T002 covers the broader drift.
-- `docs/backlog-archive.md` does not yet exist. T013 creates it. T000 and T009 are archive-eligible.
+- `docs/backlog-archive.md` contains archived Done cards (T000, T009, T015, T016).
 
 ## Archive Policy
 

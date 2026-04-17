@@ -1,6 +1,7 @@
 # Issues tracker
 
 This file is the project’s **lightweight issue log**. It’s intentionally Markdown-only so it stays diff-friendly.
+For active task execution and work tracking, see [BACKLOG.md](../BACKLOG.md) (the AI-facing execution board).
 
 ## How to use
 
@@ -26,7 +27,7 @@ This file is the project’s **lightweight issue log**. It’s intentionally Mar
 | ISS-004 | Device naming is low-quality/inconsistent | fixed | core-go/enrichment | medium | 2026-01-02 |
 | ISS-005 | Devices should be auto-classified + tagged | fixed | core-go/enrichment | medium | 2026-01-02 |
 | ISS-006 | Devices page layout wastes space; lacks detail | fixed | ui-node/devices | medium | 2026-01-02 |
-| ISS-007 | Map needs basic focused network diagram | open | ui-node/map | high | 2026-04-17 |
+| ISS-007 | Map needs basic focused network diagram | resolved | ui-node/map, core-go/httpapi | high | 2026-04-17 |
 
 ---
 
@@ -268,10 +269,18 @@ selected device connected to a router/switch/peer with IP and MAC facts visible.
 
 ### Next actions
 
-- [ ] Complete backlog task `T010 - Basic Focused Network Diagram MVP`.
-- [ ] Confirm whether existing projection payloads contain enough node/link
+- [x] Complete backlog task `T010 - Basic Focused Network Diagram MVP`.
+- [x] Confirm whether existing projection payloads contain enough node/link
       facts or whether OpenAPI needs a small shape update.
+      Existing `meta` (additionalProperties) was sufficient; no OpenAPI change needed.
+      Go API now enriches `meta.primary_ip` and `meta.primary_mac` via `ListDevicePrimaryFacts`.
 - [ ] Validate against seeded/dev data with at least two connected nodes.
+
+### Resolution
+
+Resolved by T010. Physical layer device focus now renders a basic focused
+diagram with display name, primary IP, primary MAC on each node, and link
+source/confidence as a visible badge. No schema or OpenAPI changes required.
 
 ### Fix reference
 

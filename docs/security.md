@@ -41,6 +41,17 @@ For production deployments:
 - `AUTH_USERS` is a comma-separated list of `username:password:role` entries that the Next.js UI accepts for login. Example: `admin:admin:admin,viewer:readonly:read-only`, which ships as the default quickstart configuration so the first-time login is `admin` / `admin`. The first entry acts as a fallback for legacy tooling that assumes a single admin user.
 - `read-only` users can still view devices, discovery status, and export snapshots, but the UI disables mutating controls (device creation, metadata updates, display name choices, discovery triggers, imports) and the `/api/[...path]` proxy rejects `POST/PUT/PATCH/DELETE` calls issued with a `read-only` session role.
 
+## Build-mode / topology write role requirements
+
+All `/api/v1/topology/` write endpoints (zone CRUD, link CRUD, future service
+dependencies) require the `admin` role:
+
+- The UI proxy forwards the session role via `X-User-Role` header.
+- The Go API checks this header and returns `403 forbidden` for non-admin writes.
+- All topology writes are audit-logged via the `audit_events` table.
+- `read-only` users see the map in Explore mode only; Build-mode controls
+  are hidden in the UI.
+
 Example `.env` snippet:
 
 ```env

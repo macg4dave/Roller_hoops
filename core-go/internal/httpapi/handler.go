@@ -34,6 +34,7 @@ type Handler struct {
 	devices               deviceQueries
 	discovery             discoveryQueries
 	inventory             inventoryQueries
+	topology              topologyQueries
 	audit                 auditQueries
 	metrics               *metrics.Metrics
 	discoveryDefaultScope *string
@@ -84,6 +85,19 @@ type inventoryQueries interface {
 	UpsertDeviceMetadataFillBlank(ctx context.Context, arg sqlcgen.UpsertDeviceMetadataParams) (sqlcgen.DeviceMetadata, error)
 }
 
+type topologyQueries interface {
+	ListZones(ctx context.Context) ([]sqlcgen.Zone, error)
+	GetZone(ctx context.Context, id string) (sqlcgen.Zone, error)
+	CreateZone(ctx context.Context, arg sqlcgen.CreateZoneParams) (sqlcgen.Zone, error)
+	UpdateZone(ctx context.Context, arg sqlcgen.UpdateZoneParams) (sqlcgen.Zone, error)
+	DeleteZone(ctx context.Context, id string) (int64, error)
+	ListZoneMembers(ctx context.Context, zoneID string) ([]sqlcgen.ZoneMember, error)
+	AddZoneMember(ctx context.Context, arg sqlcgen.AddZoneMemberParams) (int64, error)
+	RemoveZoneMember(ctx context.Context, arg sqlcgen.RemoveZoneMemberParams) (int64, error)
+	ReplaceZoneMembers(ctx context.Context, arg sqlcgen.ReplaceZoneMembersParams) error
+	ListExistingDeviceIDs(ctx context.Context, deviceIDs []string) ([]string, error)
+}
+
 type auditQueries interface {
 	InsertAuditEvent(ctx context.Context, arg sqlcgen.InsertAuditEventParams) error
 }
@@ -104,12 +118,14 @@ func newHandler(log zerolog.Logger, pool *db.Pool, m *metrics.Metrics, opts Opti
 	var dq deviceQueries
 	var drq discoveryQueries
 	var iq inventoryQueries
+	var tq topologyQueries
 	var aq auditQueries
 	if pool != nil {
 		q := pool.Queries()
 		dq = q
 		drq = q
 		iq = q
+		tq = q
 		aq = q
 	}
 	return &Handler{
@@ -118,6 +134,7 @@ func newHandler(log zerolog.Logger, pool *db.Pool, m *metrics.Metrics, opts Opti
 		devices:               dq,
 		discovery:             drq,
 		inventory:             iq,
+		topology:              tq,
 		audit:                 aq,
 		metrics:               m,
 		discoveryDefaultScope: normalizeScope(opts.DiscoveryDefaultScope),
@@ -182,6 +199,22 @@ func (h *Handler) Router() http.Handler {
 
 			r.Route("/audit", func(r chi.Router) {
 				r.Post("/events", h.handleCreateAuditEvent)
+			})
+
+			r.Route("/topology", func(r chi.Router) {
+				r.Route("/zones", func(r chi.Router) {
+					r.Get("/", h.handleListZones)
+					r.Post("/", h.handleCreateZone)
+					r.Route("/{id}", func(r chi.Router) {
+						r.Get("/", h.handleGetZone)
+						r.Put("/", h.handleUpdateZone)
+						r.Delete("/", h.handleDeleteZone)
+						r.Get("/members", h.handleListZoneMembers)
+						r.Put("/members", h.handleReplaceZoneMembers)
+						r.Post("/members", h.handleAddZoneMember)
+						r.Delete("/members/{deviceId}", h.handleRemoveZoneMember)
+					})
+				})
 			})
 
 			r.Route("/map", func(r chi.Router) {
@@ -517,6 +550,14 @@ func (h *Handler) ensureDeviceQueries(w http.ResponseWriter) bool {
 
 func (h *Handler) ensureInventoryQueries(w http.ResponseWriter) bool {
 	if h.inventory == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "db_unavailable", "database not configured", nil)
+		return false
+	}
+	return true
+}
+
+func (h *Handler) ensureTopologyQueries(w http.ResponseWriter) bool {
+	if h.topology == nil {
 		h.writeError(w, http.StatusServiceUnavailable, "db_unavailable", "database not configured", nil)
 		return false
 	}

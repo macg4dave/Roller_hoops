@@ -223,3 +223,80 @@ Container guidance (important for “objects that contain other objects”):
 - Invalid focus IDs return `400 invalid_id`.
 - Unknown focus resources return `404 not_found`.
 - Unknown layer returns `400 validation_failed` (or a specific `invalid_layer` if introduced).
+
+### Security layer projection (planned)
+
+The Security layer uses manual zones as regions. The projection follows the
+same `regions[]/nodes[]/edges[]` shape as other layers.
+
+Focus types:
+
+- `zone`: Show the selected zone as a single region with member devices as nodes.
+- `device`: Show the device and its zone memberships (zones as regions the device
+  appears in).
+
+Projection rules:
+
+- Zones are manual-only in v1. No auto-derived zones.
+- No inter-zone edges in v1 (no `zone_policies` table). Future enhancement.
+- Multi-zone devices appear in each zone region they belong to.
+- Empty zones (no members) are valid and should render as empty regions.
+- Inspector should show zone name, description, and member count.
+
+### Zone management endpoints
+
+Zone CRUD and membership lives under `/api/v1/topology/zones` (not under
+`/api/v1/map/`). The map projection is read-only; writes go through topology
+endpoints.
+
+Implemented endpoints:
+
+- `GET /api/v1/topology/zones` — list all zones
+- `POST /api/v1/topology/zones` — create a zone (name required, description optional)
+- `GET /api/v1/topology/zones/{id}` — get zone details
+- `PUT /api/v1/topology/zones/{id}` — update zone (name, description)
+- `DELETE /api/v1/topology/zones/{id}` — delete zone (cascade removes membership)
+- `GET /api/v1/topology/zones/{id}/members` — list zone members (devices)
+- `PUT /api/v1/topology/zones/{id}/members` — set zone members (replace membership list)
+- `POST /api/v1/topology/zones/{id}/members` — add device to zone
+- `DELETE /api/v1/topology/zones/{id}/members/{deviceId}` — remove device from zone
+
+These endpoints are gated behind topology write role checks:
+
+- `GET` endpoints are readable by authenticated UI sessions.
+- `POST`/`PUT`/`DELETE` endpoints require `X-User-Role: admin` and are audited.
+
+### Link management endpoints (planned)
+
+Manual link CRUD for operator-curated physical adjacency.
+
+Planned endpoints:
+
+- `GET /api/v1/topology/links` — list links (optional `?device_id=` filter)
+- `POST /api/v1/topology/links` — create a manual link (requires `a_device_id`,
+  `b_device_id`; `source` is always `manual`)
+- `PUT /api/v1/topology/links/{id}` — update link metadata (type, notes)
+- `DELETE /api/v1/topology/links/{id}` — delete a link (only `source=manual` links)
+
+Rules:
+
+- Enrichment-sourced links (`source=lldp`, `source=cdp`) cannot be deleted
+  via this endpoint. Return `409 conflict` with a clear message.
+- The canonical `link_key` is computed server-side to prevent duplicate
+  `(a,b)` / `(b,a)` entries.
+
+### Topology write endpoint auth contract (planned)
+
+All `/api/v1/topology/` write endpoints (POST/PUT/DELETE) require:
+
+- `X-User-Role` header forwarded by the UI proxy. Only `admin` role is
+  accepted. Non-admin requests receive `403 forbidden`.
+- Every write creates an `audit_events` row with:
+  - `actor`: username from `X-User` header
+  - `action`: e.g., `create_zone`, `delete_link`, `add_zone_member`
+  - `target_type`: e.g., `zone`, `link`
+  - `target_id`: UUID of the affected object
+  - `details`: JSON with relevant before/after data
+
+Until auth is fully implemented, the Go API should still check the header and
+log writes. This prevents accidental writes from non-UI clients.

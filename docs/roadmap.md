@@ -76,12 +76,27 @@ POST   /api/v1/devices
 GET    /api/v1/devices/{id}
 PUT    /api/v1/devices/{id}
 GET    /api/v1/devices/{id}/name-candidates
-
+GET    /api/v1/devices/{id}/tags
+PUT    /api/v1/devices/{id}/tags
+GET    /api/v1/devices/{id}/facts
 GET    /api/v1/devices/export
 POST   /api/v1/devices/import
+GET    /api/v1/devices/changes
+GET    /api/v1/devices/{id}/history
 
 POST   /api/v1/discovery/run
 GET    /api/v1/discovery/status
+GET    /api/v1/discovery/scope-suggestions
+GET    /api/v1/discovery/runs
+GET    /api/v1/discovery/runs/{id}
+GET    /api/v1/discovery/runs/{id}/logs
+
+POST   /api/v1/inventory/netbox/import
+POST   /api/v1/inventory/nautobot/import
+
+GET    /api/v1/audit/events
+
+GET    /api/v1/map/{layer}
 ```
 
 `core-go` (service health; not part of the public API contract):
@@ -89,6 +104,7 @@ GET    /api/v1/discovery/status
 ```text
 GET /healthz
 GET /readyz
+GET /metrics
 ```
 
 `ui-node` (service health):
@@ -99,21 +115,12 @@ GET /healthz
 
 ### Planned APIs (next)
 
-These “API surface” milestones are already described later in this roadmap (keep OpenAPI canonical; prefer adding endpoints/params over UI-side reconstruction):
-
 ```text
-Phase 9 — historical/diffing (implemented)
-GET    /api/v1/devices/changes?since=RFC3339&limit=N
-GET    /api/v1/devices/{id}/history?limit=N&cursor=...
-GET    /api/v1/discovery/runs
-GET    /api/v1/discovery/runs/{id}
-GET    /api/v1/discovery/runs/{id}/logs
+Phase 16 — map editing (Build mode)
+POST/PUT /api/v1/map/... or /api/v1/topology/... (write endpoints for links/zones/service deps)
 
-Phase 11 — ops/telemetry
-GET    /metrics
-
-Phase 14 — map projections (implemented; read-only, focus-scoped)
-GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone|service&focusId=...
+Phase 16 — security projection (data model not yet implemented)
+GET    /api/v1/map/security
 ```
 
 ---
@@ -155,7 +162,7 @@ GET    /api/v1/map/{layer}?focusType=device|subnet|vlan|zone|service&focusId=...
 | 9 | Done | Historical/diffing APIs (changes feed, history, runs/logs) |
 | 10 | Done | Auth + session hardening (roles + audit hooks) |
 | 11 | Done | Observability & operations (metrics/runbooks/CI) |
-| 12 | Planned | UI workflows for operators |
+| 12 | Done | UI workflows for operators |
 | 13 | Done | Map shell + interaction contract |
 | 14 | Done | Projection API + map data model (L3 first) |
 | 15 | Done | Physical/L2/L3 layers |
@@ -329,12 +336,12 @@ Implementation detail (already in place):
 * [x] Implement Devices UI (list/detail/edit metadata) backed by Go API.
 * [x] Implement Discovery panel (trigger run + status view) backed by Go API.
 * [x] Implement UI-as-BFF proxy route to keep `core-go` private.
-* [ ] Add auth + sessions (Phase 11).
-* [ ] Add richer operator workflows (Phase 10).
+* [x] Add auth + sessions (Phase 11).
+* [x] Add richer operator workflows (Phase 10).
 
 ### Blockers
 
-* Auth is not implemented yet (Phase 11); mitigate by keeping `core-go` private and routing via UI only.
+* ~~Auth is not implemented yet (Phase 11); mitigate by keeping `core-go` private and routing via UI only.~~ Auth is implemented (Phase 11 Done).
 
 ---
 
@@ -491,7 +498,7 @@ POST /api/v1/inventory/nautobot/import
 
 ## Phase 8 — Discovery engine v1 (network scanning)
 
-**Status:**
+**Status:** Done
 
 ### Goal
 
@@ -677,8 +684,6 @@ Deliverable:
 
 ---
 
-
-
 ## Phase 10 — Auth + session hardening
 
 **Status:** Done
@@ -752,7 +757,7 @@ API/telemetry endpoints (planned):
 
 ## Phase 12 — UI workflows for operators
 
-**Status:** In progress
+**Status:** Done
 
 Phase 13 is complete: the `/map` shell supports URL-driven layer + focus and inspector-driven cross-layer navigation stubs; Phase 14 adds live projections.
 
@@ -1352,9 +1357,9 @@ Acceptance criteria:
 Tasks:
 
 * API
-  * [ ] Add `GET /api/v1/map/services` projection using existing `services` facts.
+  * [x] Add `GET /api/v1/map/services` projection using existing `services` facts.
 * UI
-  * [ ] Render services grouped by host/device.
+  * [x] Render services grouped by host/device.
 * Data model (optional, later)
   * [ ] If adding dependencies, model as explicit edges (manual-first) and gate writes behind Build mode.
 
@@ -1479,7 +1484,7 @@ If you want next:
 * [x] M9.3 — discovery run listing + logs (`/api/v1/discovery/runs...`)
 * [x] Phase 10 — auth + sessions + roles
 * [x] Phase 11 — metrics + runbooks + CI smoke
-* [ ] Phase 12 — operator UX foundations + workflows
+* [x] Phase 12 — operator UX foundations + workflows
 * [x] M13.1 — `/map` route + 3-pane shell (mock data OK)
 * [x] M13.2 — Layer switching contract (URL-driven)
 * [x] M13.3 — Focus contract (object-first)

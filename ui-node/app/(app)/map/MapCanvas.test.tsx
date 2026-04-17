@@ -122,4 +122,67 @@ describe('MapCanvas', () => {
     expect(screen.getByText(/ethernet/i)).toBeInTheDocument();
     expect(screen.getByText(/manual/i)).toBeInTheDocument();
   });
+
+  test('renders primary IP and MAC facts on physical diagram nodes', () => {
+    const projection: MapProjection = {
+      layer: 'physical',
+      focus: { type: 'device', id: 'device-a', label: null },
+      guidance: null,
+      regions: [],
+      nodes: [
+        {
+          id: 'device-a',
+          kind: 'device',
+          label: 'Core router',
+          primary_region_id: null,
+          region_ids: [],
+          meta: { device_id: 'device-a', primary_ip: '10.0.1.1', primary_mac: 'aa:bb:cc:dd:ee:01' }
+        },
+        {
+          id: 'device-b',
+          kind: 'device',
+          label: 'Switch 1',
+          primary_region_id: null,
+          region_ids: [],
+          meta: { device_id: 'device-b', primary_ip: '10.0.1.2', primary_mac: 'aa:bb:cc:dd:ee:02' }
+        }
+      ],
+      edges: [
+        {
+          id: 'link-1',
+          kind: 'link',
+          from: 'device-a',
+          to: 'device-b',
+          label: null,
+          meta: { link_type: 'ethernet', source: 'lldp', link_key: 'core:sw1' }
+        }
+      ],
+      inspector: null,
+      truncation: {
+        regions: { returned: 0, limit: 8, truncated: false, total: null, warning: null },
+        nodes: { returned: 2, limit: 120, truncated: false, total: null, warning: null },
+        edges: { returned: 1, limit: 80, truncated: false, total: null, warning: null }
+      }
+    };
+
+    render(
+      <MapSelectionProvider>
+        <MapLayoutProvider>
+          <MapCanvas
+            projection={projection}
+            activeLayerId="physical"
+            currentParams="layer=physical&focusType=device&focusId=device-a"
+          />
+        </MapLayoutProvider>
+      </MapSelectionProvider>
+    );
+
+    expect(screen.getByText('IP 10.0.1.1')).toBeInTheDocument();
+    expect(screen.getByText('MAC aa:bb:cc:dd:ee:01')).toBeInTheDocument();
+
+    expect(screen.getByText('IP 10.0.1.2')).toBeInTheDocument();
+    expect(screen.getByText('MAC aa:bb:cc:dd:ee:02')).toBeInTheDocument();
+
+    expect(screen.getByText('lldp')).toBeInTheDocument();
+  });
 });

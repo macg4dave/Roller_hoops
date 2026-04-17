@@ -20,6 +20,38 @@ type MapLayer = components['schemas']['MapLayer'];
 type MapFocusType = components['schemas']['MapFocusType'];
 type MapProjection = components['schemas']['MapProjection'];
 
+const MAP_MODES = [
+  { id: 'explore', label: 'Explore', description: 'Browse, inspect, and navigate' },
+  { id: 'build', label: 'Build', description: 'Topology editing (coming soon)' },
+  { id: 'secure', label: 'Secure', description: 'Security overlays (coming soon)' },
+  { id: 'operate', label: 'Operate', description: 'Operational overlays (coming soon)' }
+] as const;
+
+type MapMode = (typeof MAP_MODES)[number]['id'];
+
+const DEFAULT_MODE: MapMode = 'explore';
+
+const MODE_NOTICES: Record<Exclude<MapMode, 'explore'>, string> = {
+  build: 'Build actions are not available yet. Explore the map read-only until Build-mode APIs are implemented.',
+  secure: 'Security overlays are not available yet. Explore the map read-only until security projection data is implemented.',
+  operate: 'Operational overlays are not available yet. Explore the map read-only until Operate-mode overlays are implemented.'
+};
+
+function resolveMode(raw: string | undefined): { mode: MapMode; unknown?: string } {
+  if (!raw) {
+    return { mode: DEFAULT_MODE };
+  }
+  const normalized = raw.trim().toLowerCase();
+  if (!normalized) {
+    return { mode: DEFAULT_MODE };
+  }
+  const match = MAP_MODES.find((m) => m.id === normalized);
+  if (!match) {
+    return { mode: DEFAULT_MODE, unknown: normalized };
+  }
+  return { mode: match.id };
+}
+
 const LAYER_OPTIONS = [
   { id: 'physical', label: 'Physical', description: 'Cables, racks, and adjacency' },
   { id: 'l2', label: 'L2 (VLANs)', description: 'VLAN grouping (PVID only)' },
@@ -159,6 +191,11 @@ export default async function MapPage({ searchParams }: { searchParams?: Promise
   const activeLayer = activeLayerId ? LAYER_OPTIONS.find((layer) => layer.id === activeLayerId) : undefined;
   const activeLayerConfig = activeLayerId ? LAYER_RENDER_CONFIG[activeLayerId] : undefined;
 
+  const rawMode = toSingleValue(resolvedSearchParams.mode);
+  const { mode: activeMode, unknown: unknownMode } = resolveMode(rawMode);
+  const activeModeOption = MAP_MODES.find((m) => m.id === activeMode)!;
+  const modeNotice = activeMode !== 'explore' ? MODE_NOTICES[activeMode] : undefined;
+
   const rawFocusType = toSingleValue(resolvedSearchParams.focusType);
   const rawFocusId = toSingleValue(resolvedSearchParams.focusId);
   const { focusType: resolvedFocusType, unknown: unknownFocusType } = resolveFocusType(rawFocusType);
@@ -268,6 +305,39 @@ export default async function MapPage({ searchParams }: { searchParams?: Promise
               );
             })}
           </div>
+
+          <div className="mapModeSection">
+            <div className="mapPanelHeader">
+              <div>
+                <p className="mapPanelKicker">Mode</p>
+                <h2 className="mapPanelTitle">{activeModeOption.label}</h2>
+              </div>
+            </div>
+
+            <div className="mapModeList" role="list">
+              {unknownMode ? (
+                <Alert tone="warning">
+                  Unknown mode <strong>&quot;{unknownMode}&quot;</strong>. Falling back to Explore.
+                </Alert>
+              ) : null}
+              {MAP_MODES.map((m) => {
+                const active = m.id === activeMode;
+                const nextParams = new URLSearchParams(currentParams);
+                nextParams.set('mode', m.id);
+                return (
+                  <Link
+                    key={m.id}
+                    href={`/map?${nextParams.toString()}`}
+                    className={`mapModeItem${active ? ' mapModeItemActive' : ''}`}
+                    aria-current={active ? 'true' : undefined}
+                  >
+                    <span className="mapModeItemLabel">{m.label}</span>
+                    <span className="mapModeItemMeta">{m.description}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         </aside>
 
         <MapSelectionProvider key={selectionScopeKey}>
@@ -292,6 +362,9 @@ export default async function MapPage({ searchParams }: { searchParams?: Promise
                 </div>
                 {focus && projection && activeLayerId && !unknownLayer ? <MapPollingControls /> : null}
               </div>
+              {modeNotice ? (
+                <Alert tone="info">{modeNotice}</Alert>
+              ) : null}
               <div className="mapCanvasBody">
                 {focus && projection && activeLayerId && !unknownLayer ? (
                   <MapCanvas projection={projection} activeLayerId={activeLayerId} currentParams={currentParams.toString()} />
@@ -351,6 +424,7 @@ export default async function MapPage({ searchParams }: { searchParams?: Promise
 
                 <form action="/map" method="get" className="mapFocusForm">
                   <input type="hidden" name="layer" value={activeLayerId ?? DEFAULT_LAYER} />
+                  <input type="hidden" name="mode" value={activeMode} />
 
                   <Field>
                     <Label htmlFor="focusType">Focus type</Label>

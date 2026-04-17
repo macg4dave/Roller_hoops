@@ -127,6 +127,9 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 
 	if focusTypeRaw == "" && focusIDRaw == "" {
 		guidance := "No focus selected. Provide focusType and focusId to render a scoped projection."
+		if layer == "security" {
+			guidance = "No focus selected. Choose a zone or device to render the Security layer."
+		}
 		resp := emptyMapProjection(layer, &guidance, regionLimit, nodeLimit, edgeLimit)
 		sortMapProjection(&resp)
 		h.writeJSON(w, http.StatusOK, resp)
@@ -164,6 +167,12 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 	var l2VLANsTruncated bool
 	var l2PeerRegions map[string]map[string]struct{}
 	var l2PeerLabels map[string]*string
+	var securityAllZones []sqlcgen.MapSecurityZone
+	var securityZones []sqlcgen.MapSecurityZone
+	var securityZonesTruncated bool
+	var securityPeerRegions map[string]map[string]struct{}
+	var securityPeerLabels map[string]*string
+	var securityZone *sqlcgen.MapSecurityZone
 	var physicalLinks []sqlcgen.MapDeviceLinkPeer
 	var physicalLinksTruncated bool
 	var servicesHostDeviceID string
@@ -486,6 +495,75 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 			status[1].Value = "services (device focus)"
 		}
 
+		if layer == "security" && depth > 0 {
+			status[1].Value = "security (device focus)"
+
+			zoneLister, ok := h.devices.(interface {
+				ListZonesForDevice(ctx context.Context, deviceID string, limit int32) ([]sqlcgen.MapSecurityZone, error)
+			})
+			if !ok {
+				h.log.Error().Msg("map security projection query missing")
+				h.writeError(w, http.StatusInternalServerError, "internal_error", "map security projection not supported", nil)
+				return
+			}
+
+			zoneRows, err := zoneLister.ListZonesForDevice(ctx, deviceRow.ID, int32(regionLimit+1))
+			if err != nil {
+				h.log.Error().Err(err).Str("device_id", deviceRow.ID).Msg("list device zones for map projection failed")
+				h.writeError(w, http.StatusInternalServerError, "db_error", "failed to build security projection", nil)
+				return
+			}
+
+			securityAllZones = zoneRows
+			securityZones = zoneRows
+			if len(securityZones) > regionLimit {
+				securityZones = securityZones[:regionLimit]
+				securityZonesTruncated = true
+			}
+
+			peerLister, ok := h.devices.(interface {
+				ListZonePeers(ctx context.Context, zoneID string, excludeDeviceID string, limit int32) ([]sqlcgen.MapDevicePeer, error)
+			})
+			if !ok {
+				h.log.Error().Msg("map security peer query missing")
+				h.writeError(w, http.StatusInternalServerError, "internal_error", "map security projection not supported", nil)
+				return
+			}
+
+			securityPeerRegions = make(map[string]map[string]struct{})
+			securityPeerLabels = make(map[string]*string)
+			for _, zoneRow := range securityZones {
+				peers, err := peerLister.ListZonePeers(ctx, zoneRow.ID, deviceRow.ID, int32(nodeLimit))
+				if err != nil {
+					h.log.Error().Err(err).Str("device_id", deviceRow.ID).Str("zone_id", zoneRow.ID).Msg("list security peers failed")
+					h.writeError(w, http.StatusInternalServerError, "db_error", "failed to build security projection", nil)
+					return
+				}
+				for _, peer := range peers {
+					regions := securityPeerRegions[peer.ID]
+					if regions == nil {
+						regions = make(map[string]struct{})
+						securityPeerRegions[peer.ID] = regions
+					}
+					regions[zoneRow.ID] = struct{}{}
+					if _, exists := securityPeerLabels[peer.ID]; !exists {
+						securityPeerLabels[peer.ID] = peer.DisplayName
+					}
+				}
+			}
+
+			if len(securityZones) > 0 {
+				if securityZonesTruncated {
+					status = append(status, mapInspectorField{Label: "Zones", Value: fmt.Sprintf("%d of %d", len(securityZones), len(securityAllZones))})
+				} else {
+					status = append(status, mapInspectorField{Label: "Zones", Value: strconv.Itoa(len(securityZones))})
+				}
+				status = append(status, mapInspectorField{Label: "Primary zone", Value: securityZones[0].Name})
+			} else {
+				status = append(status, mapInspectorField{Label: "Zones", Value: "none"})
+			}
+		}
+
 		inspector = &mapInspector{
 			Title:         title,
 			Identity:      identity,
@@ -561,18 +639,70 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 		}
 
 	case "zone":
-		focusID = focusIDRaw
-		label := focusIDRaw
-		focusLabel = &label
+		if layer != "security" {
+			focusID = focusIDRaw
+			label := focusIDRaw
+			focusLabel = &label
+			inspector = &mapInspector{
+				Title: label,
+				Identity: []mapInspectorField{
+					{Label: "Type", Value: "Zone"},
+					{Label: "ID", Value: focusID},
+				},
+				Status: []mapInspectorField{
+					{Label: "Layer", Value: layer},
+					{Label: "Projection", Value: "scaffolding (no regions/nodes yet)"},
+				},
+				Relationships: buildMapInspectorRelationships(focusType, focusID),
+			}
+			break
+		}
+
+		if !h.ensureDeviceQueries(w) {
+			return
+		}
+
+		zoneGetter, ok := h.devices.(interface {
+			GetMapZone(ctx context.Context, zoneID string) (sqlcgen.MapSecurityZone, error)
+		})
+		if !ok {
+			h.log.Error().Msg("map security zone query missing")
+			h.writeError(w, http.StatusInternalServerError, "internal_error", "map security projection not supported", nil)
+			return
+		}
+
+		zoneRow, err := zoneGetter.GetMapZone(r.Context(), focusIDRaw)
+		if err != nil {
+			switch {
+			case errors.Is(err, pgx.ErrNoRows):
+				h.writeError(w, http.StatusNotFound, "not_found", "zone not found", map[string]any{"id": focusIDRaw})
+			case isInvalidUUID(err):
+				h.writeError(w, http.StatusBadRequest, "invalid_id", "zone id is not a valid uuid", map[string]any{"id": focusIDRaw})
+			default:
+				h.log.Error().Err(err).Str("zone_id", focusIDRaw).Msg("map projection zone lookup failed")
+				h.writeError(w, http.StatusInternalServerError, "db_error", "failed to load zone", nil)
+			}
+			return
+		}
+
+		securityZone = &zoneRow
+		focusID = zoneRow.ID
+		focusLabel = &zoneRow.Name
+		identity := []mapInspectorField{
+			{Label: "Type", Value: "Zone"},
+			{Label: "ID", Value: focusID},
+			{Label: "Name", Value: zoneRow.Name},
+		}
+		if zoneRow.Description != nil && strings.TrimSpace(*zoneRow.Description) != "" {
+			identity = append(identity, mapInspectorField{Label: "Description", Value: strings.TrimSpace(*zoneRow.Description)})
+		}
 		inspector = &mapInspector{
-			Title: label,
-			Identity: []mapInspectorField{
-				{Label: "Type", Value: "Zone"},
-				{Label: "ID", Value: focusID},
-			},
+			Title: zoneRow.Name,
+			Identity: identity,
 			Status: []mapInspectorField{
 				{Label: "Layer", Value: layer},
-				{Label: "Projection", Value: "scaffolding (no regions/nodes yet)"},
+				{Label: "Projection", Value: "security (zone focus)"},
+				{Label: "Members", Value: strconv.Itoa(int(zoneRow.MemberCount))},
 			},
 			Relationships: buildMapInspectorRelationships(focusType, focusID),
 		}
@@ -1129,16 +1259,57 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 			peerIDsIncluded = peerIDsIncluded[:maxPeers]
 		}
 
+		// Batch-fetch primary IP/MAC facts for focus + peers.
+		factsMap := make(map[string]sqlcgen.MapDeviceFacts, 1+len(peerIDsIncluded))
+		factsLister, factsOK := h.devices.(interface {
+			ListDevicePrimaryFacts(ctx context.Context, deviceIDs []string) ([]sqlcgen.MapDeviceFacts, error)
+		})
+		if factsOK {
+			allIDs := make([]string, 0, 1+len(peerIDsIncluded))
+			allIDs = append(allIDs, focusID)
+			allIDs = append(allIDs, peerIDsIncluded...)
+			factsList, err := factsLister.ListDevicePrimaryFacts(r.Context(), allIDs)
+			if err != nil {
+				h.log.Warn().Err(err).Msg("batch device facts lookup failed; continuing without facts")
+			} else {
+				for _, f := range factsList {
+					factsMap[f.DeviceID] = f
+				}
+			}
+		}
+
 		resp.Nodes = make([]mapNode, 0, 1+len(peerIDsIncluded))
 		if focusNode != nil {
-			resp.Nodes = append(resp.Nodes, *focusNode)
+			fn := *focusNode
+			if facts, ok := factsMap[fn.ID]; ok {
+				if fn.Meta == nil {
+					fn.Meta = map[string]any{}
+				}
+				if facts.PrimaryIP != nil {
+					fn.Meta["primary_ip"] = *facts.PrimaryIP
+				}
+				if facts.PrimaryMAC != nil {
+					fn.Meta["primary_mac"] = *facts.PrimaryMAC
+				}
+			}
+			resp.Nodes = append(resp.Nodes, fn)
 		}
 		for _, peerID := range peerIDsIncluded {
+			meta := map[string]any{"device_id": peerID}
+			if facts, ok := factsMap[peerID]; ok {
+				if facts.PrimaryIP != nil {
+					meta["primary_ip"] = *facts.PrimaryIP
+				}
+				if facts.PrimaryMAC != nil {
+					meta["primary_mac"] = *facts.PrimaryMAC
+				}
+			}
 			resp.Nodes = append(resp.Nodes, mapNode{
 				ID:        peerID,
 				Kind:      "device",
 				Label:     peerLabels[peerID],
 				RegionIDs: []string{},
+				Meta:      meta,
 			})
 		}
 		resp.Truncation.Nodes.Returned = len(resp.Nodes)
@@ -1212,6 +1383,205 @@ func (h *Handler) handleGetMapProjection(w http.ResponseWriter, r *http.Request)
 		} else if resp.Truncation.Nodes.Truncated || resp.Truncation.Edges.Truncated {
 			guidance := "Projection truncated: some links/nodes were capped for readability."
 			resp.Guidance = &guidance
+		}
+	} else if layer == "security" && focusType == "device" && depth > 0 {
+		if focusNode != nil {
+			zoneIDs := make([]string, 0, len(securityZones))
+			for _, z := range securityZones {
+				zoneIDs = append(zoneIDs, z.ID)
+			}
+			focusNode.RegionIDs = zoneIDs
+			if len(zoneIDs) > 0 {
+				primary := zoneIDs[0]
+				focusNode.PrimaryRegionID = &primary
+			}
+		}
+
+		resp.Regions = make([]mapRegion, 0, len(securityZones))
+		for _, z := range securityZones {
+			resp.Regions = append(resp.Regions, mapRegion{ID: z.ID, Kind: "zone", Label: z.Name})
+		}
+		resp.Truncation.Regions.Returned = len(resp.Regions)
+		resp.Truncation.Regions.Truncated = securityZonesTruncated
+		totalRegions := len(securityAllZones)
+		resp.Truncation.Regions.Total = &totalRegions
+		if securityZonesTruncated {
+			warning := fmt.Sprintf("Zone cap hit: showing %d of %d.", len(resp.Regions), len(securityAllZones))
+			resp.Truncation.Regions.Warning = &warning
+		}
+
+		peerIDs := make([]string, 0, len(securityPeerRegions))
+		for id := range securityPeerRegions {
+			peerIDs = append(peerIDs, id)
+		}
+		sort.Strings(peerIDs)
+
+		maxPeers := nodeLimit - 1
+		if maxPeers < 0 {
+			maxPeers = 0
+		}
+		nodesTruncated := len(peerIDs) > maxPeers
+		peerIDsIncluded := peerIDs
+		if nodesTruncated {
+			peerIDsIncluded = peerIDs[:maxPeers]
+			warning := fmt.Sprintf("Node cap hit: showing %d of >%d devices.", 1+len(peerIDsIncluded), nodeLimit)
+			resp.Truncation.Nodes.Warning = &warning
+		}
+
+		resp.Nodes = make([]mapNode, 0, 1+len(peerIDsIncluded))
+		if focusNode != nil {
+			resp.Nodes = append(resp.Nodes, *focusNode)
+		}
+
+		for _, peerID := range peerIDsIncluded {
+			regionSet := securityPeerRegions[peerID]
+			regionIDs := make([]string, 0, len(regionSet))
+			for regionID := range regionSet {
+				regionIDs = append(regionIDs, regionID)
+			}
+			sort.Strings(regionIDs)
+
+			n := mapNode{ID: peerID, Kind: "device", Label: securityPeerLabels[peerID], RegionIDs: regionIDs}
+			if len(regionIDs) > 0 {
+				primary := regionIDs[0]
+				n.PrimaryRegionID = &primary
+			}
+			resp.Nodes = append(resp.Nodes, n)
+		}
+
+		resp.Truncation.Nodes.Returned = len(resp.Nodes)
+		resp.Truncation.Nodes.Truncated = nodesTruncated
+		if !nodesTruncated {
+			totalNodes := len(resp.Nodes)
+			resp.Truncation.Nodes.Total = &totalNodes
+		}
+
+		if resp.Inspector != nil {
+			peerCount := len(resp.Nodes)
+			if peerCount > 0 {
+				peerCount = peerCount - 1
+			}
+			resp.Inspector.Status = append(resp.Inspector.Status, mapInspectorField{Label: "Peers", Value: strconv.Itoa(peerCount)})
+
+			for _, z := range securityZones {
+				resp.Inspector.Relationships = append(resp.Inspector.Relationships, mapInspectorRelation{
+					Label:     "Open zone " + z.Name,
+					Layer:     "security",
+					FocusType: "zone",
+					FocusID:   z.ID,
+				})
+			}
+
+			for _, peerID := range peerIDsIncluded {
+				label := peerID
+				if peerLabel := securityPeerLabels[peerID]; peerLabel != nil {
+					if trimmed := strings.TrimSpace(*peerLabel); trimmed != "" {
+						label = trimmed
+					}
+				}
+
+				resp.Inspector.Relationships = append(resp.Inspector.Relationships, mapInspectorRelation{
+					Label:     "Open device " + label,
+					Layer:     "security",
+					FocusType: "device",
+					FocusID:   peerID,
+				})
+			}
+		}
+
+		if len(securityAllZones) == 0 {
+			guidance := "No zones assigned to this device. Create zones and add device memberships to render a security projection."
+			resp.Guidance = &guidance
+		} else if resp.Truncation.Regions.Truncated || resp.Truncation.Nodes.Truncated {
+			guidance := "Projection truncated: some zones/nodes were capped for readability."
+			resp.Guidance = &guidance
+		}
+	} else if layer == "security" && focusType == "zone" {
+		if securityZone == nil {
+			guidance := "Zone data not loaded."
+			resp.Guidance = &guidance
+		} else {
+			resp.Regions = []mapRegion{{ID: securityZone.ID, Kind: "zone", Label: securityZone.Name}}
+			resp.Truncation.Regions.Returned = 1
+			totalRegions := 1
+			resp.Truncation.Regions.Total = &totalRegions
+
+			if depth > 0 {
+				if !h.ensureDeviceQueries(w) {
+					return
+				}
+				memberLister, ok := h.devices.(interface {
+					ListDevicesInZone(ctx context.Context, zoneID string, limit int32) ([]sqlcgen.MapDevicePeer, error)
+				})
+				if !ok {
+					h.log.Error().Msg("map security zone member query missing")
+					h.writeError(w, http.StatusInternalServerError, "internal_error", "map security projection not supported", nil)
+					return
+				}
+
+				queryLimit := int32(nodeLimit + 1)
+				members, err := memberLister.ListDevicesInZone(r.Context(), securityZone.ID, queryLimit)
+				if err != nil {
+					h.log.Error().Err(err).Str("zone_id", securityZone.ID).Msg("list zone members failed")
+					h.writeError(w, http.StatusInternalServerError, "db_error", "failed to build security projection", nil)
+					return
+				}
+
+				nodesTruncated := len(members) > nodeLimit
+				membersIncluded := members
+				if nodesTruncated {
+					membersIncluded = members[:nodeLimit]
+					warning := fmt.Sprintf("Node cap hit: showing %d of >%d devices.", len(membersIncluded), nodeLimit)
+					resp.Truncation.Nodes.Warning = &warning
+				}
+
+				primary := securityZone.ID
+				resp.Nodes = make([]mapNode, 0, len(membersIncluded))
+				for _, member := range membersIncluded {
+					resp.Nodes = append(resp.Nodes, mapNode{
+						ID:              member.ID,
+						Kind:            "device",
+						Label:           member.DisplayName,
+						PrimaryRegionID: &primary,
+						RegionIDs:       []string{securityZone.ID},
+					})
+				}
+
+				resp.Truncation.Nodes.Returned = len(resp.Nodes)
+				resp.Truncation.Nodes.Truncated = nodesTruncated
+				if !nodesTruncated {
+					totalNodes := len(resp.Nodes)
+					resp.Truncation.Nodes.Total = &totalNodes
+				}
+
+				if resp.Inspector != nil {
+					resp.Inspector.Status = append(resp.Inspector.Status, mapInspectorField{Label: "Devices", Value: strconv.Itoa(len(resp.Nodes))})
+
+					for _, node := range resp.Nodes {
+						label := node.ID
+						if node.Label != nil {
+							if trimmed := strings.TrimSpace(*node.Label); trimmed != "" {
+								label = trimmed
+							}
+						}
+
+						resp.Inspector.Relationships = append(resp.Inspector.Relationships, mapInspectorRelation{
+							Label:     "Open device " + label,
+							Layer:     "security",
+							FocusType: "device",
+							FocusID:   node.ID,
+						})
+					}
+				}
+
+				if len(resp.Nodes) == 0 {
+					guidance := "No devices in this zone yet. Add device memberships to populate."
+					resp.Guidance = &guidance
+				} else if resp.Truncation.Nodes.Truncated {
+					guidance := "Projection truncated: some devices were capped for readability."
+					resp.Guidance = &guidance
+				}
+			}
 		}
 	} else if layer == "services" && depth > 0 {
 		hostDeviceID := ""

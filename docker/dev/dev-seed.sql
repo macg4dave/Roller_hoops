@@ -56,3 +56,38 @@ BEGIN
     VALUES (dev_id, 'tcp', 22, 'ssh');
   END IF;
 END $$;
+
+-- Security zones seed data
+DO $$
+DECLARE
+  dmz_id uuid;
+  internal_id uuid;
+  dev_id uuid;
+BEGIN
+  SELECT id INTO dmz_id FROM zones WHERE name = 'DMZ';
+  IF dmz_id IS NULL THEN
+    INSERT INTO zones (name, description)
+    VALUES ('DMZ', 'Demilitarized zone — internet-facing services')
+    RETURNING id INTO dmz_id;
+  END IF;
+
+  SELECT id INTO internal_id FROM zones WHERE name = 'Internal';
+  IF internal_id IS NULL THEN
+    INSERT INTO zones (name, description)
+    VALUES ('Internal', 'Internal corporate network')
+    RETURNING id INTO internal_id;
+  END IF;
+
+  -- Assign seeded device to Internal zone
+  SELECT id INTO dev_id FROM devices WHERE display_name = 'Seeded Office Router';
+  IF dev_id IS NOT NULL THEN
+    INSERT INTO device_zones (device_id, zone_id)
+    VALUES (dev_id, internal_id)
+    ON CONFLICT (device_id, zone_id) DO NOTHING;
+
+    -- Also add to DMZ (router spans both zones)
+    INSERT INTO device_zones (device_id, zone_id)
+    VALUES (dev_id, dmz_id)
+    ON CONFLICT (device_id, zone_id) DO NOTHING;
+  END IF;
+END $$;

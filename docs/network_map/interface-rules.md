@@ -44,6 +44,20 @@ Rules:
 - The diagram stays focused and capped; expanding nearby nodes is intentional
   and bounded.
 
+### Implementation status
+
+- **Physical layer device focus** renders the basic diagram: focus device +
+  linked peers, each showing display name, primary IP, and primary MAC when
+  known.
+- The Go API enriches `MapNode.meta` with `primary_ip` and `primary_mac` for
+  all device nodes in the physical projection via a batch facts query
+  (`ListDevicePrimaryFacts`).
+- Link source (e.g., `lldp`, `manual`, `cdp`) is displayed as a prominent
+  badge on each link row, separate from link type and link key metadata.
+- The batch facts query is a soft dependency: if the query method is not
+  available (e.g., in tests without that mock), the diagram renders without
+  facts rather than failing.
+
 ## Related docs
 
 - `docs/network_map/network_map_ideas.md` (overall product concept)
@@ -93,12 +107,19 @@ Rules:
    - The inspector is always visible.
    - Most navigation happens from the inspector (“View in L3”, “Open VLAN”, “Open Subnet”).
 4. **URL-driven state**
-   - Layer + focus are encoded in the URL (`layer`, `focusType`, `focusId`).
+   - Layer + focus + mode are encoded in the URL (`layer`, `focusType`, `focusId`, `mode`).
    - Deep links are stable and reload-safe.
    - `focusType=subnet` uses a CIDR string focus id (canonical form, e.g. `10.0.1.0/24`).
 5. **Deterministic presentation**
    - Stable IDs, stable ordering, stable layout.
    - Polling must not reshuffle the view while the user is interacting.
+6. **Mode-driven actions**
+   - Mode controls which actions and overlays are available on the canvas.
+   - Modes: `explore` (default), `build`, `secure`, `operate`.
+   - Invalid or missing mode resolves to `explore`.
+   - Mode persists across layer and focus changes.
+   - Build mode does not expose write actions until Build-mode APIs exist.
+   - See `docs/ui-ux.md` § "Map modes" for full semantics.
 
 ---
 
@@ -287,11 +308,52 @@ This is the default mapping for what “lives inside what”. It can evolve, but
 
 | Layer | Containers (regions) | Occupants (nodes) | Notes |
 | --- | --- | --- | --- |
-| Security | Zones | Devices (later Services) | Zones are likely curated/manual. |
+| Security | Zones | Devices (later Services) | Zones are manual-first. v1 has no inter-zone edges. |
 | L2 | VLANs | Devices (or Interfaces in drill-in) | Membership derived from `interface_vlans`. |
 | L3 | Subnets | Devices | Membership derived from observed IPs; pick a primary per device. |
 | Services | Service groups (optional) | Services | Prefer service→service edges only here. |
 | Physical (later) | Sites/Racks | Devices | Physical links are the only “default edge” layer. |
+
+---
+
+## Security layer contract (v1)
+
+The Security layer renders manual zones as regions with devices as occupants.
+
+### Model decisions (resolved by T004)
+
+- **Manual zones only** in v1. No auto-derived zones from tags, subnets, or
+  discovery data. Zones are operator-curated truth.
+- **`zones` + `device_zones`** tables store zone definitions and membership.
+  Schema defined in `docs/data-model.md`.
+- **No inter-zone edges** in v1. No `zone_policies` table. Future
+  enhancement when the zone model is validated.
+- **Device tags remain separate** from zones. Tags (`device_tags` table) are
+  for classification/role; zones are for security grouping. They are orthogonal.
+- **Write endpoints** live under `/api/v1/topology/zones`, not under
+  `/api/v1/map/`. The map projection is read-only.
+
+### Projection rules
+
+- Zone focus (`focusType=zone`, `focusId={zone_uuid}`): render the zone as a
+  single region with member devices as occupant nodes. Inspector shows zone
+  name, description, member count.
+- Device focus (`focusType=device`, `focusId={device_uuid}`): show which
+  zones the device belongs to as regions. Inspector includes zone memberships
+  in cross-layer navigation.
+- No focus: return guidance message suggesting a zone or device focus.
+- Empty zones are valid and render as empty regions.
+- Multi-zone devices appear in each zone region they belong to.
+- Caps: same `regionLimit`/`nodeLimit` rules as other layers.
+
+### Build-mode requirements
+
+- Zone CRUD and membership management go through `/api/v1/topology/zones`
+  endpoints (see `docs/api-contract.md`).
+- Until auth/roles are implemented, zone writes are open but audit-logged
+  via the existing `audit_events` table.
+- The UI should distinguish Build mode from Explore mode in the zone view
+  (show add/edit/remove controls only in Build mode).
 
 ---
 

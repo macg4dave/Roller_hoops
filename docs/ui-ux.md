@@ -163,7 +163,43 @@ Accessibility requirements:
 - The focused diagram must stay bounded; expanding neighbors is an explicit
   action, not an automatic whole-network render.
 
-## “Invented but in-scope” enhancements (Phase 12)
+## Map modes (Explore / Build / Secure / Operate)
+
+The map supports four **modes** that control which actions and overlays are
+available. Modes are orthogonal to layers — any layer can be viewed in any mode,
+but available actions and visual emphasis change.
+
+| Mode | Purpose | Write actions | Default |
+| --- | --- | --- | --- |
+| Explore | Read-only browsing, navigation, inspection | None | Yes |
+| Build | Topology editing: create/edit links, assign zones, manage memberships | Requires Build-mode APIs (not yet implemented) | No |
+| Secure | Security-focused view: highlights zones, policies, trust boundaries | Read-only until security layer APIs exist | No |
+| Operate | Operational monitoring: live status, health indicators, alerts | Read-only in v1 | No |
+
+### Mode contract
+
+- Mode is encoded in the URL as `mode=explore|build|secure|operate`.
+- Default mode is `explore`. Missing or empty mode resolves to `explore`.
+- Invalid modes fall back to `explore` with a visible warning.
+- Mode persists across layer switches (changing layer keeps the current mode).
+- Mode persists across focus changes.
+- Build mode does not expose write actions until authorized Build-mode APIs
+  exist. Until then, Build mode renders the same canvas as Explore but shows
+  a "Build actions coming soon" notice where the action toolbar will appear.
+- Deep links include mode: `/map?layer=l3&mode=build&focusType=device&focusId=...`
+
+### Mode semantics (v1)
+
+- **Explore**: The default operator experience. Browse layers, inspect nodes,
+  follow relationships. All existing map behavior lives here.
+- **Build**: Reserved for future topology editing. In v1, selecting Build mode
+  shows a disabled-action notice. No writes are possible.
+- **Secure**: Reserved for security overlays (zone highlighting, policy
+  visualization). In v1, selecting Secure mode shows a "security overlays
+  coming soon" notice.
+- **Operate**: Reserved for operational overlays (status badges, health
+  indicators, alert markers). In v1, selecting Operate mode shows an
+  "operational overlays coming soon" notice.## “Invented but in-scope” enhancements (Phase 12)
 
 These are intentionally scoped so they don’t require new architecture.
 

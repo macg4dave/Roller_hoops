@@ -562,7 +562,8 @@ func TestMapProjection_SubnetFocus_L3InspectorIncludesDeviceRelationships(t *tes
 
 type fakeDeviceQueriesWithPhysical struct {
 	fakeDeviceQueries
-	listLinkPeersFn func(ctx context.Context, deviceID string, limit int32) ([]sqlcgen.MapDeviceLinkPeer, error)
+	listLinkPeersFn    func(ctx context.Context, deviceID string, limit int32) ([]sqlcgen.MapDeviceLinkPeer, error)
+	listPrimaryFactsFn func(ctx context.Context, deviceIDs []string) ([]sqlcgen.MapDeviceFacts, error)
 }
 
 func (f fakeDeviceQueriesWithPhysical) ListDeviceLinkPeers(ctx context.Context, deviceID string, limit int32) ([]sqlcgen.MapDeviceLinkPeer, error) {
@@ -570,6 +571,13 @@ func (f fakeDeviceQueriesWithPhysical) ListDeviceLinkPeers(ctx context.Context, 
 		return nil, nil
 	}
 	return f.listLinkPeersFn(ctx, deviceID, limit)
+}
+
+func (f fakeDeviceQueriesWithPhysical) ListDevicePrimaryFacts(ctx context.Context, deviceIDs []string) ([]sqlcgen.MapDeviceFacts, error) {
+	if f.listPrimaryFactsFn == nil {
+		return nil, nil
+	}
+	return f.listPrimaryFactsFn(ctx, deviceIDs)
 }
 
 func TestMapProjection_DeviceFocus_PhysicalIncludesEdges(t *testing.T) {
@@ -623,6 +631,76 @@ func TestMapProjection_DeviceFocus_PhysicalIncludesEdges(t *testing.T) {
 	}
 	if edge["to"] != "00000000-0000-0000-0000-000000000101" {
 		t.Fatalf("expected edge to peer device, got %v", edge["to"])
+	}
+}
+
+func TestMapProjection_DeviceFocus_PhysicalIncludesNodeFacts(t *testing.T) {
+	name := "router-1"
+	focusDeviceID := "00000000-0000-0000-0000-000000000011"
+	peerDeviceID := "00000000-0000-0000-0000-000000000101"
+	peerName := "switch-1"
+
+	h := NewHandler(NewLogger("debug"), nil)
+	h.devices = fakeDeviceQueriesWithPhysical{
+		fakeDeviceQueries: fakeDeviceQueries{
+			getFn: func(ctx context.Context, id string) (sqlcgen.Device, error) {
+				return sqlcgen.Device{ID: focusDeviceID, DisplayName: &name}, nil
+			},
+		},
+		listLinkPeersFn: func(ctx context.Context, deviceID string, limit int32) ([]sqlcgen.MapDeviceLinkPeer, error) {
+			return []sqlcgen.MapDeviceLinkPeer{
+				{
+					LinkID:          "00000000-0000-0000-0000-000000000999",
+					LinkKey:         "router-1:switch-1",
+					PeerDeviceID:    peerDeviceID,
+					PeerDisplayName: &peerName,
+					Source:          "lldp",
+					LastSeenAt:      time.Now().UTC(),
+				},
+			}, nil
+		},
+		listPrimaryFactsFn: func(ctx context.Context, deviceIDs []string) ([]sqlcgen.MapDeviceFacts, error) {
+			focusIP := "10.0.1.1"
+			focusMAC := "aa:bb:cc:dd:ee:01"
+			peerIP := "10.0.1.2"
+			peerMAC := "aa:bb:cc:dd:ee:02"
+			return []sqlcgen.MapDeviceFacts{
+				{DeviceID: focusDeviceID, PrimaryIP: &focusIP, PrimaryMAC: &focusMAC},
+				{DeviceID: peerDeviceID, PrimaryIP: &peerIP, PrimaryMAC: &peerMAC},
+			}, nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/map/physical?focusType=device&focusId="+focusDeviceID, nil)
+	h.Router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	body := decodeBody(t, rr)
+	nodesAny := body["nodes"].([]any)
+	if len(nodesAny) != 2 {
+		t.Fatalf("expected 2 nodes, got %d", len(nodesAny))
+	}
+
+	focusNode := nodesAny[0].(map[string]any)
+	focusMeta := focusNode["meta"].(map[string]any)
+	if focusMeta["primary_ip"] != "10.0.1.1" {
+		t.Fatalf("expected focus node primary_ip=10.0.1.1, got %v", focusMeta["primary_ip"])
+	}
+	if focusMeta["primary_mac"] != "aa:bb:cc:dd:ee:01" {
+		t.Fatalf("expected focus node primary_mac=aa:bb:cc:dd:ee:01, got %v", focusMeta["primary_mac"])
+	}
+
+	peerNode := nodesAny[1].(map[string]any)
+	peerMeta := peerNode["meta"].(map[string]any)
+	if peerMeta["primary_ip"] != "10.0.1.2" {
+		t.Fatalf("expected peer node primary_ip=10.0.1.2, got %v", peerMeta["primary_ip"])
+	}
+	if peerMeta["primary_mac"] != "aa:bb:cc:dd:ee:02" {
+		t.Fatalf("expected peer node primary_mac=aa:bb:cc:dd:ee:02, got %v", peerMeta["primary_mac"])
 	}
 }
 

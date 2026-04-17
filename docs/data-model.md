@@ -195,7 +195,7 @@ This section documents **planned** entities needed for the Layered Network Explo
 
 Important:
 
-- These tables do **not** exist unless and until a migration lands in `core-go/migrations/` (exception: `links` exists as of Phase 7).
+- These tables do **not** exist unless and until a migration lands in `core-go/migrations/` (exception: `links` exists as of Phase 7, `zones` + `device_zones` exist as of migration 012).
 - The UI must never access Postgres directly; all reads/writes happen through `core-go` APIs.
 - Prefer projections derived from existing facts first; persist curated/manual truth only when necessary.
 
@@ -275,18 +275,34 @@ Constraints:
 
 Purpose: define security zones/regions for the Security layer.
 
-Proposed `zones` columns:
+**Status:** implemented (migration `012_zones`). Manual-first; no auto-derived
+zones until operator workflows are validated.
 
-- `id` (uuid)
-- `name` (text, unique)
+`zones` columns:
+
+- `id` (uuid, primary key, default `gen_random_uuid()`)
+- `name` (text, unique, not null)
 - `description` (text, nullable)
-- `created_at` (timestamptz)
+- `created_at` (timestamptz, not null, default `now()`)
+- `updated_at` (timestamptz, not null, default `now()`)
 
-Proposed `device_zones` join table:
+`device_zones` join table:
 
-- `device_id` (uuid, foreign key → `devices.id`)
-- `zone_id` (uuid, foreign key → `zones.id`)
-- `created_at` (timestamptz)
+- `device_id` (uuid, foreign key → `devices.id`, on delete cascade)
+- `zone_id` (uuid, foreign key → `zones.id`, on delete cascade)
+- `created_at` (timestamptz, not null, default `now()`)
+
+Constraints:
+
+- unique `(device_id, zone_id)`
+- index on `zone_id` for membership lookups
+
+Notes:
+
+- A device may belong to multiple zones (e.g., a firewall spanning DMZ and
+  Internal). The projection determines how to display multi-zone membership.
+- No `zone_policies` table in v1. Inter-zone edges (firewall rules, ACLs) are
+  a future enhancement once the zone model is validated by operators.
 
 ### Service dependencies (manual-first)
 

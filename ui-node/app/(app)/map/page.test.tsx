@@ -430,3 +430,86 @@ describe('MapPage URL contract', () => {
     expect(drillIn).toHaveAttribute('href', expect.stringContaining(`focusId=${encodedSubnetId}`));
   });
 });
+
+describe('MapPage mode URL contract', () => {
+  test('defaults to explore mode when no mode param is present', async () => {
+    const ui = await MapPage({ searchParams: Promise.resolve({ layer: 'l3' }) });
+    renderWithClient(ui);
+
+    const modeItem = screen.getByRole('link', { name: /explore/i });
+    expect(modeItem).toHaveAttribute('aria-current', 'true');
+  });
+
+  test('selects the mode from the URL query string', async () => {
+    const ui = await MapPage({ searchParams: Promise.resolve({ layer: 'l3', mode: 'build' }) });
+    renderWithClient(ui);
+
+    const buildItem = screen.getByRole('link', { name: /build/i });
+    expect(buildItem).toHaveAttribute('aria-current', 'true');
+
+    const exploreItem = screen.getByRole('link', { name: /explore/i });
+    expect(exploreItem).not.toHaveAttribute('aria-current');
+  });
+
+  test('falls back to explore for unknown mode with a warning', async () => {
+    const ui = await MapPage({ searchParams: Promise.resolve({ layer: 'l3', mode: 'chaos' }) });
+    renderWithClient(ui);
+
+    expect(screen.getByText(/"chaos"/)).toBeInTheDocument();
+    expect(screen.getByText(/falling back to explore/i)).toBeInTheDocument();
+
+    const exploreItem = screen.getByRole('link', { name: /explore/i });
+    expect(exploreItem).toHaveAttribute('aria-current', 'true');
+  });
+
+  test('shows a notice when build mode is selected', async () => {
+    const ui = await MapPage({ searchParams: Promise.resolve({ layer: 'l3', mode: 'build' }) });
+    renderWithClient(ui);
+
+    expect(screen.getByText(/build actions are not available yet/i)).toBeInTheDocument();
+  });
+
+  test('shows a notice when secure mode is selected', async () => {
+    const ui = await MapPage({ searchParams: Promise.resolve({ layer: 'l3', mode: 'secure' }) });
+    renderWithClient(ui);
+
+    expect(screen.getByText(/security overlays are not available yet/i)).toBeInTheDocument();
+  });
+
+  test('shows a notice when operate mode is selected', async () => {
+    const ui = await MapPage({ searchParams: Promise.resolve({ layer: 'l3', mode: 'operate' }) });
+    renderWithClient(ui);
+
+    expect(screen.getByText(/operational overlays are not available yet/i)).toBeInTheDocument();
+  });
+
+  test('does not show a notice in explore mode', async () => {
+    const ui = await MapPage({ searchParams: Promise.resolve({ layer: 'l3', mode: 'explore' }) });
+    renderWithClient(ui);
+
+    expect(screen.queryByText(/are not available yet/i)).not.toBeInTheDocument();
+  });
+
+  test('mode persists in layer switch links', async () => {
+    const ui = await MapPage({ searchParams: Promise.resolve({ layer: 'l3', mode: 'operate' }) });
+    renderWithClient(ui);
+
+    const l2Link = screen.getByRole('link', { name: /l2 \(vlans\)/i });
+    expect(l2Link).toHaveAttribute('href', expect.stringContaining('mode=operate'));
+  });
+
+  test('mode links preserve layer and focus', async () => {
+    const focusId = '550e8400-e29b-41d4-a716-446655440000';
+    const ui = await MapPage({
+      searchParams: Promise.resolve({ layer: 'l3', mode: 'explore', focusType: 'device', focusId })
+    });
+    renderWithClient(ui);
+
+    const buildLink = screen.getByRole('link', { name: /build/i });
+    const href = buildLink.getAttribute('href')!;
+    expect(href).toContain('mode=build');
+    expect(href).toContain('layer=l3');
+    expect(href).toContain('focusType=device');
+    expect(href).toContain(`focusId=${focusId}`);
+  });
+});
