@@ -1394,6 +1394,7 @@ components:
           additionalProperties: true
     DeviceChangeFeed:
       type: object
+      required: [events]
       properties:
         events:
           type: array
@@ -1404,6 +1405,7 @@ components:
           nullable: true
     DiscoveryRunPage:
       type: object
+      required: [runs]
       properties:
         runs:
           type: array
@@ -1427,6 +1429,7 @@ components:
           format: date-time
     DiscoveryRunLogPage:
       type: object
+      required: [logs]
       properties:
         logs:
           type: array

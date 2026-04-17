@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getSessionUser } from '../../../../../lib/auth/session';
-import { adminResetPassword } from '../../../../../lib/auth/users-store';
+import { adminResetPassword, isAuthRole } from '../../../../../lib/auth/users-store';
 
 export async function POST(request: Request) {
   const session = await getSessionUser();
@@ -34,6 +34,12 @@ export async function POST(request: Request) {
   if (newPassword.length < 8) {
     return NextResponse.json(
       { error: { code: 'validation_failed', message: 'new_password must be at least 8 characters.' } },
+      { status: 400 }
+    );
+  }
+  if (role && !isAuthRole(role)) {
+    return NextResponse.json(
+      { error: { code: 'validation_failed', message: 'role must be admin or read-only.' } },
       { status: 400 }
     );
   }

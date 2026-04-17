@@ -2,14 +2,28 @@ import { readFile, writeFile } from 'fs/promises';
 
 import { hashPasswordScrypt, verifyPasswordScrypt } from './password';
 
+export type AuthRole = 'admin' | 'read-only';
+
 export type AuthUser = {
   username: string;
-  role: string;
+  role: AuthRole;
   password?: string;
   password_scrypt?: string;
 };
 
 const AUTH_USERS_FILE = (process.env.AUTH_USERS_FILE ?? '').trim();
+
+export function isAuthRole(value: string): value is AuthRole {
+  return value === 'admin' || value === 'read-only';
+}
+
+function normalizeAuthRole(value: string | undefined, fallback: AuthRole): AuthRole {
+  const normalized = (value ?? '').trim();
+  if (!normalized) {
+    return fallback;
+  }
+  return isAuthRole(normalized) ? normalized : 'read-only';
+}
 
 export async function loadAuthUsers(): Promise<{ users: AuthUser[]; writable: boolean }> {
   if (AUTH_USERS_FILE) {
@@ -68,18 +82,18 @@ export async function adminResetPassword(username: string, newPassword: string, 
   }
   const normalized = username.trim();
   const idx = users.findIndex((u) => u.username === normalized);
-  const nextRole = (role ?? '').trim();
+  const nextRole = normalizeAuthRole(role, idx < 0 ? 'read-only' : users[idx].role);
   if (idx < 0) {
     const created: AuthUser = {
       username: normalized,
-      role: nextRole || 'read-only',
+      role: nextRole,
       password_scrypt: hashPasswordScrypt(newPassword)
     };
     users.push(created);
   } else {
     users[idx] = {
       ...users[idx],
-      role: nextRole || users[idx].role || 'read-only',
+      role: nextRole,
       password: undefined,
       password_scrypt: hashPasswordScrypt(newPassword)
     };
@@ -104,10 +118,11 @@ function envUsers(): AuthUser[] {
       .filter(Boolean)
       .map((raw) => {
         const [username, password, role] = raw.split(':');
+        const roleRaw = (role ?? '').trim();
         return {
           username: (username ?? '').trim(),
           password: (password ?? '').trim(),
-          role: (role ?? 'admin').trim() || 'admin',
+          role: roleRaw ? normalizeAuthRole(roleRaw, 'read-only') : 'admin',
           password_scrypt: undefined
         } satisfies AuthUser;
       })
@@ -116,7 +131,8 @@ function envUsers(): AuthUser[] {
 
   const username = (process.env.AUTH_USERNAME ?? 'admin').trim();
   const password = (process.env.AUTH_PASSWORD ?? 'admin').trim();
-  const role = (process.env.AUTH_ROLE ?? 'admin').trim() || 'admin';
+  const roleRaw = process.env.AUTH_ROLE;
+  const role = roleRaw == null || roleRaw.trim() === '' ? 'admin' : normalizeAuthRole(roleRaw, 'read-only');
   return [{ username, password, role }];
 }
 
@@ -126,7 +142,7 @@ function normalizeUser(value: unknown): AuthUser | null {
   }
   const candidate = value as Partial<AuthUser>;
   const username = String(candidate.username ?? '').trim();
-  const role = String(candidate.role ?? 'read-only').trim() || 'read-only';
+  const role = normalizeAuthRole(candidate.role, 'read-only');
   const password = candidate.password != null ? String(candidate.password) : undefined;
   const passwordScrypt = candidate.password_scrypt != null ? String(candidate.password_scrypt) : undefined;
   if (!username) {

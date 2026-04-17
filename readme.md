@@ -270,6 +270,11 @@ If you want to tweak discovery behavior, export `DISCOVERY_*` env vars before st
 
 ## Docs
 
+- Agent rules: `AGENTS.md`
+- AI backlog / dev runbook: `BACKLOG.md`
+- Engineering standards: `docs/engineering-standards.md`
+- AI coding control: `docs/ai-coding-control.md`
+- VS Code AI workflow: `docs/vscode-ai-workflow.md`
 - Roadmap / phases: `docs/roadmap.md`
 - Operations runbook (metrics, backups, secrets): `docs/runbooks.md`
 - API conventions: `docs/api-contract.md` (canonical spec: `api/openapi.yaml`)

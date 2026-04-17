@@ -65,12 +65,15 @@ Example shape:
 
 ## Endpoints (v1)
 
-Initial endpoints (from `docs/roadmap.md`):
+Current endpoints:
 
 - Devices
   - `GET /api/v1/devices`
   - `GET /api/v1/devices/{id}`
+  - `GET /api/v1/devices/{id}/facts`
   - `GET /api/v1/devices/{id}/name-candidates`
+  - `GET /api/v1/devices/{id}/tags`
+  - `PUT /api/v1/devices/{id}/tags`
   - `GET /api/v1/devices/changes`
   - `GET /api/v1/devices/{id}/history`
   - `POST /api/v1/devices`
@@ -81,9 +84,17 @@ Initial endpoints (from `docs/roadmap.md`):
 - Discovery
   - `POST /api/v1/discovery/run`
   - `GET /api/v1/discovery/status`
+  - `GET /api/v1/discovery/scope-suggestions`
   - `GET /api/v1/discovery/runs`
   - `GET /api/v1/discovery/runs/{id}`
   - `GET /api/v1/discovery/runs/{id}/logs`
+
+- Inventory
+  - `POST /api/v1/inventory/netbox/import`
+  - `POST /api/v1/inventory/nautobot/import`
+
+- Audit
+  - `POST /api/v1/audit/events`
 
 - Network map projections
   - `GET /api/v1/map/{layer}` (layer-aware projections; no global graph)
@@ -93,7 +104,7 @@ Initial endpoints (from `docs/roadmap.md`):
 
 - `POST /api/v1/discovery/run` accepts an optional `scope` hint; it returns a `DiscoveryRun` with a real run id (queued).
 - `GET /api/v1/discovery/status` returns `{status: string, latest_run?: DiscoveryRun}`. Status is `idle` when no runs exist; otherwise it mirrors the latest run’s status.
-- Discovery runs are persisted in Postgres (`discovery_runs`, `discovery_run_logs`). The current implementation stubs the worker but wires the API, status, and request id propagation.
+- Discovery runs are persisted in Postgres (`discovery_runs`, `discovery_run_logs`). A background worker claims queued runs, validates scope/default scope, runs bounded discovery, and applies configured enrichment such as names, SNMP/topology, and port scans.
 
 ### Change feed & device history (v1)
 

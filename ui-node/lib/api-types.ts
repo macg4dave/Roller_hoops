@@ -241,6 +241,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/devices/{id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * List tags for a device
+         * @description Returns both auto-derived and manually applied tags, including confidence and evidence where available.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DeviceTag"][];
+                    };
+                };
+                /** @description Invalid ID */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        /** Replace manual tags for a device */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["DeviceTagsUpdate"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DeviceTag"][];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/devices/{id}/facts": {
         parameters: {
             query?: never;
@@ -1174,6 +1279,8 @@ export interface components {
             id: string;
             /** @description Optional human-friendly name. */
             display_name?: string;
+            /** @description Effective device tags (manual tags win and appear first). */
+            tags?: string[];
             /** @description Best-effort primary IP for UI convenience (may be null when unknown). */
             primary_ip?: string | null;
             /**
@@ -1308,6 +1415,20 @@ export interface components {
             /** Format: date-time */
             observed_at: string;
         };
+        DeviceTag: {
+            tag: string;
+            /** @enum {string} */
+            source: "auto" | "manual";
+            confidence: number;
+            evidence?: {
+                [key: string]: unknown;
+            } | null;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        DeviceTagsUpdate: {
+            tags?: string[];
+        };
         DeviceMetadata: {
             owner?: string;
             location?: string;
@@ -1404,11 +1525,11 @@ export interface components {
             };
         };
         DeviceChangeFeed: {
-            events?: components["schemas"]["DeviceChangeEvent"][];
+            events: components["schemas"]["DeviceChangeEvent"][];
             cursor?: string | null;
         };
         DiscoveryRunPage: {
-            runs?: components["schemas"]["DiscoveryRun"][];
+            runs: components["schemas"]["DiscoveryRun"][];
             cursor?: string | null;
         };
         DiscoveryRunLogEntry: {
@@ -1419,7 +1540,7 @@ export interface components {
             created_at: string;
         };
         DiscoveryRunLogPage: {
-            logs?: components["schemas"]["DiscoveryRunLogEntry"][];
+            logs: components["schemas"]["DiscoveryRunLogEntry"][];
             cursor?: string | null;
         };
         ErrorResponse: {

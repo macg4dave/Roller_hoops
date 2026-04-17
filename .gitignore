@@ -83,6 +83,11 @@ go.work.sum
 .idea/
 .vscode/
 .vscode/*.log
+!.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/*.code-snippets
 
 # Local runtime data
 volumes/

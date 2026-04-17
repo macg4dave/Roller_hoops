@@ -30,6 +30,11 @@ Status values: `planned` | `in-progress` | `complete` | `deprecated`
 | Strict JSON decoding | Reject unknown JSON fields | core-go | (all JSON endpoints) | none | complete |
 | OpenAPI spec | Canonical API contract file | (repo) | (N/A) | none | complete |
 | OpenAPI drift gate | Contract test comparing `api/openapi.yaml` to chi routes | core-go | (N/A) | none | complete |
+| AI agent operating rules | Root `AGENTS.md` plus Copilot instructions define required reading, task workflow, validation, safety limits, and service-boundary rules for AI-authored changes. | (repo) | (N/A) | none | complete |
+| AI backlog/runbook | Root `BACKLOG.md` is the AI-facing execution board, task-card source, validation runbook, and active development guide. | (repo) | (N/A) | none | complete |
+| VS Code AI workspace | Shared `.vscode` tasks/settings/recommendations/snippets and `.github/prompts` help Codex/Copilot run the correct checks and follow backlog workflow from the editor. | (repo) | (N/A) | none | complete |
+| Engineering standards | Cross-cutting definition of done, contract policy, migration policy, responsibility boundaries, and documentation ownership. | (repo) | (N/A) | none | complete |
+| AI coding control | Documentation/control layer that keeps AI-authored work aligned with roadmap, feature matrix, OpenAPI, service boundaries, and validation evidence. | (repo) | (N/A) | none | complete |
 | SNMP enrichment | Enrich devices/interfaces with SNMP sysName/sysDescr and interface facts (best-effort, opt-in) so operators see richer metadata without manual entry | core-go | (via discovery worker; no dedicated endpoint) | `device_snmp`, `interfaces`, `mac_addresses` | complete |
 | VLAN / switch port mapping | Map switch interfaces to VLAN IDs (PVID via bridge/q-bridge MIB; best-effort, opt-in) | core-go | (via discovery worker; no dedicated endpoint) | `interface_vlans`, `interfaces` | complete |
 | mDNS / NetBIOS resolution | Turn up friendly names via name-resolution helpers (reverse DNS, mDNS, NetBIOS, SNMP sysName candidates) and store them for selection | core-go | `/api/v1/devices/{id}/name-candidates` | `device_name_candidates`, `devices` | complete |

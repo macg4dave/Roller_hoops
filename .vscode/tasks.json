@@ -1,0 +1,190 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "agent: show ready queue",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "Select-String -Path BACKLOG.md -Pattern '^\\| T[0-9].*\\| Ready \\|'"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "agent: show required reading",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "Get-Content AGENTS.md -TotalCount 80"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "git: diff check",
+      "type": "shell",
+      "command": "git diff --check",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "ui: npm ci",
+      "type": "shell",
+      "command": "npm ci",
+      "options": {
+        "cwd": "${workspaceFolder}/ui-node"
+      },
+      "windows": {
+        "command": "cmd",
+        "args": ["/d", "/c", "pushd \"${workspaceFolder}\\ui-node\" && npm ci"]
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "ui: gen openapi types",
+      "type": "shell",
+      "command": "npm run gen:openapi",
+      "options": {
+        "cwd": "${workspaceFolder}/ui-node"
+      },
+      "windows": {
+        "command": "cmd",
+        "args": ["/d", "/c", "pushd \"${workspaceFolder}\\ui-node\" && npm run gen:openapi"]
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "ui: test",
+      "type": "shell",
+      "command": "npm test",
+      "options": {
+        "cwd": "${workspaceFolder}/ui-node"
+      },
+      "windows": {
+        "command": "cmd",
+        "args": ["/d", "/c", "pushd \"${workspaceFolder}\\ui-node\" && npm test"]
+      },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "ui: build",
+      "type": "shell",
+      "command": "npm run build",
+      "options": {
+        "cwd": "${workspaceFolder}/ui-node"
+      },
+      "windows": {
+        "command": "cmd",
+        "args": ["/d", "/c", "pushd \"${workspaceFolder}\\ui-node\" && npm run build"]
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "go: fmt check",
+      "type": "shell",
+      "command": "test -z \"$(gofmt -l .)\"",
+      "options": {
+        "cwd": "${workspaceFolder}/core-go"
+      },
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "Push-Location '${workspaceFolder}\\core-go'; if ((gofmt -l . | Measure-Object).Count -ne 0) { gofmt -l .; exit 1 }"
+        ]
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "go: vet",
+      "type": "shell",
+      "command": "go vet ./...",
+      "options": {
+        "cwd": "${workspaceFolder}/core-go"
+      },
+      "windows": {
+        "command": "cmd",
+        "args": ["/d", "/c", "pushd \"${workspaceFolder}\\core-go\" && go vet ./..."]
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "go: test",
+      "type": "shell",
+      "command": "go test ./...",
+      "options": {
+        "cwd": "${workspaceFolder}/core-go"
+      },
+      "windows": {
+        "command": "cmd",
+        "args": ["/d", "/c", "pushd \"${workspaceFolder}\\core-go\" && go test ./..."]
+      },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "go: test via docker",
+      "type": "shell",
+      "command": "docker run --rm -v \"${workspaceFolder}:/src\" -w /src/core-go golang:1.24-alpine go test ./...",
+      "windows": {
+        "command": "cmd",
+        "args": [
+          "/d",
+          "/c",
+          "pushd \"${workspaceFolder}\" && docker run --rm -v \"%CD%:/src\" -w /src/core-go golang:1.24-alpine go test ./..."
+        ]
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "validate: ui",
+      "dependsOrder": "sequence",
+      "dependsOn": ["ui: gen openapi types", "ui: test", "ui: build"],
+      "problemMatcher": []
+    },
+    {
+      "label": "validate: available local checks",
+      "dependsOrder": "sequence",
+      "dependsOn": ["git: diff check", "validate: ui"],
+      "problemMatcher": []
+    },
+    {
+      "label": "docker: dev stack up",
+      "type": "shell",
+      "command": "docker compose --profile dev up --build",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "docker: stack down",
+      "type": "shell",
+      "command": "docker compose --profile dev down -v",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

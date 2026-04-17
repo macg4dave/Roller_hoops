@@ -1,11 +1,11 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { cookies } from 'next/headers';
 
-import { verifyCredentials as verifyCredentialsFromStore, type AuthUser } from './users-store';
+import { isAuthRole, verifyCredentials as verifyCredentialsFromStore, type AuthRole, type AuthUser } from './users-store';
 
 export type SessionUser = {
   username: string;
-  role: string;
+  role: AuthRole;
 };
 
 type SessionPayload = SessionUser & { expiresAt: number };
@@ -82,7 +82,7 @@ function decodeToken(token: string): SessionPayload | null {
   }
   const [username, role, expiresStr, nonce, signatureHex] = parts;
   const expiresAt = Number(expiresStr);
-  if (!username || !role || Number.isNaN(expiresAt)) {
+  if (!username || !role || !isAuthRole(role) || Number.isNaN(expiresAt)) {
     return null;
   }
   const payload = `${username}:${role}:${expiresAt}:${nonce}`;

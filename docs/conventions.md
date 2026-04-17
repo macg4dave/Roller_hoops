@@ -3,6 +3,14 @@
 
 These conventions exist to keep the project **diff-friendly**, **stable**, and easy for AI (and humans) to change safely.
 
+## AI agent operating rules
+
+- Start with `AGENTS.md` for the required reading order, task workflow, validation rules, and safety limits.
+- Use `BACKLOG.md` as the AI-facing execution board and developer runbook.
+- Use `docs/engineering-standards.md` for cross-cutting delivery rules and definition of done.
+- Use `docs/ai-coding-control.md` to understand how AI-authored work is kept aligned with docs, contracts, and service boundaries.
+- Use `docs/vscode-ai-workflow.md` for shared VS Code tasks, prompt files, snippets, and UNC workspace caveats.
+
 ## Golden rules
 
 - No secrets in this repo (see `docs/security.md`).
