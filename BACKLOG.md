@@ -6,8 +6,6 @@ If this file and [docs/roadmap.md](docs/roadmap.md) disagree on active sequencin
 
 If this file and implementation disagree, update this file before starting new work.
 
-## Project Snapshot
-
 Roller_hoops is a self-hosted network tracker / mapper:
 
 - `core-go`: headless Go service for discovery, normalization, persistence, REST API, metrics, and worker behavior.
@@ -29,28 +27,6 @@ Roller_hoops is a self-hosted network tracker / mapper:
 10. Default non-trivial assigned issues to one parent backlog item plus explicit child tasks unless one small standalone task is clearly sufficient.
 11. If a future issue is not safely startable yet, still capture it here using `Blocked`, dependencies, or an open decision.
 12. When assigned work changes sequencing, user-visible scope, runtime boundaries, or delivery policy, sync the owning planning docs in the same session.
-
-## Required Reading By Work Type
-
-Always start with:
-
-- [AGENTS.md](AGENTS.md)
-- [docs/engineering-standards.md](docs/engineering-standards.md)
-- [docs/conventions.md](docs/conventions.md)
-- [docs/feature-matrix.md](docs/feature-matrix.md)
-
-Then read the relevant contract:
-
-| Work Type | Required Docs |
-| --- | --- |
-| API behavior | `api/openapi.yaml`, `docs/api-contract.md` |
-| Persistence or migrations | `docs/data-model.md`, `docs/migrations.md`, `core-go/migrations/` |
-| Runtime/service boundaries | `docs/architecture.md`, `docker-compose.yml`, `.env.example` |
-| Discovery behavior | `docs/discovery-capabilities.md`, `docs/discovery-deployment.md`, `docs/runbooks.md` |
-| UI/operator workflow | `docs/ui-ux.md` |
-| Map work | `docs/network_map/interface-rules.md`, `docs/network_map/network_map_ideas.md`, `docs/network_map/implementation-stack.md` |
-| Auth/session/RBAC | `docs/security.md`, `docs/architecture.md`, `ui-node/lib/auth/` |
-| AI-agent process | `docs/ai-coding-control.md`, `docs/vscode-ai-workflow.md`, `.github/copilot-instructions.md` |
 
 ## Status Model
 
@@ -84,23 +60,101 @@ Then read the relevant contract:
 - `Security owner`: auth, roles, secret handling, exposure boundaries.
 - `Docs owner`: documentation consistency and backlog hygiene.
 
-## Ready Queue
+## Documentation Freshness Rules (Mandatory)
 
-Only rows with `Status` = `Ready` are startable without more planning unless the user explicitly assigns them.
+This file is the **known truth** for AI planning and execution. All planning docs must stay in sync with this file and with the actual codebase. Documentation drift is treated as a defect.
 
-| ID | Queue | Phase | Priority | Task | Status | Depends On | Validation |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| T000 | Now | Process | P1 | AI backlog and runbook foundation | Done | None | `git diff --check` + docs consistency review |
-| T009 | Now | Process | P1 | VS Code AI workspace scaffolding | Done | T000 | `git diff --check` + JSON parse check + docs consistency review |
-| T001 | Now | Hardening | P0 | Auth and OpenAPI drift hardening | Review | None | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .`; Go tests via Docker validator |
-| T002 | Now | Process | P1 | Planning-doc drift reconciliation | Ready | T000 | manual roadmap/feature-matrix/API docs consistency review |
-| T010 | Now | Phase 15/16 | P1 | Basic focused network diagram MVP | Ready | T002 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .`; Go/API tests if projection shape changes |
-| T003 | Now | Phase 16 | P1 | Map modes contract and UI selector | Ready | T002 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
-| T004 | Next | Phase 16 | P1 | Security layer v1 planning slice | Ready | T002 | manual docs consistency review + OpenAPI draft review if API shape changes |
-| T005 | Next | Phase 16 | P1 | Build-mode map editing parent issue | Ready | T002 | parent/child cards written + feature matrix synced |
-| T006 | Next | Ops | P1 | Local validation toolchain/runbook cleanup | Done | T000 | runbook update + one confirmed Docker-only validation path |
-| T007 | Next | Discovery | P1 | Discovery deployment smoke matrix | Ready | T006 | documented Docker bridge, host-network, and native-host smoke commands |
-| T008 | Later | Docs | P2 | Markdown encoding and typography cleanup | Ready | T000 | `git diff --check` + spot-check rendered docs |
+### Core Mandate
+
+Every agent session that changes behavior, completes work, or updates status **must** leave the affected documentation accurate before ending. There is no "I'll update docs later." Doc updates ship in the same session as the work they describe.
+
+### When To Update This File
+
+- **Starting work**: change the task card status from `Ready` to `In Progress` and update the Ready Queue table.
+- **Completing work**: change the task card status to `Done`, fill in the Handoff Notes, and update the Ready Queue table.
+- **Blocked work**: change the task card status to `Blocked`, add a one-line blocker note, and update the Ready Queue table.
+- **New work**: add a task card and a Ready Queue row before starting substantial implementation.
+- **Scope changes**: update the task card scope, files-to-touch, and definition-of-done before expanding work.
+
+### When To Update Other Docs
+
+Every change must update the owning documentation. Use this checklist — skip only the rows that are genuinely unaffected:
+
+| What Changed | Docs To Update |
+| --- | --- |
+| API routes, request/response shapes, error behavior | `api/openapi.yaml`, `docs/api-contract.md`, regenerate `ui-node/lib/api-types.ts` |
+| Database tables, columns, relationships, migrations | `docs/data-model.md`, `docs/migrations.md` |
+| Feature added, removed, or status changed | `docs/feature-matrix.md` |
+| Phase completed, milestone moved, or scope shifted | `docs/roadmap.md` |
+| Service boundary, trust boundary, or runtime wiring changed | `docs/architecture.md` |
+| Operator workflow, UI layout, or interaction changed | `docs/ui-ux.md` |
+| Discovery behavior, scope rules, or deployment changed | `docs/discovery-capabilities.md`, `docs/discovery-deployment.md` |
+| Auth, roles, session, or security boundary changed | `docs/security.md` |
+| Setup, ports, env vars, or commands changed | `readme.md` |
+| Bug fixed or issue resolved | `docs/issues.md` (status → `fixed` with reference) |
+| Network map contract, layers, or interactions changed | `docs/network_map/interface-rules.md` |
+| Runbook, monitoring, or operational procedure changed | `docs/runbooks.md` |
+
+### Roadmap Sync
+
+When a phase status changes (e.g., from `In progress` to `Done`) or when a phase's task list materially changes, update `docs/roadmap.md` in the same session. The roadmap phase table and phase detail sections must match reality.
+
+### Feature Matrix Sync
+
+When any feature is added, completed, changed in ownership, or gains/loses an endpoint or DB table, update `docs/feature-matrix.md` in the same session. No orphan features in code; no stale entries in the matrix.
+
+### Done-Work Recording
+
+When a task card moves to `Done`:
+
+1. Update the Ready Queue row status to `Done`.
+2. Fill in the task card's Handoff Notes with a brief summary of what was changed and any follow-up the next agent needs.
+3. Update `docs/roadmap.md` if the completed work moves a phase forward.
+4. Update `docs/feature-matrix.md` if feature status changed.
+5. Update `docs/issues.md` if a tracked issue was resolved.
+
+### Doc-Debt Rule
+
+If a required doc update genuinely cannot be completed in the current session (e.g., the agent lacks information to write the update accurately), the agent must:
+
+1. Add a note to the task card's Handoff Notes naming the specific doc and the missing update.
+2. Add a `P1` child task or standalone task to the Ready Queue for the doc fix.
+
+Silently skipping a doc update is not allowed.
+
+## Required Reading By Work Type
+
+Always start with:
+
+- [AGENTS.md](AGENTS.md)
+- [docs/engineering-standards.md](docs/engineering-standards.md)
+- [docs/conventions.md](docs/conventions.md)
+- [docs/feature-matrix.md](docs/feature-matrix.md)
+
+Then read the relevant contract:
+
+| Work Type | Required Docs |
+| --- | --- |
+| API behavior | `api/openapi.yaml`, `docs/api-contract.md` |
+| Persistence or migrations | `docs/data-model.md`, `docs/migrations.md`, `core-go/migrations/` |
+| Runtime/service boundaries | `docs/architecture.md`, `docker-compose.yml`, `.env.example` |
+| Discovery behavior | `docs/discovery-capabilities.md`, `docs/discovery-deployment.md`, `docs/runbooks.md` |
+| UI/operator workflow | `docs/ui-ux.md` |
+| Map work | `docs/network_map/interface-rules.md`, `docs/network_map/network_map_ideas.md`, `docs/network_map/implementation-stack.md` |
+| Auth/session/RBAC | `docs/security.md`, `docs/architecture.md`, `ui-node/lib/auth/` |
+| AI-agent process | `docs/ai-coding-control.md`, `docs/vscode-ai-workflow.md`, `.github/copilot-instructions.md` |
+
+## User-Assigned Issue Intake Workflow
+
+- A user-assigned issue overrides the `## Ready Queue`, but it does not override the need for a grounded task card.
+- Start with a short repo-grounding pass: current phase, likely owner role, affected modules, existing tasks, and open decisions.
+- Default backlog shape for a non-trivial assigned issue:
+  - one parent item using the next `Txx` id for the issue itself
+  - one or more child tasks using `Txxa`, `Txxb`, and similar ids for implementation-ready slices
+- Parent items should capture outcome, scope, sequencing context, dependencies, broad validation strategy, and handoff notes.
+- Child tasks should stay small, implementation-ready, and explicit about files to touch, validation, and definition of done.
+- If the issue is still speculative, record it anyway. Use `Blocked`, `Later`, explicit dependencies, or an open decision instead of waiting for perfect detail.
+- After documenting an assigned issue, report the parent item, child tasks, docs updated, and any blocker or open decision before asking for the next issue.
 
 ## Task Card Templates
 
@@ -168,6 +222,28 @@ Use one of these shapes when adding work. Keep task cards concrete enough that a
 - Handoff Notes:
   - sequencing, blockers, or open decisions the next agent should know
 ```
+
+## Ready Queue
+
+Only rows with `Status` = `Ready` are startable without more planning unless the user explicitly assigns them.
+
+| ID | Queue | Phase | Priority | Task | Status | Depends On | Validation |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| T000 | Now | Process | P1 | AI backlog and runbook foundation | Done | None | `git diff --check` + docs consistency review |
+| T009 | Now | Process | P1 | VS Code AI workspace scaffolding | Done | T000 | `git diff --check` + JSON parse check + docs consistency review |
+| T001 | Now | Hardening | P0 | Auth and OpenAPI drift hardening | Review | None | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .`; Go tests via Docker validator |
+| T002 | Now | Process | P1 | Planning-doc drift reconciliation | Ready | T000 | manual roadmap/feature-matrix/API docs consistency review |
+| T010 | Now | Phase 15/16 | P1 | Basic focused network diagram MVP | Ready | T002 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .`; Go/API tests if projection shape changes |
+| T003 | Now | Phase 16 | P1 | Map modes contract and UI selector | Ready | T002 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
+| T004 | Next | Phase 16 | P1 | Security layer v1 planning slice | Ready | T002 | manual docs consistency review + OpenAPI draft review if API shape changes |
+| T005 | Next | Phase 16 | P1 | Build-mode map editing parent issue | Ready | T002 | parent/child cards written + feature matrix synced |
+| T006 | Next | Ops | P1 | Local validation toolchain/runbook cleanup | Done | T000 | runbook update + one confirmed Docker-only validation path |
+| T007 | Next | Discovery | P1 | Discovery deployment smoke matrix | Ready | T006 | documented Docker bridge, host-network, and native-host smoke commands |
+| T011 | Next | Phase 16 | P1 | Operate overlays planning slice | Ready | T002, T003 | manual docs consistency review + child task validation |
+| T012 | Next | Ops | P2 | Data retention and cleanup policy | Ready | None | manual docs review + Go tests if migrations added |
+| T013 | Now | Process | P2 | Create backlog archive file | Ready | None | `git diff --check` + cross-reference review |
+| T014 | Now | Process | P1 | Phase 12 roadmap status correction | Ready | None | manual docs consistency review |
+| T008 | Later | Docs | P2 | Markdown encoding and typography cleanup | Ready | T000 | `git diff --check` + spot-check rendered docs |
 
 ## Dev Runbook
 
@@ -296,6 +372,8 @@ Before changing operator workflows:
 
 ## Detailed Task Cards
 
+Closed task cards that no longer coordinate active work are archived to `docs/backlog-archive.md`.
+
 ### T000 - AI Backlog And Runbook Foundation
 
 - Status: Done
@@ -335,6 +413,7 @@ Before changing operator workflows:
 - Phase: Hardening
 - Priority: P0
 - Owner Role: Security owner
+- Attention: Has been in `Review` since creation; needs a human pass or a follow-up agent to validate and close.
 - Goal: Close early-dev auth and generated-type drift found during the logic pass.
 - Scope:
   - block read-only users on dedicated device tag update route
@@ -421,6 +500,10 @@ Before changing operator workflows:
 - Goal: Reconcile roadmap, feature matrix, API docs, and backlog so current feature status is consistent.
 - Scope:
   - compare `docs/roadmap.md` current snapshot, phase statuses, and next checklist against `docs/feature-matrix.md`
+  - fix Phase 12 status: at-a-glance says `Planned`, section says `In progress`, but all M12 milestones and feature matrix entries are `complete` — update to `Done`
+  - fix Phase 8 blank `**Status:**` line in roadmap (should be `Done`)
+  - fix Phase 3 stale unchecked cross-references to Phases 10/11 (both are `Done`)
+  - reconcile Phase 16 M16.2 (Services): feature matrix says Services projection is `complete` but M16.2 tasks are unchecked — clarify what is done vs remaining
   - update stale API lists in roadmap if they lag behind `api/openapi.yaml`
   - ensure `docs/issues.md` references `BACKLOG.md` as the execution board while retaining issue history
   - add or update task cards for any real gaps found
@@ -443,6 +526,9 @@ Before changing operator workflows:
   - any open product gaps are represented by backlog cards
 - Handoff Notes:
   - Feature matrix currently says some Services map work is complete while roadmap Phase 16 still has unchecked Services tasks; reconcile before implementing more map work.
+  - Phase 12 is fully done (all milestones checked, all feature matrix entries `complete`) but roadmap at-a-glance still says `Planned` and section header says `In progress`. Fix all three (table, header, next-milestone checklist).
+  - Phase 8 section header has a blank `**Status:**` line — set to `Done`.
+  - Phase 3 still shows `[ ] Add auth + sessions (Phase 11)` and `[ ] Add richer operator workflows (Phase 10)` as unchecked — both are `Done`.
 
 ### T003 - Map Modes Contract And UI Selector
 
@@ -486,6 +572,7 @@ Before changing operator workflows:
 - Phase: Phase 15/16
 - Priority: P1
 - Owner Role: UI owner
+- Related Issues: ISS-007
 - Goal: Make the map deliver the basic expected network diagram: a selected device connected to its likely router/switch/peer, with IP and MAC facts visible.
 - Scope:
   - define the default device-focused diagram contract in `docs/network_map/interface-rules.md`
@@ -680,11 +767,153 @@ Before changing operator workflows:
 - Handoff Notes:
   - PowerShell `Get-Content` may display UTF-8 punctuation incorrectly depending on console encoding; verify file bytes/rendering before editing.
 
+### T011 - Operate Overlays Planning Slice
+
+- Status: Ready
+- Queue: Next
+- Phase: Phase 16
+- Priority: P1
+- Owner Role: Tech lead
+- Goal: Turn M16.4 (Operate overlays — history-aware status on the map) into implementation-ready child tasks.
+- Scope:
+  - define which Phase 9 APIs power "last seen" and "changed" overlays on map nodes
+  - define overlay rendering rules (badges, color, legend) that keep the map readable without becoming a monitoring dashboard
+  - decide toggle/dismiss UX for overlays
+  - split into API-extension (if needed), UI, and test child tasks
+- Files to Touch:
+  - `BACKLOG.md`
+  - `docs/ui-ux.md`
+  - `docs/network_map/interface-rules.md`
+  - `docs/feature-matrix.md`
+- Do Not Touch:
+  - runtime code until child tasks are explicit
+- Dependencies:
+  - T002
+  - T003 (modes contract must exist before Operate mode is safe)
+- Validation:
+  - manual docs consistency review
+  - child task validation listed on each new card
+- Definition of Done:
+  - Operate overlays have concrete child cards with files, validation, and blockers
+  - Phase 9 API dependencies are confirmed as sufficient or gaps are documented
+- Handoff Notes:
+  - Operate mode is an overlay on any layer, not a separate layer. Keep it distinct from the Explore default.
+
+### T012 - Data Retention And Cleanup Policy
+
+- Status: Ready
+- Queue: Next
+- Phase: Ops
+- Priority: P2
+- Owner Role: Data owner
+- Goal: Implement and document a data retention policy for append-only tables so the database stays performant over time.
+- Scope:
+  - define retention windows for `ip_observations`, `mac_observations`, `discovery_run_logs`, and `audit_events`
+  - document retention strategy in `docs/data-model.md` and `docs/runbooks.md`
+  - add a migration or cron-friendly SQL for pruning stale observations beyond the retention window
+  - add an index review for time-range queries that retention depends on
+- Files to Touch:
+  - `docs/data-model.md`
+  - `docs/runbooks.md`
+  - `core-go/migrations/` (if adding a cleanup function or index)
+  - `BACKLOG.md`
+- Do Not Touch:
+  - discovery or enrichment runtime behavior
+  - UI code
+- Dependencies:
+  - None (Phase 9 observation tables already exist)
+- Validation:
+  - manual docs review
+  - `docker build -f docker/validate/core-go.Dockerfile --target test .` if migrations are added
+- Definition of Done:
+  - retention policy is documented with specific windows and cleanup approach
+  - operators know how to prune old data or have an automated path
+- Handoff Notes:
+  - Phase 7 blockers and Phase 9 shared tasks both mention this need but no implementation exists yet.
+  - Start with documentation and manual SQL; automate later if volume justifies it.
+
+### T013 - Create Backlog Archive File
+
+- Status: Ready
+- Queue: Now
+- Phase: Process
+- Priority: P2
+- Owner Role: Docs owner
+- Goal: Create `docs/backlog-archive.md` so Done task cards can be archived per the Archive Policy.
+- Scope:
+  - create `docs/backlog-archive.md` with a header explaining its purpose and linking back to `BACKLOG.md`
+  - move T000 and T009 (Done, no active dependents) into the archive
+  - keep T006 in the main backlog until T007 completes (T007 depends on T006)
+- Files to Touch:
+  - `docs/backlog-archive.md` (new)
+  - `BACKLOG.md`
+- Do Not Touch:
+  - runtime code
+- Dependencies:
+  - None
+- Validation:
+  - `git diff --check`
+  - confirm cross-references are correct
+- Definition of Done:
+  - archive file exists and contains T000 and T009
+  - main backlog no longer carries cards that are Done with no active dependents
+  - archive file is linked from the BACKLOG.md Archive Policy section
+- Handoff Notes:
+  - The BACKLOG.md Detailed Task Cards header already references this file. Just create it.
+
+### T014 - Phase 12 Roadmap Status Correction
+
+- Status: Ready
+- Queue: Now
+- Phase: Process
+- Priority: P1
+- Owner Role: Docs owner
+- Goal: Mark Phase 12 as Done in all roadmap locations since every milestone is complete.
+- Scope:
+  - update the at-a-glance table row for Phase 12 from `Planned` to `Done`
+  - update the Phase 12 section status from `In progress` to `Done`
+  - check the Phase 12 item in the next-milestone checklist
+  - verify feature matrix rows for Phase 12 all say `complete` (they do; confirm only)
+- Files to Touch:
+  - `docs/roadmap.md`
+- Do Not Touch:
+  - runtime code
+- Dependencies:
+  - None
+- Validation:
+  - manual docs consistency review
+- Definition of Done:
+  - Phase 12 status is `Done` everywhere in the roadmap
+  - feature matrix is consistent
+- Handoff Notes:
+  - This is a documentation-only fix. All Phase 12 milestones (M12.1–M12.5) have every task checked off and all feature matrix entries are `complete`.
+
+## Immediate Open Decisions
+
+| ID | Decision | Needed By | Owner | Status |
+| --- | --- | --- | --- | --- |
+| OD-001 | Should Services layer M16.2 tasks be checked off (read-side projection done under Phase 15) or do they remain open for dependency-editing work? | T002 | Tech lead | Open |
+| OD-002 | What is the retention window for `ip_observations` and `mac_observations`? (30 days? 90 days? configurable?) | T012 | Data owner | Open |
+| OD-003 | T001 has been in `Review` since creation — does it need a human review pass, or can a follow-up agent validate and close it? | T001 | Security owner | Open |
+
+## Agent Execution Rules
+
+- Prefer the smallest task that unblocks the phase and removes the most operator friction.
+- Do not silently expand scope across multiple tasks.
+- Do not mark a task `Done` without running its listed validation.
+- If validation cannot be run, leave the task at `Review` and record exactly what is unverified.
+- Update related docs in the same session when the task changes setup, scope, or behavior.
+- If a task card is missing fields, repair the card before writing code.
+- If the user request conflicts with the queue, follow the user request and then update this file to reflect reality.
+
 ## Global Blockers And Notes
 
 - Go validation is unavailable on hosts without Go installed unless Docker Desktop's Linux daemon is running.
 - UNC workdir validation through npm may fail because `cmd.exe` defaults to `C:\Windows`; use the mapped `G:\Roller_hoops` path.
 - The backlog and issue log now coexist: use this file for execution cards and `docs/issues.md` for historical issue records or user-facing bug reports.
+- T001 (Auth hardening) has been in `Review` since creation. See OD-003 in Open Decisions.
+- Phase 12 is done but the roadmap still says `Planned`/`In progress`. T014 fixes this; T002 covers the broader drift.
+- `docs/backlog-archive.md` does not yet exist. T013 creates it. T000 and T009 are archive-eligible.
 
 ## Archive Policy
 

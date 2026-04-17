@@ -534,7 +534,7 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
             </>
           )}
 
-          <div className="devicesListFooter" style={{ padding: '8px 0', gap: 8, display: 'flex', alignItems: 'center' }}>
+          <div className="devicesListFooter">
             {hasCursorParam && (
               <Button type="button" onClick={resetPagination} className="btnPill">
                 First page
@@ -551,16 +551,16 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
             <>
               <Card>
                 <CardBody>
-                  <div className="stack" style={{ gap: 10 }}>
+                  <div className="stack">
                     <div className="split" style={{ alignItems: 'center' }}>
                       <div>
                         <p className="kicker">Overview</p>
-                        <h3 style={{ margin: '6px 0 0', fontSize: 22 }}>{selectedDevice.display_name ?? '(unnamed device)'}</h3>
+                        <h3 className="detailTitle">{selectedDevice.display_name ?? '(unnamed device)'}</h3>
                       </div>
                       <Badge tone="info">ID {selectedDevice.id.slice(0, 8)}</Badge>
                     </div>
 
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <div className="badgeRow">
                       {isOnline(selectedDevice.last_seen_at) ? <Badge tone="success">Online</Badge> : <Badge tone="neutral">Offline</Badge>}
                       {isRecentlyChanged(selectedDevice.last_change_at) ? <Badge tone="warning">Changed</Badge> : null}
                       {selectedDevice.primary_ip ? <Badge tone="info">IP {selectedDevice.primary_ip}</Badge> : null}
@@ -574,7 +574,7 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
                         ))}
                     </div>
 
-                    <div style={{ display: 'grid', gap: 4, fontSize: 13, color: 'var(--muted)' }}>
+                    <div className="detailMeta">
                       <div>Last seen: {formatDateTime(selectedDevice.last_seen_at)}</div>
                       <div>Last changed: {formatDateTime(selectedDevice.last_change_at)}</div>
                       <div>
@@ -595,7 +595,7 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
                       {factsStatus === 'success' && platformHint ? <div>Platform: {truncate(platformHint, 120)}</div> : null}
                     </div>
 
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                    <div className="badgeRow" style={{ marginTop: 4 }}>
                       <Button
                         type="button"
                         className="btnPill"
@@ -634,7 +634,7 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
 
               <Card>
                 <CardBody>
-                  <div className="stack" style={{ gap: 10 }}>
+                  <div className="stack">
                     <div>
                       <p className="kicker">Facts</p>
                       <p className="hint">Details from the discovery/enrichment pipeline.</p>
@@ -646,18 +646,18 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
                       </div>
                     )}
                     {factsStatus === 'success' && facts ? (
-                      <div className="stack" style={{ gap: 12 }}>
+                      <div className="stack">
                         <div>
-                          <h4 style={{ margin: '0 0 6px' }}>IP addresses</h4>
+                          <h4 className="factsSectionHead">IP addresses</h4>
                           {facts.ips.length === 0 ? (
                             <div className="hint">No IP addresses recorded yet.</div>
                           ) : (
-                            <div className="stack" style={{ gap: 6 }}>
+                            <div className="factsItemList">
                               {facts.ips.map((ip) => (
-                                <div key={`${ip.ip}-${ip.updated_at}`} className="split" style={{ alignItems: 'center' }}>
+                                <div key={`${ip.ip}-${ip.updated_at}`} className="factsItem">
                                   <div>
                                     <strong>{ip.ip}</strong>
-                                    <div className="hint" style={{ fontSize: 12 }}>
+                                    <div className="factsItemSub">
                                       {ip.interface_name ?? 'Unknown interface'}
                                     </div>
                                   </div>
@@ -669,16 +669,16 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
                         </div>
 
                         <div>
-                          <h4 style={{ margin: '0 0 6px' }}>MAC addresses</h4>
+                          <h4 className="factsSectionHead">MAC addresses</h4>
                           {facts.macs.length === 0 ? (
                             <div className="hint">No MAC addresses recorded yet.</div>
                           ) : (
-                            <div className="stack" style={{ gap: 6 }}>
+                            <div className="factsItemList">
                               {facts.macs.map((mac) => (
-                                <div key={`${mac.mac}-${mac.updated_at}`} className="split" style={{ alignItems: 'center' }}>
+                                <div key={`${mac.mac}-${mac.updated_at}`} className="factsItem">
                                   <div>
                                     <strong>{mac.mac}</strong>
-                                    <div className="hint" style={{ fontSize: 12 }}>
+                                    <div className="factsItemSub">
                                       {mac.interface_name ?? 'Unknown interface'}
                                     </div>
                                   </div>
@@ -690,25 +690,25 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
                         </div>
 
                         <div>
-                          <h4 style={{ margin: '0 0 6px' }}>Interfaces</h4>
+                          <h4 className="factsSectionHead">Interfaces</h4>
                           {facts.interfaces.length === 0 ? (
                             <div className="hint">No interfaces available yet.</div>
                           ) : (
-                            <div className="stack" style={{ gap: 6 }}>
+                            <div className="factsItemList">
                               {facts.interfaces.map((iface) => (
-                                <div key={iface.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
-                                  <div className="split" style={{ alignItems: 'center' }}>
+                                <div key={iface.id} className="factsCard">
+                                  <div className="factsItem">
                                     <span style={{ fontWeight: 700 }}>{iface.name ?? '(unnamed interface)'}</span>
                                     <span className="hint">{formatDateTime(iface.updated_at)}</span>
                                   </div>
-                                  <div className="hint" style={{ fontSize: 12, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                  <div className="factsItemSub">
                                     IFIndex: {iface.ifindex ?? 'n/a'} · Admin: {iface.admin_status ?? 'n/a'} · Oper: {iface.oper_status ?? 'n/a'} · Speed:{' '}
                                     {iface.speed_bps ? `${(iface.speed_bps / 1_000_000).toFixed(1)} Mb/s` : 'n/a'}
                                   </div>
-                                  {iface.descr ? <div className="hint" style={{ fontSize: 12 }}>Description: {iface.descr}</div> : null}
-                                  {iface.alias ? <div className="hint" style={{ fontSize: 12 }}>Alias: {iface.alias}</div> : null}
+                                  {iface.descr ? <div className="factsItemSub">Description: {iface.descr}</div> : null}
+                                  {iface.alias ? <div className="factsItemSub">Alias: {iface.alias}</div> : null}
                                   {iface.pvid ? (
-                                    <div className="hint" style={{ fontSize: 12 }}>
+                                    <div className="factsItemSub">
                                       PVID: {iface.pvid} (observed {formatDateTime(iface.pvid_observed_at)})
                                     </div>
                                   ) : null}
@@ -719,18 +719,18 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
                         </div>
 
                         <div>
-                          <h4 style={{ margin: '0 0 6px' }}>Services</h4>
+                          <h4 className="factsSectionHead">Services</h4>
                           {facts.services.length === 0 ? (
                             <div className="hint">No service scan results yet.</div>
                           ) : (
-                            <div className="stack" style={{ gap: 6 }}>
+                            <div className="factsItemList">
                               {facts.services.map((service, index) => (
-                                <div key={`${service.observed_at}-${service.port}-${index}`} className="split" style={{ alignItems: 'center' }}>
+                                <div key={`${service.observed_at}-${service.port}-${index}`} className="factsItem">
                                   <div>
                                     <strong>
                                       {service.protocol?.toUpperCase() ?? 'TCP/UDP'} {service.port ?? 'port?' }
                                     </strong>
-                                    <div className="hint" style={{ fontSize: 12 }}>
+                                    <div className="factsItemSub">
                                       {service.name ?? 'unnamed'} · {service.state ?? 'state unknown'} · {service.source ?? 'unknown source'}
                                     </div>
                                   </div>
@@ -743,8 +743,8 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
 
                         {facts.snmp ? (
                           <div>
-                            <h4 style={{ margin: '0 0 6px' }}>SNMP snapshot</h4>
-                            <div className="stack" style={{ gap: 4, fontSize: 13 }}>
+                            <h4 className="factsSectionHead">SNMP snapshot</h4>
+                            <div className="detailMeta">
                               {facts.snmp.sys_name ? <div>sysName: {facts.snmp.sys_name}</div> : null}
                               {facts.snmp.sys_descr ? <div>sysDescr: {facts.snmp.sys_descr}</div> : null}
                               {facts.snmp.sys_location ? <div>sysLocation: {facts.snmp.sys_location}</div> : null}
@@ -761,13 +761,13 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
 
                         {facts.links.length > 0 ? (
                           <div>
-                            <h4 style={{ margin: '0 0 6px' }}>Links</h4>
-                            <div className="stack" style={{ gap: 6 }}>
+                            <h4 className="factsSectionHead">Links</h4>
+                            <div className="factsItemList">
                               {facts.links.map((link) => (
-                                <div key={link.id} className="split" style={{ alignItems: 'center' }}>
+                                <div key={link.id} className="factsItem">
                                   <div>
                                     <strong>{link.link_type ?? 'link'}</strong>
-                                    <div className="hint" style={{ fontSize: 12 }}>
+                                    <div className="factsItemSub">
                                       Peer: {link.peer_device_id} · Source: {link.source}
                                     </div>
                                   </div>
@@ -787,7 +787,7 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
 
               <Card>
                 <CardBody>
-                  <div className="stack" style={{ gap: 10 }}>
+                  <div className="stack">
                     <div>
                       <p className="kicker">Metadata</p>
                       <p className="hint">Edit metadata and select friendly display names.</p>
@@ -806,7 +806,7 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
 
               <Card>
                 <CardBody>
-                  <div className="stack" style={{ gap: 10 }}>
+                  <div className="stack">
                     <div className="split" style={{ alignItems: 'center' }}>
                       <div>
                         <p className="kicker">History timeline</p>
@@ -817,7 +817,7 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
                           Load more
                         </Button>
                       ) : historyEvents.length > 0 ? (
-                        <div className="hint" style={{ fontSize: 13 }}>
+                        <div className="hint">
                           All available events loaded
                         </div>
                       ) : null}
@@ -829,24 +829,23 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
                         Discovery has not recorded any events for this device.
                       </EmptyState>
                     ) : historyEvents.length > 0 ? (
-                      <div className="stack" style={{ gap: 10 }}>
+                      <div className="stack">
                         {historyEvents.map((event) => (
                           <div
                             key={event.event_id}
-                            className="card"
-                            style={{ padding: 12, borderRadius: 10 }}
+                            className="factsCard"
                           >
-                            <div className="split" style={{ alignItems: 'center' }}>
+                            <div className="factsItem">
                               <div>
                                 <strong>{event.summary}</strong>
-                                <div className="hint" style={{ fontSize: 12 }}>
+                                <div className="factsItemSub">
                                   {event.kind}
                                 </div>
                               </div>
                               <div className="hint">{formatDateTime(event.event_at)}</div>
                             </div>
                             {event.details && Object.keys(event.details).length > 0 ? (
-                              <div style={{ marginTop: 8, fontSize: 13 }}>
+                              <div className="detailMeta" style={{ marginTop: 6 }}>
                                 {Object.entries(event.details).map(([key, value]) => (
                                   <div key={key}>
                                     <span style={{ fontWeight: 600 }}>{key}:</span>{' '}

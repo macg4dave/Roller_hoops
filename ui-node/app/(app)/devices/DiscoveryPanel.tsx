@@ -197,11 +197,11 @@ export function DiscoveryPanel({ status, readOnly = false }: Props) {
         <section className="stack">
           <div className="split">
             <div className="stack" style={{ gap: 6 }}>
-              <div style={{ fontSize: 12, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--muted-2)' }}>
+              <div className="kicker">
                 Discovery
               </div>
 
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div className="badgeRow">
                 <Badge tone={badgeTone}>{liveStatus.status}</Badge>
                 {latest?.scope ? <span className="hint">Scope: {latest.scope}</span> : null}
                 {latestPreset ? <span className="hint">Preset: {getScanPresetLabel(latestPreset)}</span> : null}
@@ -263,12 +263,12 @@ export function DiscoveryPanel({ status, readOnly = false }: Props) {
                 </Hint>
               </Field>
 
-              <details className="hint" style={{ marginTop: 4 }}>
-                <summary style={{ cursor: 'pointer', fontWeight: 750 }}>Advanced: scan tags</summary>
+                <details className="discoveryDetails">
+                <summary className="discoveryDetailsSummary">Advanced: scan tags</summary>
                 <div style={{ marginTop: 8 }}>
                   <Field>
                     <Label>Tags (optional)</Label>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <div className="badgeRow">
                       {SCAN_TAG_OPTIONS.map((opt) => {
                         const active = selectedTags.includes(opt.value);
                         return (
@@ -307,7 +307,7 @@ export function DiscoveryPanel({ status, readOnly = false }: Props) {
                   disabled={readOnly}
                 />
                 {scopeSuggestions.length > 0 ? (
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                  <div className="badgeRow" style={{ marginTop: 6 }}>
                     {scopeSuggestions.slice(0, 8).map((suggestion) => {
                       const label = suggestion.interface ? `${suggestion.scope} (${suggestion.interface})` : suggestion.scope;
                       const active = scopeValue.trim() === suggestion.scope;

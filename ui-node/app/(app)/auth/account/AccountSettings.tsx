@@ -9,16 +9,6 @@ type Props = {
 
 type PanelState = { status: 'idle' | 'loading' | 'success' | 'error'; message?: string };
 
-function messageStyle(state: PanelState) {
-  if (state.status === 'error') {
-    return { background: '#f9d7da', color: '#b00020' };
-  }
-  if (state.status === 'success') {
-    return { background: '#d1e7dd', color: '#0f5132' };
-  }
-  return { background: '#eef2ff', color: '#1e3a8a' };
-}
-
 export function AccountSettings({ username, role }: Props) {
   const [state, setState] = useState<PanelState>({ status: 'idle' });
   const [isPending, startTransition] = useTransition();
@@ -75,103 +65,85 @@ export function AccountSettings({ username, role }: Props) {
   };
 
   return (
-    <section style={{ display: 'grid', gap: 18, maxWidth: 520 }}>
-      <div style={{ display: 'grid', gap: 4 }}>
-        <div style={{ fontSize: 14, color: '#111827' }}>Signed in as {username}</div>
-        <div style={{ fontSize: 12, color: '#4b5563' }}>Role: {role}</div>
-        <div style={{ fontSize: 12, color: '#6b7280' }}>{supportedNote}</div>
+    <section className="accountSection">
+      <div className="detailMeta">
+        <div>Signed in as <strong>{username}</strong></div>
+        <div>Role: {role}</div>
+        <div className="hint">{supportedNote}</div>
       </div>
 
-      <form onSubmit={submitChangePassword} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 16, display: 'grid', gap: 10 }}>
-        <div style={{ fontSize: 12, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#4b5563' }}>
-          Change password
-        </div>
-        <label style={{ display: 'grid', gap: 6, fontWeight: 600, fontSize: 13 }}>
+      <form onSubmit={submitChangePassword} className="accountForm">
+        <p className="accountFormTitle">Change password</p>
+        <label className="accountField">
           Current password
           <input
             type="password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
             autoComplete="current-password"
-            style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db' }}
             required
           />
         </label>
-        <label style={{ display: 'grid', gap: 6, fontWeight: 600, fontSize: 13 }}>
+        <label className="accountField">
           New password
           <input
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             autoComplete="new-password"
-            style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db' }}
             required
           />
         </label>
-        <button
-          type="submit"
-          disabled={isPending}
-          style={{ borderRadius: 8, padding: '10px 14px', border: 'none', background: '#111827', color: '#fff', fontWeight: 700, cursor: 'pointer', width: 'fit-content' }}
-        >
+        <button type="submit" className="btn btnPrimary" disabled={isPending}>
           Update password
         </button>
       </form>
 
       {canAdmin ? (
-        <form onSubmit={submitAdminReset} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 16, display: 'grid', gap: 10 }}>
-          <div style={{ fontSize: 12, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#4b5563' }}>
-            Admin reset
-          </div>
-          <div style={{ fontSize: 13, color: '#374151' }}>
-            Reset a user password (or create the user if missing). Requires `AUTH_USERS_FILE`.
-          </div>
-          <label style={{ display: 'grid', gap: 6, fontWeight: 600, fontSize: 13 }}>
+        <form onSubmit={submitAdminReset} className="accountForm">
+          <p className="accountFormTitle">Admin reset</p>
+          <p className="hint">
+            Reset a user password (or create the user if missing). Requires <code>AUTH_USERS_FILE</code>.
+          </p>
+          <label className="accountField">
             Username
             <input
               type="text"
               value={adminUsername}
               onChange={(e) => setAdminUsername(e.target.value)}
-              style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db' }}
               required
             />
           </label>
-          <label style={{ display: 'grid', gap: 6, fontWeight: 600, fontSize: 13 }}>
+          <label className="accountField">
             New password
             <input
               type="password"
               value={adminPassword}
               onChange={(e) => setAdminPassword(e.target.value)}
-              style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db' }}
               required
             />
           </label>
-          <label style={{ display: 'grid', gap: 6, fontWeight: 600, fontSize: 13 }}>
+          <label className="accountField">
             Role
             <select
               value={adminRole}
               onChange={(e) => setAdminRole(e.target.value)}
-              style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db' }}
             >
               <option value="read-only">read-only</option>
               <option value="admin">admin</option>
             </select>
           </label>
-          <button
-            type="submit"
-            disabled={isPending}
-            style={{ borderRadius: 8, padding: '10px 14px', border: 'none', background: '#111827', color: '#fff', fontWeight: 700, cursor: 'pointer', width: 'fit-content' }}
-          >
+          <button type="submit" className="btn btnPrimary" disabled={isPending}>
             Reset password
           </button>
         </form>
       ) : null}
 
       {state.message ? (
-        <p style={{ margin: 0, padding: '8px 10px', borderRadius: 6, fontWeight: 600, ...messageStyle(state) }}>
+        <p className={`accountMessage ${state.status === 'error' ? 'accountMessageError' : 'accountMessageSuccess'}`}>
           {state.message}
         </p>
       ) : null}
     </section>
   );
 }
-

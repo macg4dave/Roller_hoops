@@ -74,6 +74,18 @@ Then read the contract document for the area you are changing:
 - Update `docs/data-model.md` and migrations when persistence changes.
 - Update `docs/feature-matrix.md` when feature status, endpoints, ownership, or DB tables change.
 
+## Documentation Freshness
+
+[BACKLOG.md](../BACKLOG.md) is the execution source of truth. Keep it accurate after every session.
+
+- Documentation updates are mandatory, not optional follow-ups. Ship doc changes in the same session as the code they describe.
+- After completing any task, update the BACKLOG.md task card status, handoff notes, and Ready Queue row.
+- Update `docs/roadmap.md` when phase status changes or scope shifts.
+- Update `docs/feature-matrix.md` when features are added, completed, or changed.
+- Update `docs/issues.md` when a tracked bug is resolved, with status and fix reference.
+- If a doc update cannot be completed, log the gap in the task card's handoff notes. Never skip silently.
+- See [BACKLOG.md](../BACKLOG.md) § "Documentation Freshness Rules" for the full checklist and triggers.
+
 ## Validation Rules
 
 - Go changes: run `gofmt`, `go vet ./...`, and `go test ./...` when available.

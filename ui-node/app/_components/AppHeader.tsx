@@ -82,8 +82,9 @@ export function AppHeader({ user }: { user: SessionUser }) {
   return (
     <header className="appHeader">
       <div className="appHeaderInner">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div className="headerLeft">
           <Link href="/devices" className="brand">
+            <span className="brandIcon">R</span>
             Roller_hoops <span className="brandSubtitle">Network tracker</span>
           </Link>
 

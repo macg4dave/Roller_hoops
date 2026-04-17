@@ -26,7 +26,7 @@ export function DeviceMetadataEditor({ device, readOnly = false }: Props) {
       <Card>
         <CardBody>
           <div className="stack">
-            <div style={{ fontWeight: 800 }}>Metadata</div>
+            <p className="factsSectionHead">Metadata</p>
 
             <Field>
               <Label>Owner</Label>
@@ -54,7 +54,7 @@ export function DeviceMetadataEditor({ device, readOnly = false }: Props) {
               />
             </Field>
 
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="badgeRow">
               <Button type="submit" variant="primary" disabled={readOnly}>
                 Save metadata
               </Button>

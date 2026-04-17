@@ -157,7 +157,7 @@ export function DiscoveryRunList({ initialPage, limit = PAGE_LIMIT, errorMessage
         <div className="split" style={{ alignItems: 'center' }}>
           <div>
             <p className="kicker">Discovery runs</p>
-            <h2 style={{ margin: '6px 0' }}>Run history</h2>
+            <h2 className="detailTitle" style={{ marginBottom: 0 }}>Run history</h2>
           </div>
           <Hint aria-live="polite">
             Last updated {formatLastUpdated(dataUpdatedAt)}

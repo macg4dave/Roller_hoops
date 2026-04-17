@@ -89,13 +89,13 @@ export function DeviceNameCandidatesPanel({ deviceId, currentDisplayName, readOn
 
   return (
     <Card>
-      <CardBody className="stack" style={{ gap: 10 }}>
+        <CardBody className="stack">
         <div className="split" style={{ alignItems: 'baseline' }}>
           <div className="stack" style={{ gap: 6 }}>
             <p className="kicker">Name suggestions</p>
-            <div style={{ fontSize: 14, fontWeight: 750 }}>
+            <p className="factsSectionHead">
               {currentDisplayName?.trim() ? `Current: ${currentDisplayName}` : 'Current: (unnamed)'}
-            </div>
+            </p>
           </div>
 
           <Button type="button" onClick={() => setRefreshKey((v) => v + 1)} disabled={loading || readOnly}>
@@ -122,9 +122,9 @@ export function DeviceNameCandidatesPanel({ deviceId, currentDisplayName, readOn
                     <input type="hidden" name="device_id" value={deviceId} />
                     <input type="hidden" name="display_name" value={c.name} />
 
-                    <div style={{ display: 'grid', gap: 4 }}>
+                    <div className="detailMeta">
                       <div className="nameCandidateTitle">
-                        <span style={{ fontWeight: 800, fontSize: 14 }}>{c.name}</span>
+                        <strong>{c.name}</strong>
                         <Badge>{c.source}</Badge>
                         {isCurrent ? <Badge tone="success">Current</Badge> : null}
                       </div>

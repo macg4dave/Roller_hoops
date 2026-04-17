@@ -48,7 +48,7 @@ For network map work, also read:
 4. Confirm the feature exists in [docs/feature-matrix.md](docs/feature-matrix.md), or update the matrix before adding behavior.
 5. For behavior changes, add or tighten a focused test before or alongside the implementation whenever practical.
 6. Keep edits inside the task scope. If scope must expand, update the backlog card and owning docs first.
-7. Update API, data-model, architecture, runbook, or UX docs when their contracts move.
+7. Update all affected docs (API, data-model, architecture, runbook, UX, roadmap, feature-matrix, issues) in the same session as the code change. See [BACKLOG.md](BACKLOG.md) § "Documentation Freshness Rules" for the full checklist.
 8. Run the focused validation for the touched area, then the broader suite that is available locally.
 9. Record any validation blocker in the final handoff and task card.
 
@@ -70,14 +70,28 @@ Use these states in issue/task notes:
 - Avoid formatting-only churn.
 - Never revert user changes unless explicitly instructed.
 
-## Documentation Rules
+## Documentation Rules (Mandatory)
+
+Documentation updates are not optional follow-ups. They ship in the same session as the code they describe. [BACKLOG.md](BACKLOG.md) § "Documentation Freshness Rules" is the authoritative checklist — read it before finishing any task.
+
+### Summary Of Triggers
 
 - If setup, ports, env vars, or commands change, update [readme.md](readme.md).
-- If API behavior changes, update [api/openapi.yaml](api/openapi.yaml) and [docs/api-contract.md](docs/api-contract.md).
-- If data shapes, tables, or relationships change, update [docs/data-model.md](docs/data-model.md) and migrations.
+- If API behavior changes, update [api/openapi.yaml](api/openapi.yaml), [docs/api-contract.md](docs/api-contract.md), and regenerate `ui-node/lib/api-types.ts`.
+- If data shapes, tables, or relationships change, update [docs/data-model.md](docs/data-model.md), [docs/migrations.md](docs/migrations.md), and add migrations.
 - If service boundaries change, update [docs/architecture.md](docs/architecture.md).
 - If operator workflow changes, update [docs/ui-ux.md](docs/ui-ux.md).
 - If feature status or ownership changes, update [docs/feature-matrix.md](docs/feature-matrix.md).
+- If a phase status changes or scope shifts, update [docs/roadmap.md](docs/roadmap.md).
+- If a tracked issue is resolved, update [docs/issues.md](docs/issues.md) with status and fix reference.
+- If discovery behavior or deployment changes, update [docs/discovery-capabilities.md](docs/discovery-capabilities.md) or [docs/discovery-deployment.md](docs/discovery-deployment.md).
+- If auth, roles, or security boundaries change, update [docs/security.md](docs/security.md).
+
+### Backlog Is The Source Of Truth
+
+- [BACKLOG.md](BACKLOG.md) is the execution source of truth for all AI work. Read it before starting, update it before finishing.
+- Every completed task must update the BACKLOG.md task card (status, handoff notes) and the Ready Queue table.
+- If a doc update cannot be completed, log the gap as a task card or handoff note. Never silently skip it.
 
 ## Validation Rules
 

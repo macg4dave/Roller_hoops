@@ -119,7 +119,7 @@ export function DeviceTagsPanel({ deviceId, readOnly = false }: Props) {
 
   return (
     <Card>
-      <CardBody className="stack" style={{ gap: 10 }}>
+        <CardBody className="stack">
         <div className="split" style={{ alignItems: 'baseline' }}>
           <div className="stack" style={{ gap: 6 }}>
             <p className="kicker">Tags</p>
@@ -138,7 +138,7 @@ export function DeviceTagsPanel({ deviceId, readOnly = false }: Props) {
             Run discovery with enrichment (SNMP/ports/names) to generate suggestions, or set manual tags below.
           </EmptyState>
         ) : effectiveTags.length > 0 ? (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div className="badgeRow">
             {effectiveTags.slice(0, 10).map((tag) => (
               <Badge key={tag} tone={manualTagSet.has(tag as DeviceTagValue) ? 'success' : 'neutral'}>
                 {formatTagLabel(tag)}
@@ -148,15 +148,15 @@ export function DeviceTagsPanel({ deviceId, readOnly = false }: Props) {
           </div>
         ) : null}
 
-        <form action={formAction} className="stack" style={{ gap: 10 }}>
+        <form action={formAction} className="stack">
           <input type="hidden" name="device_id" value={deviceId} />
           {manualTags.map((tag) => (
             <input key={tag} type="hidden" name="tags" value={tag} />
           ))}
 
-          <div className="stack" style={{ gap: 8 }}>
-            <div style={{ fontWeight: 800 }}>Manual override</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div className="stack">
+            <p className="factsSectionHead">Manual override</p>
+            <div className="badgeRow">
               {DEVICE_TAG_OPTIONS.map((opt) => {
                 const active = manualTags.includes(opt.value);
                 return (
@@ -181,7 +181,7 @@ export function DeviceTagsPanel({ deviceId, readOnly = false }: Props) {
                 );
               })}
             </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div className="badgeRow">
               <Button type="submit" variant="primary" disabled={readOnly}>
                 Save tags
               </Button>
@@ -195,16 +195,16 @@ export function DeviceTagsPanel({ deviceId, readOnly = false }: Props) {
 
         {autoTags.length > 0 ? (
           <details className="hint">
-            <summary style={{ cursor: 'pointer', fontWeight: 750 }}>Auto tag evidence</summary>
-            <div style={{ marginTop: 8, display: 'grid', gap: 8 }}>
+            <summary className="discoveryDetailsSummary">Auto tag evidence</summary>
+            <div className="factsItemList" style={{ marginTop: 8 }}>
               {autoTags.slice(0, 12).map((tag) => (
-                <div key={`${tag.tag}-${tag.source}-${tag.updated_at}`} className="card" style={{ padding: 10, borderRadius: 10 }}>
+                <div key={`${tag.tag}-${tag.source}-${tag.updated_at}`} className="factsCard">
                   <div className="split" style={{ alignItems: 'baseline' }}>
                     <strong>{formatTagLabel(tag.tag)}</strong>
                     <span className="hint">Confidence {tag.confidence}</span>
                   </div>
                   {tag.evidence ? (
-                    <pre className="hint" style={{ margin: '6px 0 0', whiteSpace: 'pre-wrap' }}>
+                    <pre className="hint" style={{ margin: '6px 0 0', whiteSpace: 'pre-wrap', fontSize: 12 }}>
                       {JSON.stringify(tag.evidence, null, 2)}
                     </pre>
                   ) : (

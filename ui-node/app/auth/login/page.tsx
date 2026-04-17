@@ -10,34 +10,21 @@ export default async function LoginPage() {
   }
 
   return (
-    <main
-      style={{
-        display: 'grid',
-        justifyItems: 'center',
-        paddingTop: 48
-      }}
-    >
-      <div
-        style={{
-          width: 'min(420px, 90vw)',
-          border: '1px solid #e5e7eb',
-          borderRadius: 12,
-          padding: 24,
-          textAlign: 'left'
-        }}
-      >
-        <h1 style={{ margin: 0, fontSize: 24 }}>Sign in to Roller_hoops</h1>
-        <p style={{ color: '#4b5563', margin: '6px 0 16px' }}>
-          The UI owns authentication. Sessions are stored in an HTTP-only cookie scoped to this hostname.
+    <main className="loginPage">
+      <div className="loginCard">
+        <div className="loginBrand">
+          <span className="brandIcon">R</span>
+          <h1 className="loginTitle">Sign in to Roller_hoops</h1>
+        </div>
+        <p className="loginSubtitle">
+          Network tracker — sessions are stored in an HTTP-only cookie scoped to this hostname.
         </p>
         <LoginForm />
-        <p style={{ marginTop: 18, color: '#6b7280', fontSize: 13 }}>
-          Configure users via `AUTH_USERS` (or back-compat `AUTH_USERNAME` / `AUTH_PASSWORD`) in your `.env` or secret manager.
+        <p className="loginHint">
+          Configure users via <code>AUTH_USERS</code> in your <code>.env</code> or secret manager.
         </p>
-        <p style={{ marginTop: 4, fontSize: 13 }}>
-          <Link href="/" style={{ color: '#2563eb' }}>
-            Back to home
-          </Link>
+        <p className="loginBack">
+          <Link href="/">Back to home</Link>
         </p>
       </div>
     </main>

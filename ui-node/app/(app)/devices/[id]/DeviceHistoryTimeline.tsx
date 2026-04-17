@@ -89,10 +89,10 @@ export function DeviceHistoryTimeline({ deviceId, initialEvents, initialCursor, 
   }
 
   return (
-    <div className="stack" style={{ gap: 12 }}>
+    <div className="stack">
       <div className="split" style={{ alignItems: 'baseline' }}>
         <div className="hint">Newest first · Showing {events.length} events</div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="badgeRow">
           {cursor ? (
             <Button type="button" onClick={loadMore} disabled={status === 'loading'}>
               {status === 'loading' ? 'Loading…' : 'Load more'}
@@ -105,17 +105,17 @@ export function DeviceHistoryTimeline({ deviceId, initialEvents, initialCursor, 
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
 
-      <div className="stack" style={{ gap: 10 }}>
+      <div className="factsItemList">
         {events.map((event) => (
-          <div key={event.event_id} className="card">
-            <div className="cardPad" style={{ display: 'grid', gap: 6 }}>
+          <div key={event.event_id} className="factsCard">
+            <div className="stack" style={{ gap: 6 }}>
               <div className="split" style={{ alignItems: 'baseline' }}>
-                <div style={{ fontWeight: 800 }}>{event.summary}</div>
+                <strong>{event.summary}</strong>
                 <div className="hint">{formatDateTime(event.event_at)}</div>
               </div>
               <div className="hint">{event.kind}</div>
               {event.details && Object.keys(event.details).length > 0 ? (
-                <div className="hint" style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}>
+                <div className="factsItemSub" style={{ fontFamily: 'var(--font-mono)' }}>
                   {Object.entries(event.details)
                     .slice(0, 8)
                     .map(([key, value]) => (

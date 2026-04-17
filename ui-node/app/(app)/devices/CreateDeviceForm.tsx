@@ -36,7 +36,7 @@ export function CreateDeviceForm({ readOnly = false }: Props) {
           <div className="stack">
             <div className="split">
               <div>
-                <div style={{ fontWeight: 800 }}>Create device</div>
+                <p className="factsSectionHead">Create device</p>
                 <div className="hint">Add a device and optional operator metadata.</div>
               </div>
             </div>
@@ -62,7 +62,7 @@ export function CreateDeviceForm({ readOnly = false }: Props) {
               <Textarea id="notes" name="notes" placeholder="free-form notes" rows={3} disabled={readOnly} />
             </Field>
 
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="badgeRow">
               <Button type="submit" variant="primary" disabled={readOnly}>
                 Create device
               </Button>
