@@ -118,12 +118,27 @@ function FactsCard({ facts }: { facts: DeviceFacts }) {
             <div>
               <h3 style={{ margin: '0 0 6px', fontSize: 16 }}>MAC addresses</h3>
               {sortedMacs.length === 0 ? (
-                <div className="hint">No MAC addresses recorded yet.</div>
+                <>
+                  {sortedInterfaces.some((iface) => iface.mac) ? (
+                    <div>
+                      <div className="hint" style={{ marginBottom: 6 }}>No ARP-discovered MACs (common in Docker bridge mode). Interface MACs from SNMP:</div>
+                      <ul style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 6 }}>
+                        {sortedInterfaces.filter((iface) => iface.mac).map((iface) => (
+                          <li key={`iface-mac-${iface.id}`}>
+                            <code style={{ fontSize: 13 }}>{iface.mac}</code> <span className="hint">({iface.name ?? iface.id})</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <div className="hint">No MAC addresses recorded yet.</div>
+                  )}
+                </>
               ) : (
                 <ul style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 6 }}>
                   {sortedMacs.map((mac) => (
                     <li key={`${mac.mac}-${mac.updated_at}`}>
-                      <strong>{mac.mac}</strong> <span className="hint">({mac.interface_name ?? 'unknown interface'})</span>
+                      <code style={{ fontSize: 13 }}>{mac.mac}</code> <span className="hint">({mac.interface_name ?? 'unknown interface'})</span>
                       <div className="hint">Updated {formatDateTime(mac.updated_at)}</div>
                     </li>
                   ))}
@@ -140,8 +155,10 @@ function FactsCard({ facts }: { facts: DeviceFacts }) {
                   {sortedInterfaces.map((iface) => (
                     <li key={`${iface.id}-${iface.updated_at}`}>
                       <strong>{iface.name ?? iface.id}</strong>
+                      {iface.mac ? <span className="hint"> · <code style={{ fontSize: 12 }}>{iface.mac}</code></span> : null}
                       {iface.pvid ? <span className="hint"> · PVID {iface.pvid}</span> : null}
                       {iface.mtu ? <span className="hint"> · MTU {iface.mtu}</span> : null}
+                      {iface.speed_bps ? <span className="hint"> · {(iface.speed_bps / 1_000_000).toFixed(0)} Mbps</span> : null}
                       <div className="hint">Updated {formatDateTime(iface.updated_at)}</div>
                     </li>
                   ))}
@@ -173,13 +190,23 @@ function FactsCard({ facts }: { facts: DeviceFacts }) {
             <div>
               <h3 style={{ margin: '0 0 6px', fontSize: 16 }}>SNMP snapshot</h3>
               {facts.snmp ? (
-                <div className="stack" style={{ gap: 4 }}>
-                  {facts.snmp.sys_name ? <div>sysName: {facts.snmp.sys_name}</div> : <div className="hint">sysName: —</div>}
-                  {facts.snmp.sys_descr ? <div>sysDescr: {facts.snmp.sys_descr}</div> : null}
-                  {facts.snmp.sys_location ? <div>sysLocation: {facts.snmp.sys_location}</div> : null}
-                  {facts.snmp.last_success_at ? <div className="hint">Last success: {formatDateTime(facts.snmp.last_success_at)}</div> : null}
-                  {facts.snmp.last_error ? <div className="hint">Last error: {facts.snmp.last_error}</div> : null}
-                  <div className="hint">Updated {formatDateTime(facts.snmp.updated_at)}</div>
+                <div className="snmpGrid">
+                  <span className="snmpLabel">sysName</span>
+                  <span>{facts.snmp.sys_name ?? '—'}</span>
+                  {facts.snmp.os_family ? (
+                    <><span className="snmpLabel">OS</span><span>{facts.snmp.os_family}{facts.snmp.os_version ? ` ${facts.snmp.os_version}` : ''}</span></>
+                  ) : null}
+                  {facts.snmp.sys_location ? (
+                    <><span className="snmpLabel">Location</span><span>{facts.snmp.sys_location}</span></>
+                  ) : null}
+                  {facts.snmp.sys_descr ? (
+                    <><span className="snmpLabel">sysDescr</span><span className="snmpSysDescr">{facts.snmp.sys_descr}</span></>
+                  ) : null}
+                  <span className="snmpLabel">Last polled</span>
+                  <span className="hint">{formatDateTime(facts.snmp.last_success_at)}</span>
+                  {facts.snmp.last_error ? (
+                    <><span className="snmpLabel">Last error</span><span className="hint" style={{ color: 'var(--danger)' }}>{facts.snmp.last_error}</span></>
+                  ) : null}
                 </div>
               ) : (
                 <div className="hint">No SNMP snapshot recorded.</div>
@@ -224,17 +251,21 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ i
   const isReadOnly = currentUser.role === 'read-only';
 
   const factsUpdatedAt = facts.snmp?.updated_at ?? device.last_change_at ?? null;
+  const primaryMac = facts.macs.length > 0
+    ? facts.macs[0].mac
+    : facts.interfaces.find((i) => i.mac)?.mac ?? null;
 
   return (
     <section className="stack">
-      <header className="split" style={{ alignItems: 'baseline' }}>
-        <div>
-          <h1 className="pageTitle">{device.display_name ?? '(unnamed device)'}</h1>
+      <header className="deviceHeader">
+        <div style={{ minWidth: 0 }}>
+          <h1 className="pageTitle" style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>{device.display_name ?? '(unnamed device)'}</h1>
           <p className="pageSubTitle">Inspect facts, edit metadata, and review the change timeline.</p>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', flexShrink: 0 }}>
           <Badge tone="info">ID {device.id.slice(0, 8)}</Badge>
           {device.primary_ip ? <Badge tone="info">IP {device.primary_ip}</Badge> : null}
+          {primaryMac ? <Badge tone="info">MAC {primaryMac}</Badge> : null}
           {online ? <Badge tone="success">Online</Badge> : <Badge tone="neutral">Offline</Badge>}
           {changed ? <Badge tone="warning">Changed</Badge> : null}
           {(device.tags ?? [])
@@ -264,6 +295,10 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ i
 
             <div style={{ display: 'grid', gap: 4, fontSize: 13, color: 'var(--muted)' }}>
               <div>Primary IP: {device.primary_ip ?? '—'}</div>
+              {primaryMac ? <div>Primary MAC: <code style={{ fontSize: 12 }}>{primaryMac}</code></div> : null}
+              {facts.snmp?.os_family ? (
+                <div>OS: {facts.snmp.os_family}{facts.snmp.os_version ? ` ${facts.snmp.os_version}` : ''}</div>
+              ) : null}
               <div>Last seen: {formatDateTime(device.last_seen_at)}</div>
               <div>Last changed: {formatDateTime(device.last_change_at)}</div>
               <div>Facts refreshed: {formatDateTime(factsUpdatedAt)}</div>

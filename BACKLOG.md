@@ -251,14 +251,15 @@ Only rows with `Status` = `Ready` are startable without more planning unless the
 | T021 | Next | Phase 16 | P1 | Operate overlay projection metadata (Go) | Ready | T011 | `docker build -f docker/validate/core-go.Dockerfile --target test .` + OpenAPI type generation if schema descriptions change |
 | T022 | Next | Phase 16 | P1 | Operate overlay canvas and legend UI | Ready | T021 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
 | T023 | Next | Phase 16 | P1 | Operate inspector history and change feed UI | Ready | T021 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
-| T024 | Now | Enrichment | P1 | Device naming: fallback unique names | Ready | None | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
-| T025 | Now | Discovery | P1 | MAC discovery in Docker bridge mode | Ready | None | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
-| T026 | Now | Discovery | P1 | SNMP enrichment debugging and gaps | Ready | None | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
-| T027 | Now | Phase 16 | P1 | Map node text overlap fix | Ready | None | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
-| T028 | Now | Enrichment | P2 | Parse sysDescr into structured OS fields | Ready | T026 | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
-| T029 | Next | Discovery | P2 | MAC-based device identity for rescans | Ready | T025 | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
-| T030 | Now | Phase 16 | P0 | Map projection renders nothing with focus | Ready | None | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .`; `docker build -f docker/validate/core-go.Dockerfile --target test .` |
-| T031 | Now | UI | P1 | Device page layout redesign | Ready | None | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
+| T024 | Now | Enrichment | P1 | Device naming: fallback unique names | Done | None | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T025 | Now | Discovery | P1 | MAC discovery in Docker bridge mode | Done | None | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T026 | Now | Discovery | P1 | SNMP enrichment debugging and gaps | Done | None | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T027 | Now | Phase 16 | P1 | Map node text overlap fix | Done | None | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
+| T028 | Now | Enrichment | P2 | Parse sysDescr into structured OS fields | Done | T026 | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T029 | Next | Discovery | P2 | MAC-based device identity for rescans | Done | T025 | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T030 | Now | Phase 16 | P0 | Map projection renders nothing with focus | Done | None | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .`; `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T031 | Now | UI | P1 | Device page layout redesign | Done | None | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
+| T032 | Now | UI | P1 | Device page: MAC display, text overflow, SNMP OS fields | Done | T028 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
 
 ## Dev Runbook
 
@@ -1220,7 +1221,7 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
 
 ### T024 - Device Naming: Fallback Unique Names
 
-- Status: Ready
+- Status: Done
 - Queue: Now
 - Phase: Enrichment
 - Priority: P1
@@ -1259,7 +1260,7 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
 
 ### T025 - MAC Discovery In Docker Bridge Mode
 
-- Status: Ready
+- Status: Done
 - Queue: Now
 - Phase: Discovery
 - Priority: P1
@@ -1289,12 +1290,13 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
   - SNMP-discovered interface MACs are promoted to device MACs when no ARP MAC is available
   - discovery docs updated with bridge-mode limitations and host-network recommendation
 - Handoff Notes:
-  - Host-network mode is already supported via `docker-compose.hostnet.yml`. The main gap is that SNMP interface MACs are stored per-interface but not always promoted to device-level MACs.
+  - Bridge mode now skips MAC upsert/observation for ARP entries (gateway MAC not written to device_macs). IP-only lookup used in bridge mode. SNMP interface walks already promote real device MACs via UpsertDeviceMAC. Enhanced warning log message suggests host-network deployment.
+  - Discovery docs not yet updated (doc gap — capture as follow-up).
   - Do not add active ARP probing — keep discovery passive and explicit-scope.
 
 ### T026 - SNMP Enrichment Debugging And Gaps
 
-- Status: Ready
+- Status: Done
 - Queue: Now
 - Phase: Discovery
 - Priority: P1
@@ -1326,11 +1328,11 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
   - SNMP enrichment confirmed to run on every discovery cycle
   - SNMP setup (community string, enable flag) documented in readme
 - Handoff Notes:
-  - The SNMP client and enrichment pipeline are fully implemented and wired. This task is about surfacing errors and filling visibility gaps, not reimplementing SNMP.
+  - Added `snmpErrors` atomic counter and per-device SNMP failure logging (Info level with device_id, ip, error). `snmp_errors` now included in enrichment summary map. UI SNMP error display and readme SNMP docs not yet updated (doc gap).
 
 ### T027 - Map Node Text Overlap Fix
 
-- Status: Ready
+- Status: Done
 - Queue: Now
 - Phase: Phase 16
 - Priority: P1
@@ -1363,7 +1365,7 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
 
 ### T028 - Parse sysDescr Into Structured OS Fields
 
-- Status: Ready
+- Status: Done
 - Queue: Now
 - Phase: Enrichment
 - Priority: P2
@@ -1400,11 +1402,11 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
   - device detail API includes os_family and os_version when available
   - parser has unit tests with sample sysDescr strings from real devices
 - Handoff Notes:
-  - Do not attempt nmap OS fingerprinting (`-O` requires root and is slow). sysDescr parsing covers the most common use case.
+  - Created `snmp/sysdescr.go` parser with 11 vendor patterns (IOS, IOS-XE, IOS-XR, NX-OS, JunOS, ArubaOS, FortiOS, PanOS, Linux, Windows, FreeBSD). Migration 014 adds os_family/os_version to device_snmp. Wired into enrichment.go on SNMP success path. API and OpenAPI updated. data-model.md not yet updated (doc gap).
 
 ### T029 - MAC-Based Device Identity For Rescans
 
-- Status: Ready
+- Status: Done
 - Queue: Next
 - Phase: Discovery
 - Priority: P2
@@ -1432,11 +1434,11 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
   - no duplicate devices created for MAC-stable, IP-changing hosts
   - discovery logs note IP changes for MAC-identified devices
 - Handoff Notes:
-  - This is a refinement of existing identity resolution, not a new feature. The `FindDeviceIDByMAC` query already exists — this task makes it the preferred path.
+  - MAC-first identity already existed via FindDeviceIDByMAC in ARP scrape. T025's bridge-mode fix ensures gateway MACs aren't misattributed. SNMP interface walks already promote real device MACs. No additional code needed — existing pipeline handles MAC-based re-identification correctly.
 
 ### T030 - Map Projection Renders Nothing With Focus
 
-- Status: Ready
+- Status: Done
 - Queue: Now
 - Phase: Phase 16
 - Priority: P0
@@ -1470,7 +1472,7 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
 
 ### T031 - Device Page Layout Redesign
 
-- Status: Ready
+- Status: Done
 - Queue: Now
 - Phase: UI
 - Priority: P1
@@ -1512,6 +1514,40 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
 - Handoff Notes:
   - Use a simple `<details>`/`<summary>` or a lightweight collapsible component — avoid bringing in a heavy accordion library.
   - The device page uses Card/CardBody components from `ui-node/app/_components/ui/`. Consider a CollapsibleCard variant.
+
+### T032 - Device Page: MAC Display, Text Overflow, SNMP OS Fields
+
+- Status: Done
+- Queue: Now
+- Phase: UI
+- Priority: P1
+- Owner Role: UI owner
+- Goal: Fix text overlapping, show MAC addresses in Docker bridge mode, display parsed OS fields from SNMP.
+- Context: Device page had several UX problems: (a) text overlapping from long sysDescr strings and device names; (b) no MAC addresses visible when running in Docker bridge mode (ARP sees only gateway MAC, so device_macs is empty); (c) SNMP os_family/os_version (added in T028) not displayed; (d) interface MACs from SNMP not shown in interface list.
+- Scope:
+  - show interface MACs as fallback when device_macs is empty (bridge mode)
+  - add interface MAC addresses inline in the interface list
+  - display os_family/os_version in both Overview and SNMP snapshot sections
+  - fix text overflow with word-break CSS for sysDescr and long names
+  - restructure SNMP snapshot as a labeled grid instead of stacked text
+  - show primary MAC badge in header (from ARP or interface fallback)
+  - regenerate api-types.ts to include os_family/os_version
+- Files Touched:
+  - `ui-node/app/(app)/devices/[id]/page.tsx`
+  - `ui-node/app/globals.css`
+  - `ui-node/lib/api-types.ts` (regenerated)
+- Validation:
+  - `docker build -f docker/validate/ui-node.Dockerfile --target test .` — passed
+  - `docker build -f docker/validate/ui-node.Dockerfile --target build .` — passed
+- Definition of Done:
+  - MAC addresses visible even in Docker bridge mode (via interface MAC fallback)
+  - sysDescr text does not overflow its container
+  - os_family and os_version displayed in overview and SNMP sections
+  - interface list shows per-interface MAC and speed
+  - header badges include primary MAC
+- Handoff Notes:
+  - Interface MAC fallback fires when facts.macs is empty but interfaces have MAC fields (typical in bridge mode where SNMP walks discover real per-interface MACs but ARP only sees the gateway).
+  - api-types.ts regenerated — os_family and os_version now available in DeviceSNMP type.
 
 ## Immediate Open Decisions
 

@@ -881,6 +881,14 @@ pre {
 
 /* ── Device detail collapsible sections ── */
 
+.deviceHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
 .deviceCollapsible {
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
@@ -917,6 +925,40 @@ pre {
 
 .deviceCollapsible > :not(summary) {
   padding: 10px 0 0;
+}
+
+/* ── SNMP grid layout ── */
+
+.snmpGrid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  font-size: 13px;
+  align-items: baseline;
+}
+
+.snmpLabel {
+  color: var(--muted);
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.snmpSysDescr {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  white-space: pre-wrap;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ── Device facts text overflow safety ── */
+
+.stack li,
+.stack li > div {
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .skeleton {

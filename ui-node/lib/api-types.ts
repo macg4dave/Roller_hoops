@@ -2006,6 +2006,8 @@ export interface components {
             sys_object_id?: string | null;
             sys_contact?: string | null;
             sys_location?: string | null;
+            os_family?: string | null;
+            os_version?: string | null;
             /** Format: date-time */
             last_success_at?: string | null;
             last_error?: string | null;

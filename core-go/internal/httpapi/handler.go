@@ -467,6 +467,8 @@ type deviceSNMPFact struct {
 	SysObjectID   *string    `json:"sys_object_id,omitempty"`
 	SysContact    *string    `json:"sys_contact,omitempty"`
 	SysLocation   *string    `json:"sys_location,omitempty"`
+	OSFamily      *string    `json:"os_family,omitempty"`
+	OSVersion     *string    `json:"os_version,omitempty"`
 	LastSuccessAt *time.Time `json:"last_success_at,omitempty"`
 	LastError     *string    `json:"last_error,omitempty"`
 	UpdatedAt     time.Time  `json:"updated_at"`
@@ -1544,6 +1546,8 @@ func (h *Handler) handleGetDeviceFacts(w http.ResponseWriter, r *http.Request) {
 			SysObjectID:   snmpRow.SysObjectID,
 			SysContact:    snmpRow.SysContact,
 			SysLocation:   snmpRow.SysLocation,
+			OSFamily:      snmpRow.OSFamily,
+			OSVersion:     snmpRow.OSVersion,
 			LastSuccessAt: snmpRow.LastSuccessAt,
 			LastError:     snmpRow.LastError,
 			UpdatedAt:     snmpRow.UpdatedAt,

@@ -1565,6 +1565,12 @@ components:
         sys_location:
           type: string
           nullable: true
+        os_family:
+          type: string
+          nullable: true
+        os_version:
+          type: string
+          nullable: true
         last_success_at:
           type: string
           format: date-time

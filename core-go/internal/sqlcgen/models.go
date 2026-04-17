@@ -107,6 +107,8 @@ type DeviceSNMP struct {
 	SysObjectID   *string
 	SysContact    *string
 	SysLocation   *string
+	OSFamily      *string
+	OSVersion     *string
 	LastSuccessAt *time.Time
 	LastError     *string
 	UpdatedAt     time.Time

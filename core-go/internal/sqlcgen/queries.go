@@ -792,6 +792,8 @@ SELECT device_id,
        sys_object_id,
        sys_contact,
        sys_location,
+       os_family,
+       os_version,
        last_success_at,
        last_error,
        updated_at
@@ -810,6 +812,8 @@ func (q *Queries) GetDeviceSNMP(ctx context.Context, deviceID string) (DeviceSNM
 		&i.SysObjectID,
 		&i.SysContact,
 		&i.SysLocation,
+		&i.OSFamily,
+		&i.OSVersion,
 		&i.LastSuccessAt,
 		&i.LastError,
 		&i.UpdatedAt,
@@ -893,11 +897,13 @@ INSERT INTO device_snmp (
   sys_object_id,
   sys_contact,
   sys_location,
+  os_family,
+  os_version,
   last_success_at,
   last_error,
   updated_at
 )
-VALUES ($1::uuid, $2::inet, $3, $4, $5, $6, $7, $8, $9, now())
+VALUES ($1::uuid, $2::inet, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
 ON CONFLICT (device_id) DO UPDATE
 SET address = EXCLUDED.address,
     sys_name = EXCLUDED.sys_name,
@@ -905,6 +911,8 @@ SET address = EXCLUDED.address,
     sys_object_id = EXCLUDED.sys_object_id,
     sys_contact = EXCLUDED.sys_contact,
     sys_location = EXCLUDED.sys_location,
+    os_family = EXCLUDED.os_family,
+    os_version = EXCLUDED.os_version,
     last_success_at = EXCLUDED.last_success_at,
     last_error = EXCLUDED.last_error,
     updated_at = now()
@@ -918,6 +926,8 @@ type UpsertDeviceSNMPParams struct {
 	SysObjectID   *string
 	SysContact    *string
 	SysLocation   *string
+	OSFamily      *string
+	OSVersion     *string
 	LastSuccessAt *time.Time
 	LastError     *string
 }
@@ -933,6 +943,8 @@ func (q *Queries) UpsertDeviceSNMP(ctx context.Context, arg UpsertDeviceSNMPPara
 		arg.SysObjectID,
 		arg.SysContact,
 		arg.SysLocation,
+		arg.OSFamily,
+		arg.OSVersion,
 		arg.LastSuccessAt,
 		arg.LastError,
 	)

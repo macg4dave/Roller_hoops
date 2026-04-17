@@ -166,6 +166,18 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 				}
 
 				atomic.AddInt32(&snmpOK, 1)
+
+				var osFamily, osVersion *string
+				if system.SysDescr != nil {
+					parsed := snmp.ParseSysDescr(*system.SysDescr)
+					if parsed.OSFamily != "" {
+						osFamily = &parsed.OSFamily
+					}
+					if parsed.OSVersion != "" {
+						osVersion = &parsed.OSVersion
+					}
+				}
+
 				_ = w.q.UpsertDeviceSNMP(ctx, sqlcgen.UpsertDeviceSNMPParams{
 					DeviceID:      t.DeviceID,
 					Address:       ipPtr,
@@ -174,6 +186,8 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 					SysObjectID:   system.SysObjectID,
 					SysContact:    system.SysContact,
 					SysLocation:   system.SysLocation,
+					OSFamily:      osFamily,
+					OSVersion:     osVersion,
 					LastSuccessAt: &now,
 					LastError:     nil,
 				})
