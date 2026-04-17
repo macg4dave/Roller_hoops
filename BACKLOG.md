@@ -243,6 +243,8 @@ Only rows with `Status` = `Ready` are startable without more planning unless the
 | T012 | Next | Ops | P2 | Data retention and cleanup policy | Ready | None | manual docs review + Go tests if migrations added |
 | T013 | Now | Process | P2 | Create backlog archive file | Ready | None | `git diff --check` + cross-reference review |
 | T014 | Now | Process | P1 | Phase 12 roadmap status correction | Ready | None | manual docs consistency review |
+| T015 | Now | Ops | P1 | End-user startup scripts | Done | None | Windows launcher smoke + `git diff --check` + PowerShell parse check |
+| T016 | Now | Discovery | P0 | Discovery ping fallback for Docker bridge | Done | None | Go fmt + vet + test via Docker validator |
 | T008 | Later | Docs | P2 | Markdown encoding and typography cleanup | Ready | T000 | `git diff --check` + spot-check rendered docs |
 
 ## Dev Runbook
@@ -887,6 +889,89 @@ Closed task cards that no longer coordinate active work are archived to `docs/ba
   - feature matrix is consistent
 - Handoff Notes:
   - This is a documentation-only fix. All Phase 12 milestones (M12.1–M12.5) have every task checked off and all feature matrix entries are `complete`.
+
+### T015 - End-User Startup Scripts
+
+- Status: Done
+- Queue: Now
+- Phase: Ops
+- Priority: P1
+- Owner Role: Operations owner
+- Goal: Provide per-OS launcher scripts that start the Docker stack and open the web UI for end users.
+- Scope:
+  - add Windows, macOS, and Linux/WSL startup scripts
+  - start the Compose stack in detached mode so the browser can open after startup
+  - wait for the UI health check before opening `http://localhost/`
+  - document usage in `readme.md`
+  - add the capability to `docs/feature-matrix.md`
+- Files to Touch:
+  - `scripts/start-windows.ps1`
+  - `scripts/start-windows.cmd`
+  - `scripts/start-macos.command`
+  - `scripts/start-linux.sh`
+  - `readme.md`
+  - `docs/feature-matrix.md`
+  - `BACKLOG.md`
+- Do Not Touch:
+  - runtime service code
+  - API contracts
+  - database migrations
+- Dependencies:
+  - None
+- Validation:
+  - `git diff --check`
+  - shell syntax/command review
+  - PowerShell parse check if available
+- Definition of Done:
+  - each supported OS has an obvious launcher script
+  - launchers start the Docker Compose stack and open the UI
+  - README points end users to the scripts
+- Handoff Notes:
+  - User requested "same scripts that start the program for each supported OS" and that the webpage opens automatically.
+  - Added Windows, macOS, and Linux/WSL launchers that run Compose detached, wait on `/healthz`, then open `http://localhost/`; documented `--dev` and `--logs` usage in the README.
+  - Verified `scripts\start-windows.cmd` on Windows: Compose started successfully, UI health returned `200 {"ok":true}`, and `http://localhost/` returned the `Roller_hoops` page.
+
+### T016 - Discovery Ping Fallback For Docker Bridge Networking
+
+- Status: Done
+- Queue: Now
+- Phase: Discovery
+- Priority: P0
+- Owner Role: Core owner
+- Goal: Fix discovery only seeing Docker-internal devices when running on Docker bridge networking (the default).
+- Scope:
+  - modify `pingSweep` to collect responding IPs (not just counts)
+  - add ping-based device creation fallback when ARP yields no in-scope results but ping finds responders
+  - detect Docker bridge ARP (all entries share one MAC) and log a warning
+  - update discovery deployment and capabilities docs with Windows/bridge guidance
+  - update `.env.example` to emphasize `DISCOVERY_DEFAULT_SCOPE`
+- Files to Touch:
+  - `core-go/internal/discoveryworker/worker.go`
+  - `docs/discovery-deployment.md`
+  - `docs/discovery-capabilities.md`
+  - `.env.example`
+  - `BACKLOG.md`
+  - `docs/issues.md`
+- Do Not Touch:
+  - UI code
+  - database migrations
+  - API contracts
+- Dependencies:
+  - None
+- Validation:
+  - `docker build -f docker/validate/core-go.Dockerfile --target test .`
+  - `docker build -f docker/validate/core-go.Dockerfile --target vet .`
+  - `docker build -f docker/validate/core-go.Dockerfile --target fmtcheck .`
+- Definition of Done:
+  - discovery worker falls back to ping-based device creation when ARP is ineffective
+  - bridge-mode ARP is detected and logged as a warning
+  - run stats include `ping_fallback_used` flag
+  - docs explain Windows/Docker Desktop limitations and recommend `DISCOVERY_DEFAULT_SCOPE`
+- Handoff Notes:
+  - Root cause: `/proc/net/arp` inside a Docker bridge container only shows Docker-internal entries. The ping sweep was pinging real hosts but discarding the list of responders.
+  - Fix: ping sweep now collects responding IPs; when ARP finds 0 in-scope devices but ping found responders, devices are created from ping IPs (IP-only, no MAC). Bridge-mode ARP is auto-detected (all MACs identical) and warned.
+  - Limitation: ping-based devices have no MAC address. For full ARP/MAC fidelity, users should use `docker-compose.hostnet.yml` (Linux) or run `core-go` natively.
+  - The user must still set `DISCOVERY_DEFAULT_SCOPE` to their real subnet or provide scope per run. Without a scope, there are no targets to ping.
 
 ## Immediate Open Decisions
 

@@ -24,6 +24,7 @@ Status values: `planned` | `in-progress` | `complete` | `deprecated`
 | Protect `/api` | Prevent browser-direct access to Go API (UI-as-BFF) | traefik + ui-node | `/api/...` (internal only via Traefik internal entrypoint) | none | complete |
 | Reverse proxy routing | `/` → UI (core-go stays private) | traefik | (N/A) | none | complete |
 | Docker compose bootstrap | `docker compose up` works with health checks | (all) | (N/A) | (all) | complete |
+| End-user startup scripts | Per-OS launchers start the Docker Compose stack, wait for the UI health check, and open the web page automatically. | (repo) | (N/A) | none | complete |
 | Health + readiness | `/healthz` and `/readyz` across services | core-go + ui-node | `/healthz`, `/readyz` | none | complete |
 | Observability metrics | Prometheus scrape endpoint exposing HTTP and discovery metrics (`roller_http_*`, `roller_discovery_*`) | core-go | `/metrics` | none | complete |
 | Request ID propagation | End-to-end `X-Request-ID` correlation | core-go + ui-node | (all) | none | complete |

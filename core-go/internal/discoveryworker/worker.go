@@ -424,6 +424,40 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 		Message: fmt.Sprintf("arp scrape: entries=%d devices_seen=%d devices_created=%d", result.ARPEntries, result.DevicesSeen, result.DevicesCreated),
 	})
 
+	// Fallback: when ARP produced no useful results but ping found responders,
+	// create devices from ping-responsive IPs. This handles Docker bridge
+	// networking where /proc/net/arp only contains Docker-internal entries.
+	usedPingFallback := false
+	if result.DevicesSeen == 0 && ping.Succeeded > 0 && len(ping.Responders) > 0 {
+		w.log.Warn().
+			Int("arp_entries", result.ARPEntries).
+			Int("ping_succeeded", ping.Succeeded).
+			Msg("ARP scrape found no in-scope devices but ping found responders; using ping-based discovery (possible Docker bridge networking)")
+		_ = w.q.InsertDiscoveryRunLog(execCtx, sqlcgen.InsertDiscoveryRunLogParams{
+			RunID:   run.ID,
+			Level:   "warn",
+			Message: fmt.Sprintf("ARP found no in-scope devices; falling back to %d ping responders (Docker bridge networking? Consider host networking or native deployment for MAC-level visibility)", ping.Succeeded),
+		})
+		pingResult, pingErr := w.devicesFromPing(execCtx, run.ID, ping.Responders, scopePrefix)
+		if pingErr != nil {
+			_ = w.failRun(execCtx, run.ID, pingErr.Error(), map[string]any{
+				"stage": "failed",
+				"scope": scopePrefixOrNil(scopePrefix),
+				"tags":  tags,
+			})
+			return true, pingErr
+		}
+		result.DevicesSeen = pingResult.DevicesSeen
+		result.DevicesCreated = pingResult.DevicesCreated
+		result.Targets = pingResult.Targets
+		usedPingFallback = true
+		_ = w.q.InsertDiscoveryRunLog(execCtx, sqlcgen.InsertDiscoveryRunLogParams{
+			RunID:   run.ID,
+			Level:   "info",
+			Message: fmt.Sprintf("ping fallback: devices_seen=%d devices_created=%d (no MAC addresses available)", pingResult.DevicesSeen, pingResult.DevicesCreated),
+		})
+	}
+
 	// Clear auto tags for devices in this run so the classification result stays fresh.
 	// Manual tags are preserved and always take precedence in the UI.
 	seenDevices := make(map[string]struct{}, len(result.Targets))
@@ -461,19 +495,20 @@ func (w *Worker) runOnce(ctx context.Context) (bool, error) {
 
 	completedAt := time.Now()
 	stats := map[string]any{
-		"stage":             "completed",
-		"preset":            preset,
-		"method":            discoveryMethod(ping),
-		"scope":             scopePrefixOrNil(scopePrefix),
-		"scope_targets":     scopeTargets,
-		"max_targets":       w.maxTargets,
-		"runtime_budget_ms": int(w.maxRuntime.Milliseconds()),
-		"ping_available":    ping.Available,
-		"ping_attempted":    ping.Attempted,
-		"ping_succeeded":    ping.Succeeded,
-		"arp_entries":       result.ARPEntries,
-		"devices_seen":      result.DevicesSeen,
-		"devices_created":   result.DevicesCreated,
+		"stage":              "completed",
+		"preset":             preset,
+		"method":             discoveryMethod(ping),
+		"scope":              scopePrefixOrNil(scopePrefix),
+		"scope_targets":      scopeTargets,
+		"max_targets":        w.maxTargets,
+		"runtime_budget_ms":  int(w.maxRuntime.Milliseconds()),
+		"ping_available":     ping.Available,
+		"ping_attempted":     ping.Attempted,
+		"ping_succeeded":     ping.Succeeded,
+		"ping_fallback_used": usedPingFallback,
+		"arp_entries":        result.ARPEntries,
+		"devices_seen":       result.DevicesSeen,
+		"devices_created":    result.DevicesCreated,
 	}
 	if enrichmentStats != nil {
 		stats["enrichment"] = enrichmentStats
@@ -562,9 +597,10 @@ type arpScrapeResult struct {
 }
 
 type pingSweepResult struct {
-	Attempted int
-	Succeeded int
-	Available bool
+	Attempted  int
+	Succeeded  int
+	Available  bool
+	Responders []netip.Addr
 }
 
 func safeScopeString(scope *string) *string {
@@ -714,6 +750,14 @@ func (w *Worker) scrapeARP(ctx context.Context, runID string, scope *netip.Prefi
 		return arpScrapeResult{}, err
 	}
 
+	// Detect Docker bridge networking: all entries share one MAC (the gateway).
+	if isBridgeARP(entries) {
+		w.log.Warn().
+			Int("arp_entries", len(entries)).
+			Str("shared_mac", entries[0].MAC).
+			Msg("all ARP entries share one MAC — likely Docker bridge networking; real device MACs are not visible")
+	}
+
 	var result arpScrapeResult
 	seenTargets := make(map[string]struct{})
 
@@ -808,6 +852,8 @@ func (w *Worker) pingSweep(ctx context.Context, scope netip.Prefix) (pingSweepRe
 
 	var attempted int32
 	var succeeded int32
+	var mu sync.Mutex
+	var responders []netip.Addr
 
 	jobs := make(chan netip.Addr, w.pingWorkers*2)
 	wg := sync.WaitGroup{}
@@ -826,6 +872,9 @@ func (w *Worker) pingSweep(ctx context.Context, scope netip.Prefix) (pingSweepRe
 
 			if err == nil {
 				atomic.AddInt32(&succeeded, 1)
+				mu.Lock()
+				responders = append(responders, ip)
+				mu.Unlock()
 			}
 		}
 	}
@@ -845,6 +894,7 @@ func (w *Worker) pingSweep(ctx context.Context, scope netip.Prefix) (pingSweepRe
 				wg.Wait()
 				result.Attempted = int(attempted)
 				result.Succeeded = int(succeeded)
+				result.Responders = responders
 				return result, ctx.Err()
 			case jobs <- ip:
 				ip = ip.Next()
@@ -857,6 +907,7 @@ func (w *Worker) pingSweep(ctx context.Context, scope netip.Prefix) (pingSweepRe
 
 	result.Attempted = int(attempted)
 	result.Succeeded = int(succeeded)
+	result.Responders = responders
 	return result, nil
 }
 
@@ -890,4 +941,78 @@ func pingPreflight(ctx context.Context, pingPath string, timeout time.Duration) 
 	}
 
 	return fmt.Errorf("ping failed: %s", msg)
+}
+
+// isBridgeARP returns true when all ARP entries share the same MAC address,
+// which strongly suggests the process is behind a Docker bridge / NAT gateway
+// and is not seeing real device MAC addresses.
+func isBridgeARP(entries []arpEntry) bool {
+	if len(entries) <= 1 {
+		return false
+	}
+	first := entries[0].MAC
+	for _, e := range entries[1:] {
+		if e.MAC != first {
+			return false
+		}
+	}
+	return true
+}
+
+// devicesFromPing creates or upserts devices from ping-responsive IPs when
+// ARP-based discovery is not available (e.g., Docker bridge networking).
+// Devices created this way will have an IP but no MAC address.
+func (w *Worker) devicesFromPing(ctx context.Context, runID string, responders []netip.Addr, scope *netip.Prefix) (arpScrapeResult, error) {
+	var result arpScrapeResult
+	seenTargets := make(map[string]struct{})
+
+	for _, ip := range responders {
+		if scope != nil && !scope.Contains(ip) {
+			continue
+		}
+		if ip.IsLoopback() || ip.IsMulticast() || ip.IsLinkLocalUnicast() {
+			continue
+		}
+
+		deviceID, err := w.q.FindDeviceIDByIP(ctx, ip.String())
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return result, err
+		}
+		if deviceID == "" {
+			row, err := w.q.CreateDevice(ctx, nil)
+			if err != nil {
+				return result, err
+			}
+			deviceID = row.ID
+			result.DevicesCreated++
+		}
+
+		if err := w.q.UpsertDeviceIP(ctx, sqlcgen.UpsertDeviceIPParams{
+			DeviceID: deviceID,
+			IP:       ip.String(),
+		}); err != nil {
+			return result, err
+		}
+		if runID != "" {
+			if err := w.q.InsertIPObservation(ctx, sqlcgen.InsertIPObservationParams{
+				RunID:    runID,
+				DeviceID: deviceID,
+				IP:       ip.String(),
+			}); err != nil {
+				return result, err
+			}
+		}
+		result.DevicesSeen++
+
+		key := deviceID + "|" + ip.String()
+		if _, ok := seenTargets[key]; !ok {
+			seenTargets[key] = struct{}{}
+			result.Targets = append(result.Targets, enrichmentTarget{
+				DeviceID: deviceID,
+				IP:       ip,
+			})
+		}
+	}
+
+	return result, nil
 }

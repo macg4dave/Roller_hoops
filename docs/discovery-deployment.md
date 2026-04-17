@@ -20,7 +20,24 @@ For a quick “what works where” summary, see [docs/discovery-capabilities.md]
   - Some environments disallow raw sockets entirely (managed Kubernetes, hardened Docker daemon).
 - **ARP table scraping** is easiest when the process can see the host network namespace.
   - In Docker, that generally means `network_mode: host` (Linux only) or running discovery on a host/VM directly.
+  - On **Docker bridge** networking, `/proc/net/arp` only contains entries for the Docker-internal network (gateway, other containers). Real device MACs are not visible because all external traffic routes through Docker's NAT.
+  - When ARP is not available, the discovery worker **falls back to ping-based discovery** (IP-only, no MACs). This still discovers devices by IP and allows SNMP/DNS enrichment, but cannot identify hardware-level identity.
 - **SNMP** is just UDP (no raw sockets), but you still need L3 reachability to targets.
+
+## Windows / Docker Desktop limitations
+
+Docker Desktop for Windows (and macOS) runs containers inside a Linux VM (WSL2 or Hyper-V). This means:
+
+- **`network_mode: host`** connects to the **VM's** network, not the Windows host network. It does not help with real-network discovery.
+- The container's `/proc/net/arp` will never show your real LAN neighbors.
+- Ping sweep can still reach targets if Docker's NAT routes to them, and the discovery worker will fall back to ping-based device creation (IP-only, no MAC).
+
+### Recommended approach for Windows
+
+1. **Set `DISCOVERY_DEFAULT_SCOPE`** in `.env` to your real subnet (e.g., `192.168.1.0/24`). This ensures the ping sweep targets real network hosts instead of only using ARP.
+2. **Enable SNMP** (`DISCOVERY_SNMP_ENABLED=true`) so enrichment can gather device names, interfaces, and VLANs even without MAC-level ARP visibility.
+3. **Accept IP-only discovery**: devices will be discovered by responding IP address. MAC addresses will not be available unless a future dedicated scanner component runs natively on the host.
+4. **Alternative**: run `core-go` natively on the Windows host (outside Docker) while keeping Postgres and the UI in Docker. This gives full ARP + ICMP fidelity but requires a local Go toolchain.
 
 ## Recommended deployment patterns
 

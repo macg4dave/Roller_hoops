@@ -20,7 +20,7 @@ This file is the project’s **lightweight issue log**. It’s intentionally Mar
 
 | ID | Title | Status | Area | Severity | Last updated |
 |---|---|---|---|---|---|
-| ISS-001 | Network discovery doesn’t scan outside Docker | fixed | core-go/discovery | high | 2026-01-02 |
+| ISS-001 | Network discovery doesn't scan outside Docker | fixed | core-go/discovery | high | 2026-04-17 |
 | ISS-002 | Map view UX clutter; needs auto-layout | fixed | ui-node/map | medium | 2026-01-02 |
 | ISS-003 | Discovery UX needs presets + automation | fixed | ui-node/discovery | high | 2026-01-02 |
 | ISS-004 | Device naming is low-quality/inconsistent | fixed | core-go/enrichment | medium | 2026-01-02 |
@@ -91,6 +91,7 @@ One or more of the following is true:
 - Default scope support (optional): `DISCOVERY_DEFAULT_SCOPE` is parsed in `core-go/cmd/core-go/main.go` and applied when runs omit `scope` via `core-go/internal/httpapi/handler.go`.
 - Clear failure mode when ICMP is unavailable: `core-go/internal/discoveryworker/worker.go` preflights `ping` and fails runs with actionable errors when raw-socket privileges are missing.
 - UI guidance: `ui-node/app/(app)/devices/DiscoveryPanel.tsx` clarifies how blank scope behaves and how to configure a default.
+- **Ping fallback for Docker bridge** (T016): `pingSweep` now collects responding IPs. When ARP yields no in-scope devices but ping finds responders (typical of Docker bridge networking), devices are created from ping IPs (IP-only, no MAC). Bridge-mode ARP is auto-detected and warned. See `docs/discovery-deployment.md` for Windows/Docker Desktop guidance.
 
 ## ISS-002 — Map view UX clutter; needs auto-layout
 

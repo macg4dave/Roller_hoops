@@ -117,6 +117,14 @@ If you want to build/test outside Docker on Ubuntu/Debian:
 
 ## Quickstart (dev)
 
+- Easiest start:
+  - Windows: double-click `scripts/start-windows.cmd` or run `powershell -ExecutionPolicy Bypass -File scripts/start-windows.ps1`
+  - macOS: run `sh scripts/start-macos.command`
+  - Linux / WSL 2: run `sh scripts/start-linux.sh`
+- The startup scripts run Docker Compose in the background, wait for the UI health check, then open <http://localhost/>.
+- Start with sample seed data: add `--dev` to the script command, for example `sh scripts/start-linux.sh --dev` or `scripts\start-windows.cmd --dev`.
+- Tail logs after the browser opens: add `--logs`.
+
 - Start the full stack: `docker compose up --build` (or `sudo docker compose up --build` if your user can’t access the Docker socket).
 - If you use `sudo` for `docker compose`, you’ll also need it for `docker compose logs`, `docker compose down`, etc.
 - Optional: copy `.env.example` to `.env` to override local settings like `POSTGRES_PASSWORD`, `AUTH_USERS`, and `DISCOVERY_DEFAULT_SCOPE`.
@@ -137,6 +145,9 @@ Commands work on any OS with Docker installed. The `Makefile` wraps them for con
 
 | Action | Raw command | Make shortcut |
 | --- | --- | --- |
+| Start and open UI (Windows) | `scripts\start-windows.cmd` | - |
+| Start and open UI (macOS) | `sh scripts/start-macos.command` | - |
+| Start and open UI (Linux/WSL) | `sh scripts/start-linux.sh` | - |
 | Start stack | `docker compose up --build` | `make up` |
 | Start with seed data | `docker compose --profile dev up --build` | `make dev` |
 | Stop | `docker compose down` | `make down` |

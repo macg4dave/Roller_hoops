@@ -28,6 +28,7 @@ It complements:
 |---|---|---|---|---|
 | L3 reachability to target subnets | partial | partial | partial | partial |
 | ARP-based discovery / ARP cache scrape | yes | no | yes | yes |
+| Ping-based discovery (IP-only fallback) | yes | yes (with scope) | yes | yes |
 | ICMP ping sweep | partial | partial | partial | partial |
 | SNMP polling (UDP/161) | partial | partial | partial | partial |
 | Reverse DNS lookups | yes | yes | yes | yes |
