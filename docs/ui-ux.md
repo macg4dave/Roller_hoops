@@ -20,7 +20,10 @@ The UI is the product. The Go service is the truth.
 ## Non-goals (explicit)
 
 - No new auth system (auth is already UI-owned; improve UX only).
-- No network-map canvas work here (that’s Phase 13).
+- Preserve the basic operator expectation for later map work: selecting a
+  device should be able to show a readable device-to-router/switch diagram with
+  IP/MAC facts.
+- No implementation of broad network-map canvas work here (that’s Phase 13+).
 - No UI-side reconstruction of history/diffs (Phase 9 APIs already provide this).
 - No UI direct DB access.
 
@@ -148,6 +151,17 @@ Accessibility requirements:
   - started/completed time
   - summary stats (devices touched, new facts)
   - link to logs for debugging
+
+### Basic network diagram (map fast path)
+
+- From a device, operators should be able to open a focused diagram that shows:
+  - the selected device
+  - nearby router/switch/peer when known
+  - primary IP and MAC facts on or near each visible device
+  - relationship source/confidence for each visible link
+- The diagram should be ordinary and readable before it is clever.
+- The focused diagram must stay bounded; expanding neighbors is an explicit
+  action, not an automatic whole-network render.
 
 ## “Invented but in-scope” enhancements (Phase 12)
 

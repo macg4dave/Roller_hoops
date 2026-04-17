@@ -94,6 +94,7 @@ Only rows with `Status` = `Ready` are startable without more planning unless the
 | T009 | Now | Process | P1 | VS Code AI workspace scaffolding | Done | T000 | `git diff --check` + JSON parse check + docs consistency review |
 | T001 | Now | Hardening | P0 | Auth and OpenAPI drift hardening | Review | None | `cd ui-node && npm test` + `cd ui-node && npm run build`; Go tests blocked locally until Go/Docker daemon available |
 | T002 | Now | Process | P1 | Planning-doc drift reconciliation | Ready | T000 | manual roadmap/feature-matrix/API docs consistency review |
+| T010 | Now | Phase 15/16 | P1 | Basic focused network diagram MVP | Ready | T002 | `cd ui-node && npm test` + `cd ui-node && npm run build`; Go/API tests if projection shape changes |
 | T003 | Now | Phase 16 | P1 | Map modes contract and UI selector | Ready | T002 | `cd ui-node && npm test` + `cd ui-node && npm run build` |
 | T004 | Next | Phase 16 | P1 | Security layer v1 planning slice | Ready | T002 | manual docs consistency review + OpenAPI draft review if API shape changes |
 | T005 | Next | Phase 16 | P1 | Build-mode map editing parent issue | Ready | T002 | parent/child cards written + feature matrix synced |
@@ -491,6 +492,49 @@ Before changing operator workflows:
   - Build mode does not expose writes without authorized APIs
 - Handoff Notes:
   - Treat mode as UI behavior first; do not blend map layers or add global graph behavior.
+
+### T010 - Basic Focused Network Diagram MVP
+
+- Status: Ready
+- Queue: Now
+- Phase: Phase 15/16
+- Priority: P1
+- Owner Role: UI owner
+- Goal: Make the map deliver the basic expected network diagram: a selected device connected to its likely router/switch/peer, with IP and MAC facts visible.
+- Scope:
+  - define the default device-focused diagram contract in `docs/network_map/interface-rules.md`
+  - ensure a device focus can render a simple readable diagram such as `Device 1 -- Router 1` or `Device 1 -- Switch 1 -- Router 1`
+  - show key facts on or near each node: display name, primary IP, primary MAC, and role/tag when available
+  - show link confidence/source clearly (`manual`, `lldp`, `cdp`, `gateway-inferred`, `same-subnet`, or `unknown`)
+  - use existing map projection data where possible before adding API shape
+  - if API shape is insufficient, update `api/openapi.yaml`, `docs/api-contract.md`, generated UI types, and focused Go/UI tests
+  - preserve the guardrail that the default diagram is focused and bounded, not a whole-network graph
+- Files to Touch:
+  - `docs/network_map/interface-rules.md`
+  - `docs/network_map/network_map_ideas.md`
+  - `docs/ui-ux.md`
+  - `docs/api-contract.md` if projection fields or semantics change
+  - `api/openapi.yaml` if projection fields or semantics change
+  - `ui-node/app/(app)/map/*`
+  - `core-go/internal/httpapi/map.go` and map tests only if API projection data is missing
+- Do Not Touch:
+  - discovery scanning breadth/defaults
+  - database schema unless a separate child task proves persisted curated truth is required
+  - Build-mode write behavior
+- Dependencies:
+  - T002
+- Validation:
+  - `cd ui-node && npm test`
+  - `cd ui-node && npm run build`
+  - `cd core-go && go test ./...` if Go/API projection code changes
+  - manual check: seeded/dev data can show a focused diagram with at least two connected nodes and visible IP/MAC facts
+- Definition of Done:
+  - opening a device-focused map gives an ordinary operator-readable network diagram, not only abstract regions
+  - each visible device shows identity plus primary IP/MAC when known
+  - the diagram makes relationship source/confidence visible and does not imply certainty for inferred links
+  - caps and focus rules still prevent an accidental whole-network render
+- Handoff Notes:
+  - This is the product floor for the map. The layered explorer remains the long-term model, but users must first get the simple diagram they expect: device, router/switch/peer, IPs, MACs, and visible connections.
 
 ### T004 - Security Layer V1 Planning Slice
 

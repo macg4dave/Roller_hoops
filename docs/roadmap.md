@@ -10,6 +10,8 @@ A **self-hosted network tracker / mapper** that:
 
 * Stores state historically
 * Provides a web UI for viewing and editing metadata
+* Provides a basic focused network diagram for a selected device, including
+  visible IP/MAC facts and router/switch/peer relationships when known
 * Runs fully containerised
 * Can scale or split later without redesign
 
@@ -1152,6 +1154,10 @@ Acceptance criteria:
 
 Ship the first three layers that map directly to discovered data, matching the mock mental model.
 
+Product floor: a device-focused map must be able to show a simple ordinary
+network diagram: selected device, nearby router/switch/peer when known, visible
+IP/MAC facts, and a clearly labeled relationship source/confidence.
+
 Layers:
 
 * **Physical**: devices + `links` (manual first), optional interface-level drilldown in Inspector.
@@ -1284,6 +1290,9 @@ Acceptance criteria:
 
 * L3 view shows subnet regions and device membership; no edge explosion.
 * Physical view shows a small adjacency view that can be edited/curated manually.
+* A selected device can render as a basic focused diagram with IP/MAC facts and
+  the most useful immediate connection(s), such as router, switch, gateway, or
+  explicitly linked peer.
 * L2 view shows VLAN membership based on existing `interface_vlans` PVID facts.
 * The inspector allows jumping between layers without losing context.
 
@@ -1490,6 +1499,9 @@ If you want next:
 
 * The UI matches the interaction contract in `docs/network_map/interface-rules.md` (empty-by-default, inspector-first, URL-driven, deterministic).
 * Deep links are stable and reload-safe: `layer` + `focusType` + `focusId` restore the same view.
+* The map provides a basic focused network diagram for a selected device:
+  device-to-router/switch/peer when known, visible IP/MAC facts, and clear
+  relationship confidence/source.
 * L3 view can render subnet regions + device membership from real data, and Inspector can cross-navigate between layers.
 * Physical/L2 views work with a minimal, deterministic layout; caps/truncation prevent “spaghetti graph” screens.
 * Services/Security views can start manual-first, but are served via projection endpoints (no direct DB access from UI).

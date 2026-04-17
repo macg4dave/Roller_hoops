@@ -26,6 +26,7 @@ This file is the project’s **lightweight issue log**. It’s intentionally Mar
 | ISS-004 | Device naming is low-quality/inconsistent | fixed | core-go/enrichment | medium | 2026-01-02 |
 | ISS-005 | Devices should be auto-classified + tagged | fixed | core-go/enrichment | medium | 2026-01-02 |
 | ISS-006 | Devices page layout wastes space; lacks detail | fixed | ui-node/devices | medium | 2026-01-02 |
+| ISS-007 | Map needs basic focused network diagram | open | ui-node/map | high | 2026-04-17 |
 
 ---
 
@@ -237,6 +238,45 @@ The Devices page has poor information density: most of the page is unused space,
 
 - `ui-node/app/globals.css` swaps the Devices layout to list-left/detail-right, adds responsive stacking, and introduces compact list styles.
 - `ui-node/app/(app)/devices/DevicesDashboard.tsx` implements a compact table-style list and surfaces at-a-glance facts (MAC, VLANs, open ports, platform).
+
+---
+
+## ISS-007 - Map needs basic focused network diagram
+
+### Summary
+
+The map direction currently emphasizes layered projections and avoiding global
+spaghetti graphs, but the product still needs the basic operator diagram:
+selected device connected to a router/switch/peer with IP and MAC facts visible.
+
+### Impact
+
+- Users may perceive the map as abstract or incomplete if it only shows regions
+  and inspectors.
+- Future agents may over-apply the "no global graph" rule and omit simple,
+  useful topology links.
+
+### Expected
+
+- Selecting a device can show a bounded diagram such as
+  `Device 1 -- Router 1` or `Device 1 -- Switch 1 -- Router 1`.
+- Visible nodes show display name plus primary IP/MAC when known.
+- Visible links show relationship source/confidence, especially when inferred.
+- The diagram remains focused and capped; it does not render the whole network
+  by default.
+
+### Next actions
+
+- [ ] Complete backlog task `T010 - Basic Focused Network Diagram MVP`.
+- [ ] Confirm whether existing projection payloads contain enough node/link
+      facts or whether OpenAPI needs a small shape update.
+- [ ] Validate against seeded/dev data with at least two connected nodes.
+
+### Fix reference
+
+- Open. Planning references added in `BACKLOG.md`,
+  `docs/network_map/interface-rules.md`, and
+  `docs/network_map/network_map_ideas.md`.
 
 ---
 

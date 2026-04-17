@@ -8,6 +8,30 @@ Here is **one unified, coherent product concept** that merges *all* the ideas yo
 
 A layer-aware network explorer where the same infrastructure can be viewed through physical, logical, service, and security lenses — never all at once.
 
+## Product floor
+
+Before the product feels clever, it must feel useful: it needs a basic focused
+network diagram.
+
+The simplest expected view is:
+
+```text
+[ Device 1 ] -------- [ Router 1 ]
+  IP: 192.168.1.42     IP: 192.168.1.1
+  MAC: aa:bb:...       MAC: 11:22:...
+```
+
+Or, when the data supports it:
+
+```text
+[ Device 1 ] -------- [ Switch 1 ] -------- [ Router 1 ]
+  IP/MAC                port/VLAN facts       gateway IP/MAC
+```
+
+This is not in conflict with "no global graph". It means the map defaults to a
+small, readable, fact-backed diagram around a selected object instead of trying
+to draw the entire network.
+
 ---
 
 ## Core philosophy
@@ -16,6 +40,7 @@ A layer-aware network explorer where the same infrastructure can be viewed throu
 * The UI is a **product**, not a diagram
 * A “map” is just a **projection** of structured objects
 * Users choose *how* to look before they look
+* A focused device diagram is the minimum useful projection
 
 No default topology. No spaghetti. No panic screen.
 
@@ -82,6 +107,11 @@ Example:
 * L3 → subnets + routing relationships
 * Services → apps + dependency arrows
 
+Exception to avoid overcorrecting: a focused device diagram should show the
+small number of useful visible links around that device. For example, show
+`Device 1 -- Router 1` or `Device 1 -- Switch 1 -- Router 1` with IP/MAC facts
+when known. The rule is "no uncontrolled cables", not "no simple diagram".
+
 ---
 
 ## 3. Object-first interaction (always contextual)
@@ -100,6 +130,8 @@ Example:
   → Show which subnet it’s in (L3 layer)
   → Show which services run on it (Service layer)
   → Show which zone it belongs to (Security layer)
+  → Show the most useful immediate network relationship, such as router,
+    switch, gateway, or linked peer, when known
 
 Everything else fades or disappears.
 

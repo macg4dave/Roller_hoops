@@ -14,6 +14,36 @@ This document is a **pick-list + contract** for UI rules and interaction pattern
 - Force-graph layouts as the default.
 - Representing every possible multi-membership edge case on-canvas.
 
+## Basic diagram floor
+
+The map must still satisfy the ordinary operator expectation of a basic network
+diagram. The layered/focused model is a guardrail against clutter, not a reason
+to avoid simple topology.
+
+Minimum useful device-focused diagram:
+
+```text
+[ Device 1 ] -------- [ Router 1 ]
+  IP: 192.168.1.42     IP: 192.168.1.1
+  MAC: aa:bb:...       MAC: 11:22:...
+```
+
+Rules:
+
+- A selected device should be able to render with nearby connected devices such
+  as its router, switch, gateway, or explicitly linked peer when that data is
+  known or can be safely inferred.
+- Device nodes should expose the basic facts operators expect: display name,
+  primary IP, primary MAC, and role/tag when available.
+- Links should be visible as links in Physical and focused device diagrams.
+  Region membership remains preferred for subnet/VLAN containment, but it must
+  not hide a simple "this connects to that" relationship.
+- Relationship source/confidence must be visible when relevant:
+  `manual`, `lldp`, `cdp`, `gateway-inferred`, `same-subnet`, or `unknown`.
+- Inferred relationships must not be presented as certain physical cabling.
+- The diagram stays focused and capped; expanding nearby nodes is intentional
+  and bounded.
+
 ## Related docs
 
 - `docs/network_map/network_map_ideas.md` (overall product concept)
@@ -56,6 +86,9 @@ This document is a **pick-list + contract** for UI rules and interaction pattern
 2. **Object-first**
    - Selecting a layer does not draw “the whole network”.
    - Selecting a focus draws only the focused scope.
+   - For a device focus, the focused scope should include the selected device
+     and its most useful immediate relationship(s), such as router/switch/peer,
+     when those relationships are available.
 3. **Inspector is the anchor**
    - The inspector is always visible.
    - Most navigation happens from the inspector (“View in L3”, “Open VLAN”, “Open Subnet”).
@@ -186,6 +219,8 @@ Allowed edges (examples):
 - firewall ↔ zone boundary (policy context)
 - service → service dependency (Services layer only)
 - physical link edges (Physical layer only; still bounded)
+- focused device ↔ router/switch/peer where the relationship is explicit or
+  clearly marked as inferred
 
 Disallowed by default:
 
@@ -235,6 +270,8 @@ This preserves clarity while still letting operators explore.
 ## v1 must-haves (minimum product bar)
 
 - Empty state: “Pick a layer + focus” guidance and a focus picker/search.
+- Basic focused network diagram: selecting a device can show that device linked
+  to its router/switch/peer with IP and MAC facts visible when known.
 - Stable deep links: `layer` + `focusType` + `focusId` reload to the same view.
 - Clear “Expand” vs “Drill-in” affordances (and consistent behavior).
 - Deterministic layout and stable ordering (no jitter across polling).

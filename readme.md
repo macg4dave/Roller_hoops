@@ -2,6 +2,11 @@
 
 Self-hosted network tracker / mapper (Go + Node.js + PostgreSQL), fully containerised.
 
+The map is intended to provide a basic focused network diagram first: select a
+device and see useful nearby relationships such as router/switch/peer links with
+IP and MAC facts. Larger layered views build on that without defaulting to a
+whole-network spaghetti graph.
+
 ## Requirements
 
 - **Recommended (no local toolchains):** Docker + Docker Compose (`docker compose ...`)

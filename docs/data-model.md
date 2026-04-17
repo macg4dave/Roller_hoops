@@ -248,6 +248,11 @@ This enables the map/UI to render different device icons and filter by role whil
 
 Purpose: represent curated physical adjacency for the Physical layer (manual-first; later enrichment may write with `source=lldp|cdp`).
 
+The basic focused network diagram depends on this table when a relationship is
+known. When the UI shows inferred relationships that are not true physical
+links, they must be clearly labeled in the projection response and should not be
+persisted here unless an operator or trusted enrichment confirms them.
+
 Columns:
 
 - `id` (uuid)

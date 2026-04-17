@@ -162,6 +162,9 @@ The network map is **projection-first**:
 
 - The API returns a **small, render-ready projection** for a specific layer and focus.
 - The API must **not** provide a “whole network graph” endpoint in v1.
+- A device-focused projection must be able to support a basic readable network
+  diagram: the selected device, nearby router/switch/peer relationships when
+  known, visible IP/MAC facts, and relationship source/confidence.
 
 ### Layers
 
@@ -200,6 +203,12 @@ Rules:
 
 - The response should be deterministic (stable sorting, stable IDs).
 - Avoid overloading `edges`; prefer region membership + a small number of intentional connectors.
+- Do not suppress ordinary focused topology: Physical and device-focused
+  projections may include bounded device-to-device edges when the relationship
+  is explicit or clearly marked as inferred.
+- Device nodes should include enough render data for the UI to show the expected
+  basic facts without extra round trips: display name, primary IP, primary MAC,
+  role/tag when available, and selected relationship context.
 - Errors use the standard error envelope (see “Error format”).
 
 Container guidance (important for “objects that contain other objects”):
