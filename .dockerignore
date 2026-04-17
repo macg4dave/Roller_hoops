@@ -1,0 +1,12 @@
+.git
+.github
+.vscode
+.next
+node_modules
+ui-node/.next
+ui-node/node_modules
+ui-node/coverage
+core-go/bin
+core-go/.cache
+*.log
+.env

@@ -92,13 +92,13 @@ Only rows with `Status` = `Ready` are startable without more planning unless the
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | T000 | Now | Process | P1 | AI backlog and runbook foundation | Done | None | `git diff --check` + docs consistency review |
 | T009 | Now | Process | P1 | VS Code AI workspace scaffolding | Done | T000 | `git diff --check` + JSON parse check + docs consistency review |
-| T001 | Now | Hardening | P0 | Auth and OpenAPI drift hardening | Review | None | `cd ui-node && npm test` + `cd ui-node && npm run build`; Go tests blocked locally until Go/Docker daemon available |
+| T001 | Now | Hardening | P0 | Auth and OpenAPI drift hardening | Review | None | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .`; Go tests via Docker validator |
 | T002 | Now | Process | P1 | Planning-doc drift reconciliation | Ready | T000 | manual roadmap/feature-matrix/API docs consistency review |
-| T010 | Now | Phase 15/16 | P1 | Basic focused network diagram MVP | Ready | T002 | `cd ui-node && npm test` + `cd ui-node && npm run build`; Go/API tests if projection shape changes |
-| T003 | Now | Phase 16 | P1 | Map modes contract and UI selector | Ready | T002 | `cd ui-node && npm test` + `cd ui-node && npm run build` |
+| T010 | Now | Phase 15/16 | P1 | Basic focused network diagram MVP | Ready | T002 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .`; Go/API tests if projection shape changes |
+| T003 | Now | Phase 16 | P1 | Map modes contract and UI selector | Ready | T002 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
 | T004 | Next | Phase 16 | P1 | Security layer v1 planning slice | Ready | T002 | manual docs consistency review + OpenAPI draft review if API shape changes |
 | T005 | Next | Phase 16 | P1 | Build-mode map editing parent issue | Ready | T002 | parent/child cards written + feature matrix synced |
-| T006 | Next | Ops | P1 | Local validation toolchain/runbook cleanup | Ready | T000 | runbook update + one confirmed Go or Docker validation path |
+| T006 | Next | Ops | P1 | Local validation toolchain/runbook cleanup | Done | T000 | runbook update + one confirmed Docker-only validation path |
 | T007 | Next | Discovery | P1 | Discovery deployment smoke matrix | Ready | T006 | documented Docker bridge, host-network, and native-host smoke commands |
 | T008 | Later | Docs | P2 | Markdown encoding and typography cleanup | Ready | T000 | `git diff --check` + spot-check rendered docs |
 
@@ -207,33 +207,24 @@ See `docs/vscode-ai-workflow.md` for the full task list, Copilot prompt starters
 ### UI Commands
 
 ```powershell
-cd ui-node
-npm ci
-npm run gen:openapi
-npm test
-npm run build
+docker build -f docker/validate/ui-node.Dockerfile --target deps .
+# use the VS Code task `ui: gen openapi types` to copy generated types back into the workspace
+docker build -f docker/validate/ui-node.Dockerfile --target test .
+docker build -f docker/validate/ui-node.Dockerfile --target build .
 ```
 
 Use focused Vitest runs for small changes:
 
 ```powershell
-cd ui-node
-npm test -- --run path/to/file.test.ts
+docker build -f docker/validate/ui-node.Dockerfile --target test .
 ```
 
 ### Go Commands
 
 ```powershell
-cd core-go
-gofmt -w <changed-go-files>
-go vet ./...
-go test ./...
-```
-
-If Go is not installed and Docker Desktop is running:
-
-```powershell
-docker run --rm -v "${PWD}:/src" -w /src/core-go golang:1.24-alpine go test ./...
+docker build -f docker/validate/core-go.Dockerfile --target fmtcheck .
+docker build -f docker/validate/core-go.Dockerfile --target vet .
+docker build -f docker/validate/core-go.Dockerfile --target test .
 ```
 
 ### Full Stack Smoke
@@ -254,12 +245,7 @@ When API routes or schemas change:
 
 1. Update `api/openapi.yaml`.
 2. Update `docs/api-contract.md`.
-3. Regenerate UI types:
-
-   ```powershell
-   cd ui-node
-   npm run gen:openapi
-   ```
+3. Regenerate UI types using the VS Code task `ui: gen openapi types`.
 
 4. Ensure generated `ui-node/lib/api-types.ts` is committed.
 5. Run UI tests/build.
@@ -371,17 +357,17 @@ Before changing operator workflows:
 - Dependencies:
   - None
 - Validation:
-  - `cd ui-node && npm test`
-  - `cd ui-node && npm run build`
+  - `docker build -f docker/validate/ui-node.Dockerfile --target test .`
+  - `docker build -f docker/validate/ui-node.Dockerfile --target build .`
   - `git diff --check`
-  - `cd core-go && go test ./...` when Go or Docker fallback is available
+  - `docker build -f docker/validate/core-go.Dockerfile --target test .`
 - Definition of Done:
   - UI tests and build pass
   - Go contract tests pass or local blocker is documented
   - OpenAPI generated types are committed
 - Handoff Notes:
   - UI validation passed in the current working tree
-  - Go validation is locally blocked when `go` is unavailable and Docker Desktop Linux daemon is stopped
+  - Go validation now runs through the Docker validator when the daemon is available
 
 ### T009 - VS Code AI Workspace Scaffolding
 
@@ -484,8 +470,8 @@ Before changing operator workflows:
 - Dependencies:
   - T002
 - Validation:
-  - `cd ui-node && npm test`
-  - `cd ui-node && npm run build`
+  - `docker build -f docker/validate/ui-node.Dockerfile --target test .`
+  - `docker build -f docker/validate/ui-node.Dockerfile --target build .`
 - Definition of Done:
   - mode is deep-linkable and deterministic
   - invalid modes fall back safely
@@ -524,9 +510,9 @@ Before changing operator workflows:
 - Dependencies:
   - T002
 - Validation:
-  - `cd ui-node && npm test`
-  - `cd ui-node && npm run build`
-  - `cd core-go && go test ./...` if Go/API projection code changes
+  - `docker build -f docker/validate/ui-node.Dockerfile --target test .`
+  - `docker build -f docker/validate/ui-node.Dockerfile --target build .`
+  - `docker build -f docker/validate/core-go.Dockerfile --target test .` if Go/API projection code changes
   - manual check: seeded/dev data can show a focused diagram with at least two connected nodes and visible IP/MAC facts
 - Definition of Done:
   - opening a device-focused map gives an ordinary operator-readable network diagram, not only abstract regions
@@ -603,17 +589,17 @@ Before changing operator workflows:
 
 ### T006 - Local Validation Toolchain And Runbook Cleanup
 
-- Status: Ready
+- Status: Done
 - Queue: Next
 - Phase: Ops
 - Priority: P1
 - Owner Role: Operations owner
-- Goal: Make local validation reliable for agents on Windows/UNC workspaces and Docker/Go variants.
+- Goal: Make validation and stack startup reliable with Docker only on Windows/UNC workspaces.
 - Scope:
-  - document UNC path caveat for npm/cmd wrappers
-  - document local Go install path and Docker fallback
-  - add a short troubleshooting section for Docker Desktop Linux daemon failures
-  - update backlog/runbook commands if a better local command is confirmed
+  - replace local Go/Node validation assumptions with Docker-backed tasks
+  - remove bind-mount-sensitive compose inputs for Traefik config, migrations, and dev seed SQL
+  - document Docker-only validation and stack usage on Windows/mapped-drive workspaces
+  - keep local toolchains optional rather than required
 - Files to Touch:
   - `BACKLOG.md`
   - `readme.md`
@@ -624,13 +610,14 @@ Before changing operator workflows:
 - Dependencies:
   - T000
 - Validation:
-  - one confirmed UI validation command from mapped path
-  - one confirmed Go validation command, or documented blocker
+  - one confirmed Docker-backed UI validation command from mapped path
+  - one confirmed Docker-backed Go validation command from mapped path
 - Definition of Done:
-  - future agents can run validations without rediscovering UNC and Docker daemon pitfalls
-  - blockers are documented with exact symptoms and remedies
+  - future agents can run validations with Docker only, without reinstalling local Go/Node toolchains
+  - bind-mount-sensitive validation paths are replaced or documented away
 - Handoff Notes:
-  - Current environment has working UI validation via `G:\Roller_hoops`; Go validation may be blocked by missing Go and stopped Docker Desktop Linux daemon.
+  - Shared validation tasks now build Docker validation targets instead of invoking local Go/Node CLIs.
+  - Compose services for Traefik config, migrations, and dev seed no longer depend on host bind mounts, which improves Windows mapped-drive support.
 
 ### T007 - Discovery Deployment Smoke Matrix
 

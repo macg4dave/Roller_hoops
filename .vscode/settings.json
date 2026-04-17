@@ -2,6 +2,7 @@
   "typescript.tsdk": "ui-node/node_modules/typescript/lib",
   "typescript.enablePromptUseWorkspaceTsdk": true,
   "npm.packageManager": "npm",
+  "python.terminal.useEnvFile": true,
   "go.testFlags": ["-count=1"],
   "go.toolsManagement.autoUpdate": true,
   "files.exclude": {

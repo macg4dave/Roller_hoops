@@ -105,20 +105,20 @@ Use these states in issue/task notes:
 
 ## Build And Test
 
-Use the local toolchain when available. If local Go is unavailable, Docker is an acceptable fallback when the daemon is running.
+Use the shared Docker-backed validation workflow by default. Local Go/Node toolchains remain optional for developers who prefer native runs. A `Makefile` wraps all Docker commands for convenience (`make help` lists targets).
 
-- Go formatting: `cd core-go && gofmt -w <changed-go-files>`
-- Go vet: `cd core-go && go vet ./...`
-- Go tests: `cd core-go && go test ./...`
-- UI install: `cd ui-node && npm ci`
-- OpenAPI type generation: `cd ui-node && npm run gen:openapi`
-- UI tests: `cd ui-node && npm test`
-- UI build/type check: `cd ui-node && npm run build`
-- Full stack smoke: `docker compose --profile dev up --build`
-
-If using Docker for Go tests:
-
-- `docker run --rm -v "${PWD}:/src" -w /src/core-go golang:1.24-alpine go test ./...`
+- Go formatting check: `docker build -f docker/validate/core-go.Dockerfile --target fmtcheck .` (`make go-fmt`)
+- Go vet: `docker build -f docker/validate/core-go.Dockerfile --target vet .` (`make go-vet`)
+- Go tests: `docker build -f docker/validate/core-go.Dockerfile --target test .` (`make go-test`)
+- All Go checks: `make go-validate`
+- UI install/dependency check: `docker build -f docker/validate/ui-node.Dockerfile --target deps .` (`make ui-deps`)
+- OpenAPI type generation: use the VS Code task `ui: gen openapi types` or `make gen-types`
+- UI tests: `docker build -f docker/validate/ui-node.Dockerfile --target test .` (`make ui-test`)
+- UI build/type check: `docker build -f docker/validate/ui-node.Dockerfile --target build .` (`make ui-build`)
+- All UI checks: `make ui-validate`
+- All validation: `make validate`
+- Full stack smoke: `docker compose --profile dev up --build` (`make dev`)
+- Dev tools shell (Go + Node + psql): `make devtools`
 
 ## Module Boundary Rules
 

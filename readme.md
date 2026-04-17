@@ -9,9 +9,33 @@ whole-network spaghetti graph.
 
 ## Requirements
 
-- **Recommended (no local toolchains):** Docker + Docker Compose (`docker compose ...`)
+- **Recommended and fully supported:** Docker + Docker Compose (`docker compose ...`)
+- **No local Go, Node.js, npm, PostgreSQL, or migrate CLI is required** for the shared dev stack or validation workflow.
 - **Also supported:** run the stack locally without Docker (see [Running locally (no Docker)](#running-locally-no-docker))
 - Host port `80/tcp` available (Traefik binds `80:80`; change `docker-compose.yml` if you want a different host port)
+- **Optional:** GNU `make` for the convenience targets in `Makefile` (ships with macOS/Linux/WSL; on Windows install via `choco install make` or `scoop install make`, or use WSL)
+
+### Platform support
+
+The project builds and runs on **Windows (Docker Desktop)**, **macOS (Docker Desktop / OrbStack)**, **Debian/Ubuntu**, and **WSL 2**. All validation and build tooling runs inside Docker containers so the host only needs Docker itself.
+
+#### Windows — mapped / dev drives (G:, D:, etc.)
+
+If your workspace is on a non-default drive letter, Docker Desktop may fail to resolve bind-mount paths. Fixes:
+
+1. Open **Docker Desktop → Settings → Resources → File sharing** and add the drive (e.g. `G:\`).
+2. Add `COMPOSE_CONVERT_WINDOWS_PATHS=1` to your `.env` file (see `.env.example`).
+3. The project's validation tasks use `docker build` (build-context, not bind mounts), so they work regardless of drive letter.
+
+#### Line endings
+
+A `.gitattributes` enforces LF line endings for all source and Docker files. If you cloned the repo before this file existed, run:
+
+```sh
+git rm -r --cached . && git reset --hard
+```
+
+This re-normalises your working tree so Docker builds don't break from CRLF.
 
 ### Installing prerequisites (Debian/Ubuntu)
 
@@ -19,7 +43,7 @@ These are “good enough to get started” commands. For production, pin version
 
 - Base tools:
   - `sudo apt update`
-  - `sudo apt install -y git ca-certificates curl`
+  - `sudo apt install -y git ca-certificates curl make`
 
 - Docker engine + Compose plugin:
   - Option A (simplest; distro packages, versions may lag):
@@ -39,7 +63,7 @@ These are “good enough to get started” commands. For production, pin version
 ### Installing prerequisites (Fedora)
 
 - Base tools:
-  - `sudo dnf install -y git ca-certificates curl`
+  - `sudo dnf install -y git ca-certificates curl make`
 
 - Docker engine + Compose plugin:
   - Option A (distro packages, if available):
@@ -52,6 +76,29 @@ These are “good enough to get started” commands. For production, pin version
 - Post-install:
   - `sudo systemctl enable --now docker`
   - `sudo usermod -aG docker "$USER"` (then log out/in so `docker` works without sudo)
+
+### Installing prerequisites (macOS)
+
+- Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or OrbStack)
+- Install `make` (ships with Xcode Command Line Tools):
+  - `xcode-select --install`
+- Clone the repo and run `make dev`.
+
+### Installing prerequisites (Windows)
+
+- Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- Enable **WSL 2 backend** in Docker Desktop settings (recommended).
+- If your workspace is on a non-default drive (G:, D:, etc.), see [Windows — mapped / dev drives](#windows--mapped--dev-drives-g-d-etc) above.
+- For `make`, install via `choco install make` or `scoop install make`, or run from WSL.
+
+### Installing prerequisites (WSL 2)
+
+WSL 2 is the recommended way to develop on Windows. Docker Desktop integrates with WSL 2 automatically.
+
+- Inside your WSL distro:
+  - `sudo apt update && sudo apt install -y git make`
+- Docker Desktop exposes the `docker` and `docker compose` CLI inside WSL automatically.
+- Clone the repo inside WSL's filesystem (`~/projects/...`) for best I/O performance. Avoid `/mnt/c/` or `/mnt/g/` paths.
 
 ### Optional (only if running services outside Docker)
 
@@ -86,10 +133,47 @@ If you want to build/test outside Docker on Ubuntu/Debian:
 
 ## Common commands
 
-- Tail logs: `docker compose logs -f --tail=200`
-- Stop: `docker compose down`
-- Reset DB (dev only): `docker compose down -v`
-- Re-run seed (dev profile): `docker compose --profile dev run --rm dev-seed`
+Commands work on any OS with Docker installed. The `Makefile` wraps them for convenience (run `make help` to see all targets).
+
+| Action | Raw command | Make shortcut |
+| --- | --- | --- |
+| Start stack | `docker compose up --build` | `make up` |
+| Start with seed data | `docker compose --profile dev up --build` | `make dev` |
+| Stop | `docker compose down` | `make down` |
+| Reset DB | `docker compose down -v` | `make reset` |
+| Tail logs | `docker compose logs -f --tail=200` | `make logs` |
+| Re-run seed | `docker compose --profile dev run --rm dev-seed` | — |
+
+## Docker-only validation
+
+The shared validation workflow runs entirely in Docker, so agents and developers do not need local Go or Node toolchains.
+
+| Check | Raw command | Make shortcut |
+| --- | --- | --- |
+| Go fmt check | `docker build -f docker/validate/core-go.Dockerfile --target fmtcheck .` | `make go-fmt` |
+| Go vet | `docker build -f docker/validate/core-go.Dockerfile --target vet .` | `make go-vet` |
+| Go tests | `docker build -f docker/validate/core-go.Dockerfile --target test .` | `make go-test` |
+| All Go checks | — | `make go-validate` |
+| UI deps | `docker build -f docker/validate/ui-node.Dockerfile --target deps .` | `make ui-deps` |
+| UI tests | `docker build -f docker/validate/ui-node.Dockerfile --target test .` | `make ui-test` |
+| UI build | `docker build -f docker/validate/ui-node.Dockerfile --target build .` | `make ui-build` |
+| All UI checks | — | `make ui-validate` |
+| All checks | — | `make validate` |
+| Gen OpenAPI types | VS Code task `ui: gen openapi types` | `make gen-types` |
+| Smoke test (prod) | `docker compose --profile prod up --build --abort-on-container-exit` | `make smoke` |
+
+## Dev tools container
+
+A combined Go + Node dev shell is available for ad-hoc tooling without installing anything locally:
+
+```sh
+make devtools          # build + open interactive shell
+# or manually:
+docker build -f docker/devtools.Dockerfile -t roller-devtools .
+docker run --rm -it -v "$(pwd)":/workspace -w /workspace roller-devtools sh
+```
+
+Inside the container you have `go`, `node`, `npm`, `psql`, `migrate`, `sqlc`, `jq`, `curl`, `git`, and `make`.
 
 ## Services (responsibilities)
 

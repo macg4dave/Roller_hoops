@@ -1,6 +1,8 @@
 services:
   traefik:
-    image: traefik:v3.3
+    build:
+      context: .
+      dockerfile: docker/traefik.Dockerfile
     command:
       - --api.dashboard=false
       - --providers.docker=false
@@ -11,9 +13,6 @@ services:
       - --log.level=INFO
     ports:
       - "80:80"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
 
   db:
     image: postgres:16-alpine
@@ -32,12 +31,12 @@ services:
       retries: 20
 
   migrate:
-    image: migrate/migrate:v4.17.1
+    build:
+      context: .
+      dockerfile: docker/migrate.Dockerfile
     depends_on:
       db:
         condition: service_healthy
-    volumes:
-      - ./core-go/migrations:/migrations:ro
     entrypoint:
       - /migrate
       - -path
@@ -47,12 +46,16 @@ services:
       - up
 
   dev-seed:
-    image: postgres:16-alpine
+    build:
+      context: .
+      dockerfile: docker/dev-seed.Dockerfile
     profiles:
       - dev
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: "no"
     command:
       - sh
@@ -62,9 +65,7 @@ services:
           sleep 1
         done
         PGPASSWORD=$${POSTGRES_PASSWORD:-postgres} \
-          psql -h db -U postgres -d roller_hoops -f /seed/dev-seed.sql
-    volumes:
-      - ./docker/dev/dev-seed.sql:/seed/dev-seed.sql:ro
+          psql -v ON_ERROR_STOP=1 -h db -U postgres -d roller_hoops -f /seed/dev-seed.sql
 
   core-go:
     build:

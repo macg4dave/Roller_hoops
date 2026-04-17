@@ -47,6 +47,7 @@ type deviceQueries interface {
 	ListDevices(ctx context.Context) ([]sqlcgen.Device, error)
 	ListDevicesPage(ctx context.Context, arg sqlcgen.ListDevicesPageParams) ([]sqlcgen.DeviceListItem, error)
 	GetDevice(ctx context.Context, id string) (sqlcgen.Device, error)
+	GetDeviceSummaryTimestamps(ctx context.Context, deviceID string) (sqlcgen.DeviceSummaryTimestamps, error)
 	CreateDevice(ctx context.Context, displayName *string) (sqlcgen.Device, error)
 	UpdateDevice(ctx context.Context, arg sqlcgen.UpdateDeviceParams) (sqlcgen.Device, error)
 	UpsertDeviceMetadata(ctx context.Context, arg sqlcgen.UpsertDeviceMetadataParams) (sqlcgen.DeviceMetadata, error)
@@ -1409,6 +1410,11 @@ func (h *Handler) handleGetDevice(w http.ResponseWriter, r *http.Request) {
 	if tags, err := h.devices.ListDeviceEffectiveTags(r.Context(), row.ID); err == nil && len(tags) > 0 {
 		resp.Tags = tags
 	}
+	if ts, err := h.devices.GetDeviceSummaryTimestamps(r.Context(), row.ID); err == nil {
+		resp.PrimaryIP = normalizeInetPointer(ts.PrimaryIP)
+		resp.LastSeenAt = ts.LastSeenAt
+		resp.LastChangeAt = ts.LastChangeAt
+	}
 	h.writeJSON(w, http.StatusOK, resp)
 }
 
@@ -1596,7 +1602,21 @@ func (h *Handler) handleListDeviceNameCandidates(w http.ResponseWriter, r *http.
 		return
 	}
 
-	rows, err := h.devices.ListDeviceNameCandidates(r.Context(), id)
+	ctx := r.Context()
+	if _, err := h.devices.GetDevice(ctx, id); err != nil {
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			h.writeError(w, http.StatusNotFound, "not_found", "device not found", map[string]any{"id": id})
+		case isInvalidUUID(err):
+			h.writeError(w, http.StatusBadRequest, "invalid_id", "device id is not a valid uuid", map[string]any{"id": id})
+		default:
+			h.log.Error().Err(err).Str("id", id).Msg("fetch device before name candidates failed")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to list device name candidates", nil)
+		}
+		return
+	}
+
+	rows, err := h.devices.ListDeviceNameCandidates(ctx, id)
 	if err != nil {
 		switch {
 		case isInvalidUUID(err):
@@ -1689,7 +1709,21 @@ func (h *Handler) handleListDeviceTags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := h.devices.ListDeviceTags(r.Context(), id)
+	ctx := r.Context()
+	if _, err := h.devices.GetDevice(ctx, id); err != nil {
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			h.writeError(w, http.StatusNotFound, "not_found", "device not found", map[string]any{"id": id})
+		case isInvalidUUID(err):
+			h.writeError(w, http.StatusBadRequest, "invalid_id", "device id is not a valid uuid", map[string]any{"id": id})
+		default:
+			h.log.Error().Err(err).Str("id", id).Msg("fetch device before tags list failed")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to list device tags", nil)
+		}
+		return
+	}
+
+	rows, err := h.devices.ListDeviceTags(ctx, id)
 	if err != nil {
 		switch {
 		case isInvalidUUID(err):
@@ -1759,13 +1793,17 @@ func (h *Handler) handlePutDeviceTags(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, tag := range normalized {
-		_ = h.devices.UpsertDeviceTag(ctx, sqlcgen.UpsertDeviceTagParams{
+		if err := h.devices.UpsertDeviceTag(ctx, sqlcgen.UpsertDeviceTagParams{
 			DeviceID:   id,
 			Tag:        tag,
 			Source:     "manual",
 			Confidence: 100,
 			Evidence:   map[string]any{"signal": "manual"},
-		})
+		}); err != nil {
+			h.log.Error().Err(err).Str("id", id).Str("tag", tag).Msg("upsert device tag failed")
+			h.writeError(w, http.StatusInternalServerError, "db_error", "failed to upsert device tag", nil)
+			return
+		}
 	}
 
 	h.handleListDeviceTags(w, r)
@@ -1940,6 +1978,11 @@ func (h *Handler) handleUpdateDevice(w http.ResponseWriter, r *http.Request) {
 	resp := toDevice(row)
 	if tags, err := h.devices.ListDeviceEffectiveTags(ctx, row.ID); err == nil && len(tags) > 0 {
 		resp.Tags = tags
+	}
+	if ts, err := h.devices.GetDeviceSummaryTimestamps(ctx, row.ID); err == nil {
+		resp.PrimaryIP = normalizeInetPointer(ts.PrimaryIP)
+		resp.LastSeenAt = ts.LastSeenAt
+		resp.LastChangeAt = ts.LastChangeAt
 	}
 	h.writeJSON(w, http.StatusOK, resp)
 }

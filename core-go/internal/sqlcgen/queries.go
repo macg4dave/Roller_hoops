@@ -93,6 +93,49 @@ func (q *Queries) GetDevice(ctx context.Context, id string) (Device, error) {
 	return i, err
 }
 
+const getDeviceSummaryTimestamps = `-- name: GetDeviceSummaryTimestamps :one
+SELECT
+    (
+        SELECT ia.ip::text
+        FROM ip_addresses ia
+        LEFT JOIN interfaces i2 ON i2.id = ia.interface_id
+        WHERE ia.device_id = $1::uuid OR i2.device_id = $1::uuid
+        ORDER BY ia.updated_at DESC, ia.ip::text ASC
+        LIMIT 1
+    ) AS primary_ip,
+    (
+        SELECT MAX(ts)
+        FROM (
+            VALUES
+                ((SELECT MAX(ia.updated_at) FROM ip_addresses ia LEFT JOIN interfaces i ON i.id = ia.interface_id WHERE ia.device_id = $1::uuid OR i.device_id = $1::uuid)),
+                ((SELECT MAX(ma.updated_at) FROM mac_addresses ma LEFT JOIN interfaces i ON i.id = ma.interface_id WHERE ma.device_id = $1::uuid OR i.device_id = $1::uuid)),
+                ((SELECT MAX(s.observed_at) FROM services s WHERE s.device_id = $1::uuid)),
+                ((SELECT MAX(ds.last_success_at) FROM device_snmp ds WHERE ds.device_id = $1::uuid))
+        ) v(ts)
+    ) AS last_seen_at,
+    (
+        SELECT MAX(ts)
+        FROM (
+            VALUES
+                ((SELECT d.updated_at FROM devices d WHERE d.id = $1::uuid)),
+                ((SELECT MAX(dm.updated_at) FROM device_metadata dm WHERE dm.device_id = $1::uuid)),
+                ((SELECT MAX(ia.created_at) FROM ip_addresses ia LEFT JOIN interfaces i ON i.id = ia.interface_id WHERE ia.device_id = $1::uuid OR i.device_id = $1::uuid)),
+                ((SELECT MAX(ma.created_at) FROM mac_addresses ma LEFT JOIN interfaces i ON i.id = ma.interface_id WHERE ma.device_id = $1::uuid OR i.device_id = $1::uuid)),
+                ((SELECT MAX(s.created_at) FROM services s WHERE s.device_id = $1::uuid)),
+                ((SELECT MAX(ds.updated_at) FROM device_snmp ds WHERE ds.device_id = $1::uuid)),
+                ((SELECT MAX(iv.observed_at) FROM interface_vlans iv JOIN interfaces i ON i.id = iv.interface_id WHERE i.device_id = $1::uuid)),
+                ((SELECT MAX(COALESCE(l.observed_at, l.updated_at)) FROM links l WHERE l.a_device_id = $1::uuid OR l.b_device_id = $1::uuid))
+        ) v(ts)
+    ) AS last_change_at
+`
+
+func (q *Queries) GetDeviceSummaryTimestamps(ctx context.Context, deviceID string) (DeviceSummaryTimestamps, error) {
+	row := q.db.QueryRow(ctx, getDeviceSummaryTimestamps, deviceID)
+	var i DeviceSummaryTimestamps
+	err := row.Scan(&i.PrimaryIP, &i.LastSeenAt, &i.LastChangeAt)
+	return i, err
+}
+
 const listDevices = `-- name: ListDevices :many
 SELECT d.id,
        d.display_name,
@@ -547,9 +590,15 @@ func (q *Queries) ListDeviceTags(ctx context.Context, deviceID string) ([]Device
 }
 
 const listDeviceEffectiveTags = `-- name: ListDeviceEffectiveTags :many
-SELECT tag
-FROM device_tags
-WHERE device_id = $1::uuid
+SELECT tag FROM (
+    SELECT DISTINCT ON (tag) tag, source, confidence, updated_at
+    FROM device_tags
+    WHERE device_id = $1::uuid
+    ORDER BY tag,
+             CASE source WHEN 'manual' THEN 0 ELSE 1 END,
+             confidence DESC,
+             updated_at DESC
+) ranked
 ORDER BY CASE source WHEN 'manual' THEN 0 ELSE 1 END,
          confidence DESC,
          updated_at DESC,

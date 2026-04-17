@@ -23,6 +23,8 @@ VS Code should prompt for the shared recommendations in `.vscode/extensions.json
 
 These are recommendations only; the project must still build and test from the CLI.
 
+All shared validation tasks are Docker-backed so the workspace can be used without installing local Go or Node.js toolchains.
+
 ## Shared Tasks
 
 Use `Terminal: Run Task...` and prefer these labels:
@@ -32,24 +34,24 @@ Use `Terminal: Run Task...` and prefer these labels:
 | `agent: show ready queue` | Print startable backlog rows |
 | `agent: show required reading` | Print the top of `AGENTS.md` |
 | `git: diff check` | Catch whitespace and conflict-marker problems |
-| `ui: npm ci` | Install UI dependencies |
-| `ui: gen openapi types` | Regenerate `ui-node/lib/api-types.ts` from OpenAPI |
-| `ui: test` | Run Vitest |
-| `ui: build` | Run Next build/type check |
-| `go: fmt check` | Check Go formatting |
-| `go: vet` | Run Go vet |
-| `go: test` | Run Go tests locally |
-| `go: test via docker` | Run Go tests through the Go Docker image |
+| `ui: npm ci` | Validate UI dependency install inside Docker |
+| `ui: gen openapi types` | Regenerate `ui-node/lib/api-types.ts` using Docker and copy it back into the workspace |
+| `ui: test` | Run Vitest inside Docker |
+| `ui: build` | Run Next build/type check inside Docker |
+| `go: fmt check` | Check Go formatting inside Docker |
+| `go: vet` | Run Go vet inside Docker |
+| `go: test` | Run Go tests inside Docker |
+| `go: test via docker` | Alias for the Docker-backed Go test path |
 | `validate: ui` | OpenAPI typegen, UI tests, UI build |
-| `validate: available local checks` | Whitespace check plus UI validation |
+| `validate: available local checks` | Whitespace check plus Docker-backed UI validation |
 | `docker: dev stack up` | Build and start the dev stack |
 | `docker: stack down` | Stop and remove dev-profile stack volumes |
 
 ## UNC Workspace Note
 
-If the repo is opened through a UNC path, npm scripts may fail because Windows launches `cmd.exe` and defaults to `C:\Windows`.
+If the repo is opened through a UNC path, some direct `cmd.exe` workflows may fail because Windows launches from `C:\Windows`.
 
-The shared VS Code tasks use `pushd` on Windows so they work from UNC workspaces. If a manual command fails with `No test files found` from `C:/Windows`, rerun from a mapped path:
+The shared VS Code tasks avoid local Node/Go execution, which removes most UNC friction. If a manual command fails with `No test files found` from `C:/Windows`, rerun from a mapped path:
 
 ```powershell
 Set-Location G:\Roller_hoops

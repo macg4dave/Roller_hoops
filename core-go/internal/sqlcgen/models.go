@@ -10,6 +10,12 @@ type Device struct {
 	Notes       *string
 }
 
+type DeviceSummaryTimestamps struct {
+	PrimaryIP    *string
+	LastSeenAt   *time.Time
+	LastChangeAt *time.Time
+}
+
 type DeviceListItem struct {
 	ID           string
 	DisplayName  *string

@@ -20,6 +20,7 @@ type fakeDeviceQueries struct {
 	listFn               func(ctx context.Context) ([]sqlcgen.Device, error)
 	listPageFn           func(ctx context.Context, arg sqlcgen.ListDevicesPageParams) ([]sqlcgen.DeviceListItem, error)
 	getFn                func(ctx context.Context, id string) (sqlcgen.Device, error)
+	getTimestampsFn      func(ctx context.Context, deviceID string) (sqlcgen.DeviceSummaryTimestamps, error)
 	createFn             func(ctx context.Context, displayName *string) (sqlcgen.Device, error)
 	updateFn             func(ctx context.Context, arg sqlcgen.UpdateDeviceParams) (sqlcgen.Device, error)
 	upsertFn             func(ctx context.Context, arg sqlcgen.UpsertDeviceMetadataParams) (sqlcgen.DeviceMetadata, error)
@@ -74,6 +75,13 @@ func (f fakeDeviceQueries) ListDevicesPage(ctx context.Context, arg sqlcgen.List
 
 func (f fakeDeviceQueries) GetDevice(ctx context.Context, id string) (sqlcgen.Device, error) {
 	return f.getFn(ctx, id)
+}
+
+func (f fakeDeviceQueries) GetDeviceSummaryTimestamps(ctx context.Context, deviceID string) (sqlcgen.DeviceSummaryTimestamps, error) {
+	if f.getTimestampsFn == nil {
+		return sqlcgen.DeviceSummaryTimestamps{}, nil
+	}
+	return f.getTimestampsFn(ctx, deviceID)
 }
 
 func (f fakeDeviceQueries) CreateDevice(ctx context.Context, displayName *string) (sqlcgen.Device, error) {

@@ -4,32 +4,38 @@
     {
       "label": "agent: show ready queue",
       "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-Command",
-        "Select-String -Path BACKLOG.md -Pattern '^\\| T[0-9].*\\| Ready \\|'"
-      ],
+      "command": "grep -E '^\\| T[0-9].*\\| Ready \\|' BACKLOG.md || true",
       "options": {
         "cwd": "${workspaceFolder}"
+      },
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "Select-String -Path BACKLOG.md -Pattern '^\\| T[0-9].*\\| Ready \\|'"
+        ]
       },
       "problemMatcher": []
     },
     {
       "label": "agent: show required reading",
       "type": "shell",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-Command",
-        "Get-Content AGENTS.md -TotalCount 80"
-      ],
+      "command": "head -80 AGENTS.md",
       "options": {
         "cwd": "${workspaceFolder}"
+      },
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "Get-Content AGENTS.md -TotalCount 80"
+        ]
       },
       "problemMatcher": []
     },
@@ -45,63 +51,18 @@
     {
       "label": "ui: npm ci",
       "type": "shell",
-      "command": "npm ci",
+      "command": "docker build -f docker/validate/ui-node.Dockerfile --target deps .",
       "options": {
-        "cwd": "${workspaceFolder}/ui-node"
-      },
-      "windows": {
-        "command": "cmd",
-        "args": ["/d", "/c", "pushd \"${workspaceFolder}\\ui-node\" && npm ci"]
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": []
     },
     {
       "label": "ui: gen openapi types",
       "type": "shell",
-      "command": "npm run gen:openapi",
+      "command": "docker build -q -f docker/validate/ui-node.Dockerfile --target generated-types . | tail -n 1 | xargs -I {} sh -c 'cid=$(docker create {}); trap \"docker rm -f $cid >/dev/null\" EXIT; docker cp $cid:/workspace/ui-node/lib/api-types.ts ui-node/lib/api-types.ts'",
       "options": {
-        "cwd": "${workspaceFolder}/ui-node"
-      },
-      "windows": {
-        "command": "cmd",
-        "args": ["/d", "/c", "pushd \"${workspaceFolder}\\ui-node\" && npm run gen:openapi"]
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "ui: test",
-      "type": "shell",
-      "command": "npm test",
-      "options": {
-        "cwd": "${workspaceFolder}/ui-node"
-      },
-      "windows": {
-        "command": "cmd",
-        "args": ["/d", "/c", "pushd \"${workspaceFolder}\\ui-node\" && npm test"]
-      },
-      "group": "test",
-      "problemMatcher": []
-    },
-    {
-      "label": "ui: build",
-      "type": "shell",
-      "command": "npm run build",
-      "options": {
-        "cwd": "${workspaceFolder}/ui-node"
-      },
-      "windows": {
-        "command": "cmd",
-        "args": ["/d", "/c", "pushd \"${workspaceFolder}\\ui-node\" && npm run build"]
-      },
-      "group": "build",
-      "problemMatcher": []
-    },
-    {
-      "label": "go: fmt check",
-      "type": "shell",
-      "command": "test -z \"$(gofmt -l .)\"",
-      "options": {
-        "cwd": "${workspaceFolder}/core-go"
+        "cwd": "${workspaceFolder}"
       },
       "windows": {
         "command": "powershell",
@@ -110,34 +71,55 @@
           "-ExecutionPolicy",
           "Bypass",
           "-Command",
-          "Push-Location '${workspaceFolder}\\core-go'; if ((gofmt -l . | Measure-Object).Count -ne 0) { gofmt -l .; exit 1 }"
+          "$image = docker build -q -f docker/validate/ui-node.Dockerfile --target generated-types .; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; $cid = docker create $image; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; try { docker cp \"${cid}:/workspace/ui-node/lib/api-types.ts\" \"ui-node/lib/api-types.ts\"; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } finally { docker rm -f $cid | Out-Null }"
         ]
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "ui: test",
+      "type": "shell",
+      "command": "docker build -f docker/validate/ui-node.Dockerfile --target test .",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "ui: build",
+      "type": "shell",
+      "command": "docker build -f docker/validate/ui-node.Dockerfile --target build .",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "go: fmt check",
+      "type": "shell",
+      "command": "docker build -f docker/validate/core-go.Dockerfile --target fmtcheck .",
+      "options": {
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": []
     },
     {
       "label": "go: vet",
       "type": "shell",
-      "command": "go vet ./...",
+      "command": "docker build -f docker/validate/core-go.Dockerfile --target vet .",
       "options": {
-        "cwd": "${workspaceFolder}/core-go"
-      },
-      "windows": {
-        "command": "cmd",
-        "args": ["/d", "/c", "pushd \"${workspaceFolder}\\core-go\" && go vet ./..."]
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": []
     },
     {
       "label": "go: test",
       "type": "shell",
-      "command": "go test ./...",
+      "command": "docker build -f docker/validate/core-go.Dockerfile --target test .",
       "options": {
-        "cwd": "${workspaceFolder}/core-go"
-      },
-      "windows": {
-        "command": "cmd",
-        "args": ["/d", "/c", "pushd \"${workspaceFolder}\\core-go\" && go test ./..."]
+        "cwd": "${workspaceFolder}"
       },
       "group": "test",
       "problemMatcher": []
@@ -145,14 +127,9 @@
     {
       "label": "go: test via docker",
       "type": "shell",
-      "command": "docker run --rm -v \"${workspaceFolder}:/src\" -w /src/core-go golang:1.24-alpine go test ./...",
-      "windows": {
-        "command": "cmd",
-        "args": [
-          "/d",
-          "/c",
-          "pushd \"${workspaceFolder}\" && docker run --rm -v \"%CD%:/src\" -w /src/core-go golang:1.24-alpine go test ./..."
-        ]
+      "command": "docker build -f docker/validate/core-go.Dockerfile --target test .",
+      "options": {
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": []
     },
@@ -163,9 +140,15 @@
       "problemMatcher": []
     },
     {
+      "label": "validate: go",
+      "dependsOrder": "sequence",
+      "dependsOn": ["go: fmt check", "go: vet", "go: test"],
+      "problemMatcher": []
+    },
+    {
       "label": "validate: available local checks",
       "dependsOrder": "sequence",
-      "dependsOn": ["git: diff check", "validate: ui"],
+      "dependsOn": ["git: diff check", "validate: go", "validate: ui"],
       "problemMatcher": []
     },
     {
@@ -181,6 +164,15 @@
       "label": "docker: stack down",
       "type": "shell",
       "command": "docker compose --profile dev down -v",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "docker: smoke test",
+      "type": "shell",
+      "command": "docker compose --profile prod up --build --abort-on-container-exit",
       "options": {
         "cwd": "${workspaceFolder}"
       },

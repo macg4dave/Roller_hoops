@@ -52,7 +52,16 @@ This directory-level guide collects the day-to-day operations runbook that lives
 
 - Ensure `/metrics` returns `200 OK` and Prom metrics scrape successfully.
 - Confirm `docker compose logs --tail 50 core-go` show structured logs with request IDs.
-- Run `go test ./...` locally before shipping to keep the contract gate healthy.
+- Run the Docker-backed validation checks before shipping to keep the contract gate healthy:
+  - `docker build -f docker/validate/core-go.Dockerfile --target test .`
+  - `docker build -f docker/validate/ui-node.Dockerfile --target test .`
+  - `docker build -f docker/validate/ui-node.Dockerfile --target build .`
+
+## Docker-only developer workflow
+
+- Shared VS Code validation tasks no longer require local Go or Node.js installs.
+- The compose stack no longer relies on host bind mounts for Traefik config, migrations, or dev seed SQL, which makes Windows mapped-drive usage more reliable.
+- To refresh generated UI API types without a local Node install, use the `ui: gen openapi types` task.
 
 ## Monitoring / SLO stubs
 
