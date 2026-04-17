@@ -40,3 +40,21 @@ func TestChooseBestDisplayName_RejectsGarbage(t *testing.T) {
 		t.Fatalf("expected ok=false, got name=%q", name)
 	}
 }
+
+func TestFallbackDisplayName(t *testing.T) {
+	tests := []struct {
+		ip, id, want string
+	}{
+		{"10.0.1.5", "abcdef01-2345-6789-abcd-ef0123456789", "device-10.0.1.5"},
+		{"", "abcdef01-2345-6789-abcd-ef0123456789", "device-abcdef01"},
+		{"", "short", "device-short"},
+		{"", "", "device-unknown"},
+		{"  ", "  ", "device-unknown"},
+	}
+	for _, tt := range tests {
+		got := FallbackDisplayName(tt.ip, tt.id)
+		if got != tt.want {
+			t.Errorf("FallbackDisplayName(%q, %q) = %q, want %q", tt.ip, tt.id, got, tt.want)
+		}
+	}
+}

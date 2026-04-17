@@ -58,6 +58,7 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 	}
 
 	var snmpOK int32
+	var snmpErrors int32
 	var namesWritten int32
 	var vlansWritten int32
 	var linksWritten int32
@@ -135,6 +136,12 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 				now := time.Now()
 				if err != nil {
 					msg := err.Error()
+					atomic.AddInt32(&snmpErrors, 1)
+					w.log.Info().
+						Str("device_id", t.DeviceID).
+						Str("ip", ipStr).
+						Str("error", msg).
+						Msg("SNMP enrichment failed for device")
 					_ = w.q.UpsertDeviceSNMP(ctx, sqlcgen.UpsertDeviceSNMPParams{
 						DeviceID:      t.DeviceID,
 						Address:       ipPtr,
@@ -146,6 +153,11 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 						_, _ = w.q.SetDeviceDisplayNameIfUnset(ctx, sqlcgen.SetDeviceDisplayNameIfUnsetParams{
 							ID:          t.DeviceID,
 							DisplayName: displayName,
+						})
+					} else {
+						_, _ = w.q.SetDeviceDisplayNameIfUnset(ctx, sqlcgen.SetDeviceDisplayNameIfUnsetParams{
+							ID:          t.DeviceID,
+							DisplayName: naming.FallbackDisplayName(ipStr, t.DeviceID),
 						})
 					}
 					upsertSuggestions(t.DeviceID, tagging.MergeSuggestions(tagging.SuggestFromNames(deviceNames)))
@@ -193,6 +205,11 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 					_, _ = w.q.SetDeviceDisplayNameIfUnset(ctx, sqlcgen.SetDeviceDisplayNameIfUnsetParams{
 						ID:          t.DeviceID,
 						DisplayName: displayName,
+					})
+				} else {
+					_, _ = w.q.SetDeviceDisplayNameIfUnset(ctx, sqlcgen.SetDeviceDisplayNameIfUnsetParams{
+						ID:          t.DeviceID,
+						DisplayName: naming.FallbackDisplayName(ipStr, t.DeviceID),
 					})
 				}
 
@@ -403,6 +420,11 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 						ID:          t.DeviceID,
 						DisplayName: displayName,
 					})
+				} else {
+					_, _ = w.q.SetDeviceDisplayNameIfUnset(ctx, sqlcgen.SetDeviceDisplayNameIfUnsetParams{
+						ID:          t.DeviceID,
+						DisplayName: naming.FallbackDisplayName(ipStr, t.DeviceID),
+					})
 				}
 				upsertSuggestions(t.DeviceID, tagging.MergeSuggestions(tagging.SuggestFromNames(deviceNames)))
 			}
@@ -426,6 +448,7 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 			return map[string]any{
 				"targets":       len(targets),
 				"snmp_ok":       int(snmpOK),
+				"snmp_errors":   int(snmpErrors),
 				"names_written": int(namesWritten),
 				"vlans_written": int(vlansWritten),
 				"links_written": int(linksWritten),
@@ -440,6 +463,7 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 	return map[string]any{
 		"targets":       len(targets),
 		"snmp_ok":       int(snmpOK),
+		"snmp_errors":   int(snmpErrors),
 		"names_written": int(namesWritten),
 		"vlans_written": int(vlansWritten),
 		"links_written": int(linksWritten),

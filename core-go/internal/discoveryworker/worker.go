@@ -751,11 +751,12 @@ func (w *Worker) scrapeARP(ctx context.Context, runID string, scope *netip.Prefi
 	}
 
 	// Detect Docker bridge networking: all entries share one MAC (the gateway).
-	if isBridgeARP(entries) {
+	bridgeMode := isBridgeARP(entries)
+	if bridgeMode {
 		w.log.Warn().
 			Int("arp_entries", len(entries)).
 			Str("shared_mac", entries[0].MAC).
-			Msg("all ARP entries share one MAC — likely Docker bridge networking; real device MACs are not visible")
+			Msg("all ARP entries share one MAC — Docker bridge networking detected; skipping MAC-based identity and using IP-only lookup (real MACs will be populated via SNMP enrichment)")
 	}
 
 	var result arpScrapeResult
@@ -767,14 +768,26 @@ func (w *Worker) scrapeARP(ctx context.Context, runID string, scope *netip.Prefi
 		}
 		result.ARPEntries++
 
-		deviceID, err := w.q.FindDeviceIDByMAC(ctx, e.MAC)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return result, err
-		}
-		if errors.Is(err, pgx.ErrNoRows) {
+		var deviceID string
+		var err error
+
+		if bridgeMode {
+			// In bridge mode the MAC belongs to the gateway, not the device.
+			// Only look up by IP to avoid merging all devices under one MAC.
 			deviceID, err = w.q.FindDeviceIDByIP(ctx, e.IP.String())
 			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 				return result, err
+			}
+		} else {
+			deviceID, err = w.q.FindDeviceIDByMAC(ctx, e.MAC)
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return result, err
+			}
+			if errors.Is(err, pgx.ErrNoRows) {
+				deviceID, err = w.q.FindDeviceIDByIP(ctx, e.IP.String())
+				if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+					return result, err
+				}
 			}
 		}
 		if deviceID == "" {
@@ -786,11 +799,16 @@ func (w *Worker) scrapeARP(ctx context.Context, runID string, scope *netip.Prefi
 			result.DevicesCreated++
 		}
 
-		if err := w.q.UpsertDeviceMAC(ctx, sqlcgen.UpsertDeviceMACParams{
-			DeviceID: deviceID,
-			MAC:      e.MAC,
-		}); err != nil {
-			return result, err
+		// In bridge mode, skip MAC upsert and observation — the MAC is the
+		// gateway's address, not the device's. Real device MACs are populated
+		// later via SNMP interface walks.
+		if !bridgeMode {
+			if err := w.q.UpsertDeviceMAC(ctx, sqlcgen.UpsertDeviceMACParams{
+				DeviceID: deviceID,
+				MAC:      e.MAC,
+			}); err != nil {
+				return result, err
+			}
 		}
 		if err := w.q.UpsertDeviceIP(ctx, sqlcgen.UpsertDeviceIPParams{
 			DeviceID: deviceID,
@@ -799,12 +817,14 @@ func (w *Worker) scrapeARP(ctx context.Context, runID string, scope *netip.Prefi
 			return result, err
 		}
 		if runID != "" {
-			if err := w.q.InsertMACObservation(ctx, sqlcgen.InsertMACObservationParams{
-				RunID:    runID,
-				DeviceID: deviceID,
-				MAC:      e.MAC,
-			}); err != nil {
-				return result, err
+			if !bridgeMode {
+				if err := w.q.InsertMACObservation(ctx, sqlcgen.InsertMACObservationParams{
+					RunID:    runID,
+					DeviceID: deviceID,
+					MAC:      e.MAC,
+				}); err != nil {
+					return result, err
+				}
 			}
 			if err := w.q.InsertIPObservation(ctx, sqlcgen.InsertIPObservationParams{
 				RunID:    runID,

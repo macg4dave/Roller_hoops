@@ -251,6 +251,14 @@ Only rows with `Status` = `Ready` are startable without more planning unless the
 | T021 | Next | Phase 16 | P1 | Operate overlay projection metadata (Go) | Ready | T011 | `docker build -f docker/validate/core-go.Dockerfile --target test .` + OpenAPI type generation if schema descriptions change |
 | T022 | Next | Phase 16 | P1 | Operate overlay canvas and legend UI | Ready | T021 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
 | T023 | Next | Phase 16 | P1 | Operate inspector history and change feed UI | Ready | T021 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
+| T024 | Now | Enrichment | P1 | Device naming: fallback unique names | Ready | None | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T025 | Now | Discovery | P1 | MAC discovery in Docker bridge mode | Ready | None | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T026 | Now | Discovery | P1 | SNMP enrichment debugging and gaps | Ready | None | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T027 | Now | Phase 16 | P1 | Map node text overlap fix | Ready | None | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
+| T028 | Now | Enrichment | P2 | Parse sysDescr into structured OS fields | Ready | T026 | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T029 | Next | Discovery | P2 | MAC-based device identity for rescans | Ready | T025 | `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T030 | Now | Phase 16 | P0 | Map projection renders nothing with focus | Ready | None | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .`; `docker build -f docker/validate/core-go.Dockerfile --target test .` |
+| T031 | Now | UI | P1 | Device page layout redesign | Ready | None | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
 
 ## Dev Runbook
 
@@ -1209,6 +1217,301 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
   - failures are shown as operator-grade inline messages
 - Handoff Notes:
   - Keep the Inspector compact; the full timeline remains on the device detail page.
+
+### T024 - Device Naming: Fallback Unique Names
+
+- Status: Ready
+- Queue: Now
+- Phase: Enrichment
+- Priority: P1
+- Owner Role: Core owner
+- Goal: Ensure every device gets a display name — either from discovery sources or a generated unique fallback.
+- Context: SNMP data is present on device pages (enrichment runs), but most devices still show "(unnamed device)". The naming pipeline collects candidates and scores them, but when no candidate meets the score-70 threshold (e.g., no PTR records, sysName is empty/garbage), the device stays unnamed. No DHCP source is implemented despite being the highest-scored source. The naming pipeline itself is sound — it just needs a fallback for devices that have no good name candidates.
+- Scope:
+  - investigate why devices remain unnamed despite SNMP being active — check if sysName is populated in the DB for unnamed devices
+  - if sysName is not populated, confirm enrichment ordering (name resolution may be running before SNMP returns)
+  - add a generated fallback name when no candidate meets the threshold (e.g., `device-<short-hash>` using first 8 chars of UUID, or `device-<primary-ip>` if an IP is known)
+  - the fallback should use a new naming source like `"auto"` with a low score so any real name discovered later overrides it
+  - change `SetDeviceDisplayNameIfUnset` callers so the fallback is applied after all enrichment sources have been tried
+  - add unit tests for the fallback path in `naming_test.go`
+- Files to Touch:
+  - `core-go/internal/naming/naming.go`
+  - `core-go/internal/naming/naming_test.go`
+  - `core-go/internal/discoveryworker/enrichment.go`
+  - `core-go/queries/enrichment.sql` (if new query needed)
+  - `core-go/internal/sqlcgen/` (if query added)
+- Do Not Touch:
+  - UI code
+  - existing name candidate scoring (the scoring is correct)
+- Dependencies:
+  - None
+- Validation:
+  - `docker build -f docker/validate/core-go.Dockerfile --target test .`
+- Definition of Done:
+  - every device gets a non-empty display name after enrichment completes
+  - devices with real DNS/SNMP/mDNS names use those (existing behavior unchanged)
+  - devices without good candidates get a deterministic unique fallback name
+  - fallback names are overridable by later discovery of real names or operator edits
+  - unit tests cover the fallback naming path
+- Handoff Notes:
+  - The `auto` source should score below the 70 threshold so `ChooseBestDisplayName` normally skips it — the fallback should be applied separately after scoring fails, not by lowering the threshold.
+  - Check whether `SetDeviceDisplayNameIfUnset` should be changed to `SetDeviceDisplayNameIfEmpty` with different semantics for auto vs. operator names.
+
+### T025 - MAC Discovery In Docker Bridge Mode
+
+- Status: Ready
+- Queue: Now
+- Phase: Discovery
+- Priority: P1
+- Owner Role: Core owner
+- Goal: Improve MAC address discovery when the Go service runs in Docker bridge networking.
+- Context: ARP scraping reads `/proc/net/arp`, which in Docker bridge mode only sees the bridge gateway MAC for all containers. The code already detects this via `isBridgeARP()` and falls back to creating devices from responsive IPs without MACs. No MACs are being found because the deployment uses default Docker compose (bridge networking).
+- Scope:
+  - document the bridge-mode MAC limitation prominently in discovery logs and operator-facing guidance
+  - add ARP-based enrichment as a post-discovery step when running in host-network mode (currently only done during initial scan)
+  - consider adding SNMP interface MAC addresses as primary device MACs when ARP MACs are unavailable — SNMP `ifPhysAddress` is already collected but may not be promoted to the device's MAC list effectively
+  - ensure the device page clearly explains when no MACs are found and why (bridge mode guidance)
+  - add a discovery run log message when bridge-mode is detected, suggesting host-network deployment
+- Files to Touch:
+  - `core-go/internal/discoveryworker/worker.go`
+  - `core-go/internal/discoveryworker/enrichment.go`
+  - `docs/discovery-deployment.md`
+  - `docs/discovery-capabilities.md`
+- Do Not Touch:
+  - Docker compose defaults (keep bridge as default for safety)
+  - UI code
+- Dependencies:
+  - None
+- Validation:
+  - `docker build -f docker/validate/core-go.Dockerfile --target test .`
+- Definition of Done:
+  - bridge-mode detection logs an operator-grade message suggesting host-network mode
+  - SNMP-discovered interface MACs are promoted to device MACs when no ARP MAC is available
+  - discovery docs updated with bridge-mode limitations and host-network recommendation
+- Handoff Notes:
+  - Host-network mode is already supported via `docker-compose.hostnet.yml`. The main gap is that SNMP interface MACs are stored per-interface but not always promoted to device-level MACs.
+  - Do not add active ARP probing — keep discovery passive and explicit-scope.
+
+### T026 - SNMP Enrichment Debugging And Gaps
+
+- Status: Ready
+- Queue: Now
+- Phase: Discovery
+- Priority: P1
+- Owner Role: Core owner
+- Goal: Investigate and fix any gaps in SNMP enrichment that prevent data from being fully surfaced.
+- Context: User reports "SNMP is not being added" despite `SNMP_ENABLED=true` and devices responding to SNMPv2c. SNMP data IS visible on some device pages, so enrichment runs. The issue may be: (a) SNMP only runs on the first discovery, not on rescans; (b) community string mismatch on some devices; (c) SNMP errors are swallowed silently; (d) the UI doesn't clearly show SNMP success vs. failure per device.
+- Scope:
+  - add a discovery run summary that counts SNMP successes, failures, and skips per run
+  - ensure SNMP errors per device are visible in the device detail page (last_error is stored but may not render prominently)
+  - verify SNMP enrichment runs on every discovery cycle, not just the first
+  - check if the SNMP community string configuration is documented and prominent in setup docs
+  - add a test that validates SNMP enrichment is invoked during re-enrichment, not just initial runs
+- Files to Touch:
+  - `core-go/internal/discoveryworker/enrichment.go`
+  - `core-go/internal/httpapi/` (if discovery run summary API needs enhancement)
+  - `ui-node/app/(app)/devices/[id]/page.tsx` (SNMP status display)
+  - `docs/discovery-capabilities.md`
+  - `readme.md` (if SNMP setup docs need clarification)
+- Do Not Touch:
+  - SNMP protocol implementation (it works)
+  - SNMPv3 (explicitly out of scope)
+- Dependencies:
+  - None
+- Validation:
+  - `docker build -f docker/validate/core-go.Dockerfile --target test .`
+- Definition of Done:
+  - discovery run logs include per-device SNMP success/failure counts
+  - device detail page shows SNMP last success and last error timestamps prominently
+  - SNMP enrichment confirmed to run on every discovery cycle
+  - SNMP setup (community string, enable flag) documented in readme
+- Handoff Notes:
+  - The SNMP client and enrichment pipeline are fully implemented and wired. This task is about surfacing errors and filling visibility gaps, not reimplementing SNMP.
+
+### T027 - Map Node Text Overlap Fix
+
+- Status: Ready
+- Queue: Now
+- Phase: Phase 16
+- Priority: P1
+- Owner Role: UI owner
+- Goal: Fix text rendering in map device boxes where text displays on top of other text.
+- Context: On the map page, device node labels (rendered as buttons/spans in MapCanvas.tsx) overlap when labels are long or when the UUID fallback is used (36 chars). The CSS classes `.mapPhysicalLinkLabel` and `.mapRegionOccupantLabel` may lack proper `text-overflow: ellipsis`, `overflow: hidden`, or `white-space: nowrap` rules.
+- Scope:
+  - audit `.mapPhysicalLinkLabel`, `.mapRegionOccupantLabel`, `.mapPhysicalFact`, and related CSS classes for overflow handling
+  - add `text-overflow: ellipsis`, `overflow: hidden`, `white-space: nowrap` where needed
+  - ensure long UUID labels (when no display name exists) don't break layout
+  - test with various label lengths including very long FQDNs and raw UUIDs
+  - keep the hover title intact so full label is accessible on hover
+- Files to Touch:
+  - `ui-node/app/globals.css` (map-related CSS classes)
+  - `ui-node/app/(app)/map/MapCanvas.tsx` (if structural JSX changes needed)
+- Do Not Touch:
+  - Map projection API
+  - Map data fetching logic
+- Dependencies:
+  - None
+- Validation:
+  - `docker build -f docker/validate/ui-node.Dockerfile --target test .`
+  - `docker build -f docker/validate/ui-node.Dockerfile --target build .`
+- Definition of Done:
+  - no text overlaps on the map page with any combination of label lengths
+  - long labels are truncated with ellipsis
+  - full label accessible via hover tooltip
+- Handoff Notes:
+  - The map is currently list/card-based HTML, not SVG/Canvas. Text overflow is a CSS issue.
+
+### T028 - Parse sysDescr Into Structured OS Fields
+
+- Status: Ready
+- Queue: Now
+- Phase: Enrichment
+- Priority: P2
+- Owner Role: Core owner
+- Goal: Extract OS/system info from SNMP sysDescr into structured fields for display and filtering.
+- Context: SNMP sysDescr is stored as raw text. The tagging system already parses it for device-type keywords, but there's no structured `os_name`, `os_version`, or `os_family` field. User wants OS/system info for devices.
+- Scope:
+  - add a sysDescr parser that extracts OS family, OS name, and version string from common sysDescr formats (Linux, Cisco IOS/IOS-XE/NX-OS, Juniper Junos, pfSense, OPNsense, FortiOS, Windows, Ubiquiti, Aruba, HP ProCurve, Synology/QNAP, VMware ESXi)
+  - add `os_family` and `os_version` columns to `device_snmp` (or a new lightweight table) via migration
+  - populate structured fields during SNMP enrichment alongside existing sysDescr storage
+  - expose structured fields in the device detail API response
+  - add unit tests for the parser covering major sysDescr formats
+- Files to Touch:
+  - `core-go/internal/enrichment/snmp/sysdescr.go` (new parser)
+  - `core-go/internal/enrichment/snmp/sysdescr_test.go` (new tests)
+  - `core-go/internal/discoveryworker/enrichment.go`
+  - `core-go/migrations/013_os_fields.up.sql` (new)
+  - `core-go/migrations/013_os_fields.down.sql` (new)
+  - `core-go/queries/enrichment.sql`
+  - `core-go/internal/sqlcgen/` (generated queries)
+  - `api/openapi.yaml` (device SNMP schema)
+  - `docs/data-model.md`
+  - `docs/feature-matrix.md`
+- Do Not Touch:
+  - nmap / port scanning code
+  - UI rendering (separate task if needed)
+- Dependencies:
+  - T026 (SNMP must be working reliably first)
+- Validation:
+  - `docker build -f docker/validate/core-go.Dockerfile --target test .`
+- Definition of Done:
+  - sysDescr parser extracts os_family and os_version for at least 8 common vendor formats
+  - structured fields are persisted in the DB via migration
+  - device detail API includes os_family and os_version when available
+  - parser has unit tests with sample sysDescr strings from real devices
+- Handoff Notes:
+  - Do not attempt nmap OS fingerprinting (`-O` requires root and is slow). sysDescr parsing covers the most common use case.
+
+### T029 - MAC-Based Device Identity For Rescans
+
+- Status: Ready
+- Queue: Next
+- Phase: Discovery
+- Priority: P2
+- Owner Role: Core owner
+- Goal: Use stable MAC addresses to correlate device identity across IP changes and rescans.
+- Context: MAC addresses rarely change, making them ideal for tracking device identity when IPs change (DHCP renewals, network moves). Currently `FindDeviceIDByMAC` exists and is used during ARP scraping, but the workflow could be strengthened to prefer MAC-based identity over IP-based identity when MACs are available.
+- Scope:
+  - audit the device identity resolution order in `worker.go` — ensure MAC lookup takes priority over IP lookup when both are available
+  - when a known MAC appears with a new IP, update the device's IP association rather than creating a duplicate device
+  - add a discovery run log entry when a device is re-identified by MAC with a changed IP
+  - add tests for MAC-based re-identification scenarios
+- Files to Touch:
+  - `core-go/internal/discoveryworker/worker.go`
+  - `core-go/queries/discovery_facts.sql` (if query changes needed)
+  - `core-go/internal/sqlcgen/` (if queries change)
+- Do Not Touch:
+  - ARP scraping logic (keep passive)
+  - Device merge/dedup (future work)
+- Dependencies:
+  - T025 (MACs need to be discoverable first)
+- Validation:
+  - `docker build -f docker/validate/core-go.Dockerfile --target test .`
+- Definition of Done:
+  - devices with known MACs are re-identified correctly when their IP changes
+  - no duplicate devices created for MAC-stable, IP-changing hosts
+  - discovery logs note IP changes for MAC-identified devices
+- Handoff Notes:
+  - This is a refinement of existing identity resolution, not a new feature. The `FindDeviceIDByMAC` query already exists — this task makes it the preferred path.
+
+### T030 - Map Projection Renders Nothing With Focus
+
+- Status: Ready
+- Queue: Now
+- Phase: Phase 16
+- Priority: P0
+- Owner Role: UI owner + Core owner
+- Goal: Diagnose and fix why the map renders nothing when a device is selected as focus.
+- Context: User selects a focus device on the map and sees nothing rendered. The map projection API returns regions/nodes/edges but the UI may not be rendering them. This could be: (a) API returns empty regions/nodes for the selected layer despite data existing; (b) UI rendering bug in MapCanvas; (c) CSS hides rendered content; (d) MapProjectionContext polling returns stale/empty data; (e) the selected layer doesn't have data for that device.
+- Scope:
+  - reproduce the issue: select a device on L3 layer, check browser DevTools Network tab for the API response
+  - if API returns data but UI is blank: fix the rendering bug in MapCanvas.tsx
+  - if API returns empty despite data existing: fix the projection query in map.go
+  - if the issue is layer-specific (e.g., no subnets for L3, no VLANs for L2): add guidance text explaining why the projection is empty for that layer
+  - ensure at least L3 (subnet) projection works when a device has known IPs
+  - check that the security layer (newly added) renders correctly
+- Files to Touch:
+  - `ui-node/app/(app)/map/MapCanvas.tsx`
+  - `ui-node/app/(app)/map/MapProjectionContext.tsx`
+  - `core-go/internal/httpapi/map.go` (if API bug found)
+  - `ui-node/app/globals.css` (if CSS hiding issue)
+- Dependencies:
+  - None
+- Validation:
+  - `docker build -f docker/validate/ui-node.Dockerfile --target test .`
+  - `docker build -f docker/validate/ui-node.Dockerfile --target build .`
+  - `docker build -f docker/validate/core-go.Dockerfile --target test .`
+- Definition of Done:
+  - selecting a device on the map renders its projection for at least one layer
+  - empty projections show meaningful guidance text
+  - no blank/white canvas when data exists
+- Handoff Notes:
+  - Start by checking the API response in browser DevTools. The API should return regions/nodes when a device has IPs (L3), VLANs (L2), links (physical), or zones (security). If the API is returning data, the bug is in the UI renderer.
+
+### T031 - Device Page Layout Redesign
+
+- Status: Ready
+- Queue: Now
+- Phase: UI
+- Priority: P1
+- Owner Role: UI owner
+- Goal: Redesign the device detail page so Overview and Facts are the main focus, with secondary sections collapsed.
+- Context: The current device page renders all sections (Overview, Facts, Metadata, Tags, History) as equal-weight cards stacked vertically. The user wants: (a) Overview and Facts as the primary prominent content; (b) Metadata, Tags, and History collapsed into smaller expandable boxes; (c) Discovery section smaller; (d) SNMP snapshot could be a compact inline box.
+- Scope:
+  - keep Overview card prominent at the top
+  - keep Facts card (IPs, MACs, Interfaces, Services, SNMP, Links) as the main content area
+  - convert Metadata card to a collapsible/accordion section, collapsed by default
+  - convert Tags card to a collapsible/accordion section, collapsed by default
+  - convert History card to a collapsible/accordion section, collapsed by default
+  - make the SNMP snapshot subsection within Facts more compact (inline key-value, not a full card)
+  - reduce the visual weight of the "discovery tip" section
+  - preserve all existing functionality — just reorganize the visual hierarchy
+  - preserve read-only mode enforcement
+- Files to Touch:
+  - `ui-node/app/(app)/devices/[id]/page.tsx`
+  - `ui-node/app/globals.css` (collapsible section styles)
+  - possibly `ui-node/app/_components/ui/` (if a shared Collapsible component is needed)
+- Do Not Touch:
+  - API endpoints
+  - Device data fetching logic
+  - DeviceHistoryTimeline component internals
+  - DeviceMetadataEditor component internals
+  - DeviceTagsPanel component internals
+- Dependencies:
+  - None
+- Validation:
+  - `docker build -f docker/validate/ui-node.Dockerfile --target test .`
+  - `docker build -f docker/validate/ui-node.Dockerfile --target build .`
+- Definition of Done:
+  - Overview and Facts are visually prominent
+  - Metadata, Tags, and History are collapsible, defaulting to collapsed
+  - SNMP snapshot is compact
+  - all existing functionality preserved
+  - read-only mode still works
+  - page renders correctly with empty states (no data for any section)
+- Handoff Notes:
+  - Use a simple `<details>`/`<summary>` or a lightweight collapsible component — avoid bringing in a heavy accordion library.
+  - The device page uses Card/CardBody components from `ui-node/app/_components/ui/`. Consider a CollapsibleCard variant.
 
 ## Immediate Open Decisions
 

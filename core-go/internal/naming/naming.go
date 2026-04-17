@@ -79,6 +79,24 @@ func ChooseBestDisplayName(candidates []Candidate) (string, bool) {
 	return best.DisplayName, true
 }
 
+// FallbackDisplayName generates a human-readable fallback name when no naming
+// candidate meets the quality threshold. Prefers primary IP, then a UUID prefix.
+func FallbackDisplayName(primaryIP, deviceID string) string {
+	ip := strings.TrimSpace(primaryIP)
+	id := strings.TrimSpace(deviceID)
+
+	if ip != "" {
+		return "device-" + ip
+	}
+	if len(id) >= 8 {
+		return "device-" + id[:8]
+	}
+	if id != "" {
+		return "device-" + id
+	}
+	return "device-unknown"
+}
+
 func SortCandidatesForDisplay(candidates []Candidate) []Candidate {
 	type scored struct {
 		orig       Candidate

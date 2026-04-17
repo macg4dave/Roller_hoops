@@ -274,40 +274,47 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ i
 
       <FactsCard facts={facts} />
 
-      <Card>
-        <CardBody className="stack" style={{ gap: 12 }}>
-          <div>
-            <p className="kicker">Metadata</p>
-            <p className="hint">Edit operator-owned fields and apply a friendly display name.</p>
-          </div>
-          <DeviceNameCandidatesPanel
-            deviceId={device.id}
-            currentDisplayName={device.display_name ?? null}
-            readOnly={isReadOnly}
-          />
-          <DeviceMetadataEditor device={device} readOnly={isReadOnly} />
-        </CardBody>
-      </Card>
+      <details className="deviceCollapsible">
+        <summary className="deviceCollapsibleSummary">
+          <span className="kicker">Metadata</span>
+          <span className="hint">Edit operator-owned fields and apply a friendly display name.</span>
+        </summary>
+        <Card>
+          <CardBody className="stack" style={{ gap: 12 }}>
+            <DeviceNameCandidatesPanel
+              deviceId={device.id}
+              currentDisplayName={device.display_name ?? null}
+              readOnly={isReadOnly}
+            />
+            <DeviceMetadataEditor device={device} readOnly={isReadOnly} />
+          </CardBody>
+        </Card>
+      </details>
 
-      <DeviceTagsPanel deviceId={device.id} readOnly={isReadOnly} />
+      <details className="deviceCollapsible">
+        <summary className="deviceCollapsibleSummary">
+          <span className="kicker">Tags</span>
+          <span className="hint">Manage classification tags for this device.</span>
+        </summary>
+        <DeviceTagsPanel deviceId={device.id} readOnly={isReadOnly} />
+      </details>
 
-      <Card>
-        <CardBody>
-          <div className="stack" style={{ gap: 12 }}>
-            <div>
-              <p className="kicker">History</p>
-              <p className="hint">Timeline powered by the Phase 9 history endpoint (no UI-side diffing).</p>
-            </div>
-
+      <details className="deviceCollapsible">
+        <summary className="deviceCollapsibleSummary">
+          <span className="kicker">History</span>
+          <span className="hint">Timeline powered by the Phase 9 history endpoint.</span>
+        </summary>
+        <Card>
+          <CardBody>
             <DeviceHistoryTimeline
               deviceId={device.id}
               initialEvents={history.events ?? []}
               initialCursor={history.cursor ?? null}
               limit={HISTORY_LIMIT}
             />
-          </div>
-        </CardBody>
-      </Card>
+          </CardBody>
+        </Card>
+      </details>
 
       <div>
         <EmptyState title="Tip">

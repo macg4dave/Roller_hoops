@@ -302,6 +302,11 @@ export function MapCanvas({
 
   const focusId = projection.focus?.id;
 
+  const peerNodes = useMemo(() => {
+    if (isPhysical || showRegions) return [];
+    return nodes.filter((n) => n.id !== focusId);
+  }, [isPhysical, showRegions, nodes, focusId]);
+
   const applyAutoLayout = useCallback(() => {
     setExpanded({});
     const container = rootRef.current?.closest('.mapCanvasBody') as HTMLElement | null;
@@ -543,28 +548,60 @@ export function MapCanvas({
         </div>
       ) : (
         <div className="mapNodeCloud" role="list">
-          {nodes.length === 0 ? <p className="mapRegionEmpty">No nodes returned for this focus.</p> : null}
-          {nodes.length > 0 ? (
-            <div className="mapNodeGrid">
-              {nodes.slice(0, OCCUPANT_EXPANDED_LIMIT).map((node) => {
-                const nodeSelected = selection?.kind === 'node' && selection.id === node.id;
-                return (
-                  <button
-                    key={node.id}
-                    type="button"
-                    className={`mapNodeChip${nodeSelected ? ' mapNodeChipSelected' : ''}`}
-                    title={resolveNodeHoverTitle(node)}
-                    onClick={() => setSelection({ kind: 'node', id: node.id })}
-                  >
-                    <span className="mapNodeChipLabel">{resolveNodeTitle(node)}</span>
-                  </button>
-                );
-              })}
+          {focusId && nodeById.has(focusId) ? (
+            <div className="mapPhysicalSection">
+              <div className="mapPhysicalHeading">Focus device</div>
+              <button
+                type="button"
+                className={`mapPhysicalFocus${selection?.kind === 'node' && selection.id === focusId ? ' mapPhysicalFocusSelected' : ''}`}
+                title={resolveNodeHoverTitle(nodeById.get(focusId)!)}
+                onClick={() => setSelection({ kind: 'node', id: focusId })}
+              >
+                <span className="mapPhysicalFocusLabel">{resolveNodeTitle(nodeById.get(focusId)!)}</span>
+                {(() => {
+                  const focusNodeData = nodeById.get(focusId)!;
+                  const ip = resolveNodeMetaString(focusNodeData, 'primary_ip');
+                  const mac = resolveNodeMetaString(focusNodeData, 'primary_mac');
+                  if (!ip && !mac) return null;
+                  return (
+                    <span className="mapPhysicalFocusFacts">
+                      {ip ? <span className="mapPhysicalFact">IP {ip}</span> : null}
+                      {mac ? <span className="mapPhysicalFact">MAC {mac}</span> : null}
+                    </span>
+                  );
+                })()}
+              </button>
             </div>
           ) : null}
-          {nodes.length > OCCUPANT_EXPANDED_LIMIT ? (
-            <p className="mapRegionTruncation">Showing {OCCUPANT_EXPANDED_LIMIT} of {nodes.length} nodes.</p>
-          ) : null}
+          {peerNodes.length === 0 ? (
+            <p className="mapRegionEmpty">
+              {focusId && nodeById.has(focusId)
+                ? 'No additional topology for this layer. Try another layer or run discovery to populate relationships.'
+                : 'No nodes returned for this focus.'}
+            </p>
+          ) : (
+            <>
+              <div className="mapNodeGrid">
+                {peerNodes.slice(0, OCCUPANT_EXPANDED_LIMIT).map((node) => {
+                  const nodeSelected = selection?.kind === 'node' && selection.id === node.id;
+                  return (
+                    <button
+                      key={node.id}
+                      type="button"
+                      className={`mapNodeChip${nodeSelected ? ' mapNodeChipSelected' : ''}`}
+                      title={resolveNodeHoverTitle(node)}
+                      onClick={() => setSelection({ kind: 'node', id: node.id })}
+                    >
+                      <span className="mapNodeChipLabel">{resolveNodeTitle(node)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {peerNodes.length > OCCUPANT_EXPANDED_LIMIT ? (
+                <p className="mapRegionTruncation">Showing {OCCUPANT_EXPANDED_LIMIT} of {peerNodes.length} nodes.</p>
+              ) : null}
+            </>
+          )}
         </div>
       )}
 

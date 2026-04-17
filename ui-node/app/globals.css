@@ -879,6 +879,46 @@ pre {
   max-width: 400px;
 }
 
+/* ── Device detail collapsible sections ── */
+
+.deviceCollapsible {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.deviceCollapsibleSummary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.deviceCollapsibleSummary::-webkit-details-marker {
+  display: none;
+}
+
+.deviceCollapsibleSummary::before {
+  content: '▸';
+  font-size: 12px;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.deviceCollapsible[open] > .deviceCollapsibleSummary::before {
+  transform: rotate(90deg);
+}
+
+.deviceCollapsible[open] > .deviceCollapsibleSummary {
+  border-bottom: 1px solid var(--border);
+}
+
+.deviceCollapsible > :not(summary) {
+  padding: 10px 0 0;
+}
+
 .skeleton {
   border-radius: var(--radius-xs);
   background: linear-gradient(
@@ -1303,6 +1343,9 @@ pre {
 
 .mapPhysicalFocusLabel {
   font-weight: 850;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .mapPhysicalFocusFacts {
@@ -1459,10 +1502,18 @@ pre {
   gap: 12px;
 }
 
+.mapRegionHeader > :first-child {
+  min-width: 0;
+  flex: 1;
+}
+
 .mapRegionTitle {
   font-size: 15px;
   font-weight: 850;
   color: rgba(226, 232, 240, 0.96);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .mapRegionMeta {
@@ -1529,6 +1580,9 @@ pre {
   font-size: 13px;
   font-weight: 650;
   color: rgba(226, 232, 240, 0.88);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .mapRegionSummaryHint {
