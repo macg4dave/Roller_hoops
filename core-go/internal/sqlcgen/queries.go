@@ -61,6 +61,9 @@ WITH inserted AS (
 )
 SELECT i.id,
        i.display_name,
+       NULL::text AS os_guess,
+       NULL::text AS os_guess_confidence,
+       NULL::text AS mac_vendor,
        m.owner,
        m.location,
        m.notes
@@ -71,13 +74,16 @@ LEFT JOIN device_metadata m ON m.device_id = i.id
 func (q *Queries) CreateDevice(ctx context.Context, displayName *string) (Device, error) {
 	row := q.db.QueryRow(ctx, createDevice, displayName)
 	var i Device
-	err := row.Scan(&i.ID, &i.DisplayName, &i.Owner, &i.Location, &i.Notes)
+	err := row.Scan(&i.ID, &i.DisplayName, &i.OSGuess, &i.OSGuessConfidence, &i.MACVendor, &i.Owner, &i.Location, &i.Notes)
 	return i, err
 }
 
 const getDevice = `-- name: GetDevice :one
 SELECT d.id,
        d.display_name,
+       d.os_guess,
+       d.os_guess_confidence,
+       d.mac_vendor,
        m.owner,
        m.location,
        m.notes
@@ -89,7 +95,7 @@ WHERE d.id = $1
 func (q *Queries) GetDevice(ctx context.Context, id string) (Device, error) {
 	row := q.db.QueryRow(ctx, getDevice, id)
 	var i Device
-	err := row.Scan(&i.ID, &i.DisplayName, &i.Owner, &i.Location, &i.Notes)
+	err := row.Scan(&i.ID, &i.DisplayName, &i.OSGuess, &i.OSGuessConfidence, &i.MACVendor, &i.Owner, &i.Location, &i.Notes)
 	return i, err
 }
 
@@ -139,6 +145,9 @@ func (q *Queries) GetDeviceSummaryTimestamps(ctx context.Context, deviceID strin
 const listDevices = `-- name: ListDevices :many
 SELECT d.id,
        d.display_name,
+       d.os_guess,
+       d.os_guess_confidence,
+       d.mac_vendor,
        m.owner,
        m.location,
        m.notes
@@ -156,7 +165,7 @@ func (q *Queries) ListDevices(ctx context.Context) ([]Device, error) {
 	var items []Device
 	for rows.Next() {
 		var i Device
-		if err := rows.Scan(&i.ID, &i.DisplayName, &i.Owner, &i.Location, &i.Notes); err != nil {
+		if err := rows.Scan(&i.ID, &i.DisplayName, &i.OSGuess, &i.OSGuessConfidence, &i.MACVendor, &i.Owner, &i.Location, &i.Notes); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -385,10 +394,13 @@ WITH updated AS (
   SET display_name = $2,
       updated_at = now()
   WHERE id = $1
-  RETURNING id, display_name
+  RETURNING id, display_name, os_guess, os_guess_confidence, mac_vendor
 )
 SELECT u.id,
        u.display_name,
+       u.os_guess,
+       u.os_guess_confidence,
+       u.mac_vendor,
        m.owner,
        m.location,
        m.notes
@@ -404,7 +416,7 @@ type UpdateDeviceParams struct {
 func (q *Queries) UpdateDevice(ctx context.Context, arg UpdateDeviceParams) (Device, error) {
 	row := q.db.QueryRow(ctx, updateDevice, arg.ID, arg.DisplayName)
 	var i Device
-	err := row.Scan(&i.ID, &i.DisplayName, &i.Owner, &i.Location, &i.Notes)
+	err := row.Scan(&i.ID, &i.DisplayName, &i.OSGuess, &i.OSGuessConfidence, &i.MACVendor, &i.Owner, &i.Location, &i.Notes)
 	return i, err
 }
 
@@ -1797,4 +1809,25 @@ func (q *Queries) ListDiscoveryRunLogs(ctx context.Context, arg ListDiscoveryRun
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateDeviceFingerprint = `-- name: UpdateDeviceFingerprint :exec
+UPDATE devices
+SET os_guess            = $2,
+    os_guess_confidence = $3,
+    mac_vendor          = $4,
+    updated_at          = now()
+WHERE id = $1
+`
+
+type UpdateDeviceFingerprintParams struct {
+	ID                string
+	OSGuess           *string
+	OSGuessConfidence *string
+	MACVendor         *string
+}
+
+func (q *Queries) UpdateDeviceFingerprint(ctx context.Context, arg UpdateDeviceFingerprintParams) error {
+	_, err := q.db.Exec(ctx, updateDeviceFingerprint, arg.ID, arg.OSGuess, arg.OSGuessConfidence, arg.MACVendor)
+	return err
 }

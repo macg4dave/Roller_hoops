@@ -1,6 +1,9 @@
 -- name: ListDevices :many
 SELECT d.id,
        d.display_name,
+       d.os_guess,
+       d.os_guess_confidence,
+       d.mac_vendor,
        m.owner,
        m.location,
        m.notes
@@ -11,6 +14,9 @@ ORDER BY d.created_at DESC;
 -- name: GetDevice :one
 SELECT d.id,
        d.display_name,
+       d.os_guess,
+       d.os_guess_confidence,
+       d.mac_vendor,
        m.owner,
        m.location,
        m.notes
@@ -82,3 +88,11 @@ SELECT u.id,
        m.notes
 FROM updated u
 LEFT JOIN device_metadata m ON m.device_id = u.id;
+
+-- name: UpdateDeviceFingerprint :exec
+UPDATE devices
+SET os_guess            = $2,
+    os_guess_confidence = $3,
+    mac_vendor          = $4,
+    updated_at          = now()
+WHERE id = $1;

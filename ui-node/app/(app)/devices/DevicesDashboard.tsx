@@ -469,6 +469,7 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
                 <div>Name</div>
                 <div>Status</div>
                 <div>Primary IP</div>
+                <div>OS / Vendor</div>
                 <div>Tags</div>
                 <div style={{ textAlign: 'right' }}>Last seen</div>
               </div>
@@ -511,6 +512,17 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
                     </div>
 
                     <div className="devicesCompactIp">{device.primary_ip ? <Badge tone="info">{device.primary_ip}</Badge> : '—'}</div>
+
+                    <div className="devicesCompactOs">
+                      {device.os_guess ? (
+                        <span className="osLabel">{device.os_guess}</span>
+                      ) : null}
+                      {device.mac_vendor ? (
+                        <span className="vendorLabel">{device.mac_vendor}</span>
+                      ) : (
+                        !device.os_guess ? <span className="hint">—</span> : null
+                      )}
+                    </div>
 
                     <div className="devicesCompactTags">
                       {tags.length === 0 ? (
@@ -564,6 +576,16 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
                       {isOnline(selectedDevice.last_seen_at) ? <Badge tone="success">Online</Badge> : <Badge tone="neutral">Offline</Badge>}
                       {isRecentlyChanged(selectedDevice.last_change_at) ? <Badge tone="warning">Changed</Badge> : null}
                       {selectedDevice.primary_ip ? <Badge tone="info">IP {selectedDevice.primary_ip}</Badge> : null}
+                      {selectedDevice.os_guess ? (
+                        <Badge tone={
+                          selectedDevice.os_guess_confidence === 'high' ? 'success'
+                          : selectedDevice.os_guess_confidence === 'medium' ? 'warning'
+                          : 'neutral'
+                        }>
+                          {selectedDevice.os_guess}
+                        </Badge>
+                      ) : null}
+                      {selectedDevice.mac_vendor ? <Badge tone="info">{selectedDevice.mac_vendor}</Badge> : null}
                       {(selectedDevice.tags ?? [])
                         .filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0)
                         .slice(0, 5)
@@ -586,7 +608,10 @@ export function DevicesDashboard({ devicePage, discoveryStatus, currentUser, ini
                           ? `Facts refreshed ${formatDateTime(facts?.snmp?.updated_at ?? selectedDevice.last_change_at)}`
                           : 'Facts will sync shortly.'}
                       </div>
-                      <div>Primary MAC: {factsStatus === 'success' ? primaryMac ?? '—' : '—'}</div>
+                      <div>Primary MAC: {factsStatus === 'success' ? primaryMac ?? '—' : '—'}{selectedDevice.mac_vendor ? ` (${selectedDevice.mac_vendor})` : ''}</div>
+                      {selectedDevice.os_guess ? (
+                        <div>OS: {selectedDevice.os_guess}{selectedDevice.os_guess_confidence ? ` · confidence: ${selectedDevice.os_guess_confidence}` : ''}</div>
+                      ) : null}
                       <div>
                         Interfaces: {factsStatus === 'success' ? facts?.interfaces.length ?? 0 : '—'}
                         {factsStatus === 'success' && vlanSummary ? ` · ${vlanSummary}` : null}

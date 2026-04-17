@@ -187,6 +187,18 @@ func (f *fakeQueries) UpsertServiceFromScan(ctx context.Context, arg sqlcgen.Ups
 	return f.upsertServiceFn(ctx, arg)
 }
 
+func (f *fakeQueries) ListDeviceServices(ctx context.Context, deviceID string) ([]sqlcgen.DeviceService, error) {
+	return nil, nil
+}
+
+func (f *fakeQueries) ListDeviceMACs(ctx context.Context, deviceID string) ([]sqlcgen.DeviceMAC, error) {
+	return nil, nil
+}
+
+func (f *fakeQueries) UpdateDeviceFingerprint(ctx context.Context, arg sqlcgen.UpdateDeviceFingerprintParams) error {
+	return nil
+}
+
 func writeTempARPFile(t *testing.T, content string) string {
 	t.Helper()
 	f, err := os.CreateTemp("", "arp-*.txt")

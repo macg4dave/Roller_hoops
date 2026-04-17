@@ -1912,6 +1912,15 @@ export interface components {
             id: string;
             /** @description Optional human-friendly name. */
             display_name?: string;
+            /** @description Best-effort OS classification derived from SNMP sysDescr, open ports, and MAC OUI. */
+            os_guess?: string | null;
+            /**
+             * @description Confidence level of the OS guess (high = SNMP sysDescr, medium = port heuristic, low = vendor hint).
+             * @enum {string|null}
+             */
+            os_guess_confidence?: "high" | "medium" | "low" | null;
+            /** @description Hardware manufacturer derived from the MAC OUI prefix. */
+            mac_vendor?: string | null;
             /** @description Effective device tags (manual tags win and appear first). */
             tags?: string[];
             /** @description Best-effort primary IP for UI convenience (may be null when unknown). */

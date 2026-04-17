@@ -592,7 +592,7 @@ pre {
 
 .devicesCompactHeader {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) 120px 140px minmax(0, 1fr) 140px;
+  grid-template-columns: minmax(0, 1.6fr) 120px 140px minmax(0, 0.9fr) minmax(0, 0.8fr) 140px;
   gap: 12px;
   padding: 8px 12px;
   color: var(--muted);
@@ -640,7 +640,7 @@ pre {
 }
 
 .devicesCompactRow {
-  grid-template-columns: minmax(0, 1.6fr) 120px 140px minmax(0, 1fr) 140px;
+  grid-template-columns: minmax(0, 1.6fr) 120px 140px minmax(0, 0.9fr) minmax(0, 0.8fr) 140px;
   gap: 12px;
   align-items: start;
 }
@@ -951,6 +951,101 @@ pre {
   font-size: 12px;
   color: var(--muted);
   line-height: 1.5;
+}
+
+/* ── Device detail overview grid ── */
+
+.deviceOverviewGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 700px) {
+  .deviceOverviewGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.deviceOverviewMeta {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.deviceOverviewRow {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.deviceOverviewLabel {
+  color: var(--muted);
+  font-weight: 500;
+  white-space: nowrap;
+  min-width: 100px;
+}
+
+/* ── OS / vendor column in device list ── */
+
+.devicesCompactOs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.osLabel {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vendorLabel {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Vendor tag (inline next to MAC) ── */
+
+.vendorTag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--badge-info-bg, rgba(59, 130, 246, 0.12));
+  color: var(--badge-info-fg, #2563eb);
+  border-radius: var(--radius-xs, 4px);
+  vertical-align: middle;
+}
+
+/* ── Confidence dot indicator ── */
+
+.confidenceDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.confidence-high {
+  background: var(--success, #22c55e);
+}
+
+.confidence-medium {
+  background: var(--warning, #eab308);
+}
+
+.confidence-low {
+  background: var(--muted, #94a3b8);
 }
 
 /* ── Device facts text overflow safety ── */

@@ -344,13 +344,16 @@ func (h *Handler) handleReadyZ(w http.ResponseWriter, r *http.Request) {
 }
 
 type device struct {
-	ID           string          `json:"id"`
-	DisplayName  *string         `json:"display_name,omitempty"`
-	PrimaryIP    *string         `json:"primary_ip,omitempty"`
-	Tags         []string        `json:"tags,omitempty"`
-	Metadata     *deviceMetadata `json:"metadata,omitempty"`
-	LastSeenAt   *time.Time      `json:"last_seen_at,omitempty"`
-	LastChangeAt *time.Time      `json:"last_change_at,omitempty"`
+	ID                string          `json:"id"`
+	DisplayName       *string         `json:"display_name,omitempty"`
+	PrimaryIP         *string         `json:"primary_ip,omitempty"`
+	OSGuess           *string         `json:"os_guess,omitempty"`
+	OSGuessConfidence *string         `json:"os_guess_confidence,omitempty"`
+	MACVendor         *string         `json:"mac_vendor,omitempty"`
+	Tags              []string        `json:"tags,omitempty"`
+	Metadata          *deviceMetadata `json:"metadata,omitempty"`
+	LastSeenAt        *time.Time      `json:"last_seen_at,omitempty"`
+	LastChangeAt      *time.Time      `json:"last_change_at,omitempty"`
 }
 
 type deviceNameCandidate struct {
@@ -585,9 +588,12 @@ func toDevice(d sqlcgen.Device) device {
 	}
 
 	return device{
-		ID:          d.ID,
-		DisplayName: d.DisplayName,
-		Metadata:    meta,
+		ID:                d.ID,
+		DisplayName:       d.DisplayName,
+		OSGuess:           d.OSGuess,
+		OSGuessConfidence: d.OSGuessConfidence,
+		MACVendor:         d.MACVendor,
+		Metadata:          meta,
 	}
 }
 

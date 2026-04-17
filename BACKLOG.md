@@ -260,6 +260,7 @@ Only rows with `Status` = `Ready` are startable without more planning unless the
 | T030 | Now | Phase 16 | P0 | Map projection renders nothing with focus | Done | None | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .`; `docker build -f docker/validate/core-go.Dockerfile --target test .` |
 | T031 | Now | UI | P1 | Device page layout redesign | Done | None | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
 | T032 | Now | UI | P1 | Device page: MAC display, text overflow, SNMP OS fields | Done | T028 | `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
+| T033 | Now | Enrichment/UI | P1 | OS fingerprinting, MAC OUI lookup, device page redesign | Done | T028 | `docker build -f docker/validate/core-go.Dockerfile --target test .`; `docker build -f docker/validate/ui-node.Dockerfile --target test .` + `docker build -f docker/validate/ui-node.Dockerfile --target build .` |
 
 ## Dev Runbook
 
@@ -1548,6 +1549,62 @@ Closed task cards that no longer coordinate active work are archived to [docs/ba
 - Handoff Notes:
   - Interface MAC fallback fires when facts.macs is empty but interfaces have MAC fields (typical in bridge mode where SNMP walks discover real per-interface MACs but ARP only sees the gateway).
   - api-types.ts regenerated — os_family and os_version now available in DeviceSNMP type.
+
+### T033 - OS Fingerprinting, MAC OUI Lookup, Device Page Redesign
+
+- Status: Done
+- Queue: Now
+- Phase: Enrichment / UI
+- Priority: P1
+- Owner Role: Full-stack
+- Goal: Add nmap-style OS detection by combining SNMP sysDescr, open-port heuristics, and MAC OUI vendor lookup. Expose os_guess, os_guess_confidence, and mac_vendor through the API. Redesign device pages with better layout.
+- Context: User requested better MAC finding across all OSes, best-guess OS detection (like nmap), and improved device page layout.
+- Scope:
+  - Expand sysDescr parser from 11 to 35+ regex patterns (pfSense, OPNsense, NX-OS, FortiOS, MikroTik, etc.)
+  - Add OS guess from open-port heuristics (port 3389 → Windows, port 548 → macOS, etc.)
+  - Add MAC OUI vendor lookup with 120+ common prefix table
+  - Combine all signals into a multi-signal fingerprint module with confidence levels (high/medium/low)
+  - Add migration 015 with os_guess, os_guess_confidence, mac_vendor columns on devices table
+  - Expose new fields through API and regenerate TypeScript types
+  - Redesign device list to show OS/vendor column
+  - Redesign device detail page with two-column Identity/Freshness layout
+  - Add confidence-colored OS badges and vendor tags throughout UI
+- Files Touched:
+  - `core-go/internal/enrichment/snmp/sysdescr.go` (expanded patterns)
+  - `core-go/internal/enrichment/snmp/sysdescr_test.go` (21 test cases)
+  - `core-go/internal/enrichment/fingerprint/fingerprint.go` (new module)
+  - `core-go/internal/enrichment/fingerprint/fingerprint_test.go` (new tests)
+  - `core-go/internal/enrichment/fingerprint/oui.go` (new OUI lookup)
+  - `core-go/internal/discoveryworker/worker.go` (Queries interface extended)
+  - `core-go/internal/discoveryworker/worker_test.go` (fakeQueries updated)
+  - `core-go/internal/discoveryworker/enrichment.go` (fingerprint integration)
+  - `core-go/internal/httpapi/handler.go` (toDevice maps new fields)
+  - `core-go/internal/sqlcgen/` (regenerated for new queries)
+  - `core-go/migrations/015_device_fingerprint.up.sql`
+  - `core-go/migrations/015_device_fingerprint.down.sql`
+  - `core-go/queries/devices.sql` (UpdateDeviceFingerprint query)
+  - `api/openapi.yaml` (os_guess, os_guess_confidence, mac_vendor)
+  - `ui-node/lib/api-types.ts` (regenerated)
+  - `ui-node/app/(app)/devices/DevicesDashboard.tsx` (OS/vendor column, detail badges)
+  - `ui-node/app/(app)/devices/[id]/page.tsx` (two-column layout, vendor tags, confidence dots)
+  - `ui-node/app/globals.css` (new CSS for overview grid, vendor tags, confidence dots)
+- Validation:
+  - `docker build -f docker/validate/core-go.Dockerfile --target test .` — passed
+  - `docker build -f docker/validate/ui-node.Dockerfile --target test .` — passed
+  - `docker build -f docker/validate/ui-node.Dockerfile --target build .` — passed
+- Definition of Done:
+  - sysDescr parser handles 35+ OS patterns with tests
+  - OS guess combines sysDescr, port heuristics, and MAC OUI with confidence levels
+  - MAC vendor resolved from OUI table (120+ prefixes)
+  - New fields persisted in DB (migration 015) and exposed via API
+  - Device list shows OS/vendor column
+  - Device detail shows two-column Identity/Freshness layout with confidence-colored badges
+  - All Go tests and UI tests/build pass
+- Handoff Notes:
+  - The fingerprint module runs during enrichment after SNMP and service scan complete. It queries device services and MACs, then updates os_guess/os_guess_confidence/mac_vendor on the device.
+  - sysDescr patterns fixed: pfSense/OPNsense use non-greedy `.*?`, NX-OS TrimRight excludes `)` to preserve version strings like `7.3(5)N1(1)`.
+  - Duplicate OUI key "000C29" (VMware) was removed from line 80 (already defined at line 47).
+  - Pre-existing Go fmt failures exist in map.go, map_test.go, zones.go, zones_test.go (not from this task).
 
 ## Immediate Open Decisions
 

@@ -3,11 +3,14 @@ package sqlcgen
 import "time"
 
 type Device struct {
-	ID          string
-	DisplayName *string
-	Owner       *string
-	Location    *string
-	Notes       *string
+	ID                  string
+	DisplayName         *string
+	OSGuess             *string
+	OSGuessConfidence   *string
+	MACVendor           *string
+	Owner               *string
+	Location            *string
+	Notes               *string
 }
 
 type DeviceSummaryTimestamps struct {

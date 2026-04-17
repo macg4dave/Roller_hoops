@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"roller_hoops/core-go/internal/enrichment/fingerprint"
 	"roller_hoops/core-go/internal/enrichment/mdns"
 	"roller_hoops/core-go/internal/enrichment/snmp"
 	"roller_hoops/core-go/internal/enrichment/vlan"
@@ -397,6 +398,45 @@ func (w *Worker) runEnrichment(ctx context.Context, targets []enrichmentTarget) 
 							atomic.AddInt32(&linksWritten, 1)
 						}
 					}
+				}
+
+				// --- Device fingerprint: combine SNMP + ports + MAC OUI ---
+				var fpSysDescrFamily string
+				if osFamily != nil {
+					fpSysDescrFamily = *osFamily
+				}
+				// Fetch open ports for this device
+				deviceServices, _ := w.q.ListDeviceServices(ctx, t.DeviceID)
+				var openPorts []int
+				for _, svc := range deviceServices {
+					if svc.Port != nil {
+						openPorts = append(openPorts, int(*svc.Port))
+					}
+				}
+				// Pick the best MAC for OUI lookup
+				deviceMACs, _ := w.q.ListDeviceMACs(ctx, t.DeviceID)
+				var firstMAC string
+				if len(deviceMACs) > 0 {
+					firstMAC = deviceMACs[0].MAC
+				}
+				fp := fingerprint.GuessOS(fpSysDescrFamily, openPorts, firstMAC)
+				if fp.OSGuess != "" || fp.MACVendor != "" {
+					var osGuess, osConf, macVendor *string
+					if fp.OSGuess != "" {
+						osGuess = &fp.OSGuess
+					}
+					if fp.Confidence != "" {
+						osConf = &fp.Confidence
+					}
+					if fp.MACVendor != "" {
+						macVendor = &fp.MACVendor
+					}
+					_ = w.q.UpdateDeviceFingerprint(ctx, sqlcgen.UpdateDeviceFingerprintParams{
+						ID:                t.DeviceID,
+						OSGuess:           osGuess,
+						OSGuessConfidence: osConf,
+						MACVendor:         macVendor,
+					})
 				}
 			}
 

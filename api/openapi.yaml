@@ -1365,6 +1365,19 @@ components:
         display_name:
           type: string
           description: Optional human-friendly name.
+        os_guess:
+          type: string
+          nullable: true
+          description: Best-effort OS classification derived from SNMP sysDescr, open ports, and MAC OUI.
+        os_guess_confidence:
+          type: string
+          nullable: true
+          enum: [high, medium, low]
+          description: Confidence level of the OS guess (high = SNMP sysDescr, medium = port heuristic, low = vendor hint).
+        mac_vendor:
+          type: string
+          nullable: true
+          description: Hardware manufacturer derived from the MAC OUI prefix.
         tags:
           type: array
           items:

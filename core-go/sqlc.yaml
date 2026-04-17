@@ -20,6 +20,12 @@ sql:
         go_type: "*string"
       - column: "discovery_runs.stats"
         go_type: "map[string]any"
+      - column: "devices.os_guess"
+        go_type: "*string"
+      - column: "devices.os_guess_confidence"
+        go_type: "*string"
+      - column: "devices.mac_vendor"
+        go_type: "*string"
     gen:
       go:
         package: "sqlcgen"

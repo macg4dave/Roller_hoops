@@ -78,7 +78,7 @@ async function fetchHistory(deviceId: string): Promise<DeviceChangeFeed> {
   return (await res.json()) as DeviceChangeFeed;
 }
 
-function FactsCard({ facts }: { facts: DeviceFacts }) {
+function FactsCard({ facts, device }: { facts: DeviceFacts; device: Device }) {
   const sortedIps = [...facts.ips].sort((a, b) => a.ip.localeCompare(b.ip));
   const sortedMacs = [...facts.macs].sort((a, b) => a.mac.localeCompare(b.mac));
   const sortedInterfaces = [...facts.interfaces].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
@@ -136,9 +136,11 @@ function FactsCard({ facts }: { facts: DeviceFacts }) {
                 </>
               ) : (
                 <ul style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 6 }}>
-                  {sortedMacs.map((mac) => (
+                  {sortedMacs.map((mac, idx) => (
                     <li key={`${mac.mac}-${mac.updated_at}`}>
-                      <code style={{ fontSize: 13 }}>{mac.mac}</code> <span className="hint">({mac.interface_name ?? 'unknown interface'})</span>
+                      <code style={{ fontSize: 13 }}>{mac.mac}</code>
+                      {idx === 0 && device.mac_vendor ? <span className="vendorTag">{device.mac_vendor}</span> : null}
+                      {' '}<span className="hint">({mac.interface_name ?? 'unknown interface'})</span>
                       <div className="hint">Updated {formatDateTime(mac.updated_at)}</div>
                     </li>
                   ))}
@@ -268,6 +270,16 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ i
           {primaryMac ? <Badge tone="info">MAC {primaryMac}</Badge> : null}
           {online ? <Badge tone="success">Online</Badge> : <Badge tone="neutral">Offline</Badge>}
           {changed ? <Badge tone="warning">Changed</Badge> : null}
+          {device.os_guess ? (
+            <Badge tone={
+              device.os_guess_confidence === 'high' ? 'success'
+              : device.os_guess_confidence === 'medium' ? 'warning'
+              : 'neutral'
+            }>
+              {device.os_guess}
+            </Badge>
+          ) : null}
+          {device.mac_vendor ? <Badge tone="info">{device.mac_vendor}</Badge> : null}
           {(device.tags ?? [])
             .filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0)
             .slice(0, 6)
@@ -285,29 +297,68 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ i
         </Link>
       </div>
 
-      <Card>
-        <CardBody>
-          <div className="stack" style={{ gap: 10 }}>
-            <div>
-              <p className="kicker">Overview</p>
-              <p className="hint">High-level identity and freshness indicators.</p>
+      <div className="deviceOverviewGrid">
+        <Card>
+          <CardBody>
+            <div className="stack" style={{ gap: 10 }}>
+              <p className="kicker">Identity</p>
+              <div className="deviceOverviewMeta">
+                <div className="deviceOverviewRow">
+                  <span className="deviceOverviewLabel">Primary IP</span>
+                  <span>{device.primary_ip ?? '—'}</span>
+                </div>
+                {primaryMac ? (
+                  <div className="deviceOverviewRow">
+                    <span className="deviceOverviewLabel">Primary MAC</span>
+                    <span><code style={{ fontSize: 12 }}>{primaryMac}</code>{device.mac_vendor ? <span className="hint"> ({device.mac_vendor})</span> : null}</span>
+                  </div>
+                ) : null}
+                {device.os_guess ? (
+                  <div className="deviceOverviewRow">
+                    <span className="deviceOverviewLabel">OS guess</span>
+                    <span>
+                      {device.os_guess}
+                      {device.os_guess_confidence ? (
+                        <span className={`confidenceDot confidence-${device.os_guess_confidence}`} title={`Confidence: ${device.os_guess_confidence}`} />
+                      ) : null}
+                    </span>
+                  </div>
+                ) : null}
+                {facts.snmp?.os_family ? (
+                  <div className="deviceOverviewRow">
+                    <span className="deviceOverviewLabel">SNMP OS</span>
+                    <span>{facts.snmp.os_family}{facts.snmp.os_version ? ` ${facts.snmp.os_version}` : ''}</span>
+                  </div>
+                ) : null}
+              </div>
             </div>
+          </CardBody>
+        </Card>
 
-            <div style={{ display: 'grid', gap: 4, fontSize: 13, color: 'var(--muted)' }}>
-              <div>Primary IP: {device.primary_ip ?? '—'}</div>
-              {primaryMac ? <div>Primary MAC: <code style={{ fontSize: 12 }}>{primaryMac}</code></div> : null}
-              {facts.snmp?.os_family ? (
-                <div>OS: {facts.snmp.os_family}{facts.snmp.os_version ? ` ${facts.snmp.os_version}` : ''}</div>
-              ) : null}
-              <div>Last seen: {formatDateTime(device.last_seen_at)}</div>
-              <div>Last changed: {formatDateTime(device.last_change_at)}</div>
-              <div>Facts refreshed: {formatDateTime(factsUpdatedAt)}</div>
+        <Card>
+          <CardBody>
+            <div className="stack" style={{ gap: 10 }}>
+              <p className="kicker">Freshness</p>
+              <div className="deviceOverviewMeta">
+                <div className="deviceOverviewRow">
+                  <span className="deviceOverviewLabel">Last seen</span>
+                  <span>{formatDateTime(device.last_seen_at)}</span>
+                </div>
+                <div className="deviceOverviewRow">
+                  <span className="deviceOverviewLabel">Last changed</span>
+                  <span>{formatDateTime(device.last_change_at)}</span>
+                </div>
+                <div className="deviceOverviewRow">
+                  <span className="deviceOverviewLabel">Facts refreshed</span>
+                  <span>{formatDateTime(factsUpdatedAt)}</span>
+                </div>
+              </div>
             </div>
-          </div>
-        </CardBody>
-      </Card>
+          </CardBody>
+        </Card>
+      </div>
 
-      <FactsCard facts={facts} />
+      <FactsCard facts={facts} device={device} />
 
       <details className="deviceCollapsible">
         <summary className="deviceCollapsibleSummary">

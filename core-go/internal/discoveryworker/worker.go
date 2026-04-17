@@ -48,6 +48,9 @@ type Queries interface {
 	UpsertInterfaceVLAN(ctx context.Context, arg sqlcgen.UpsertInterfaceVLANParams) error
 	UpsertLink(ctx context.Context, arg sqlcgen.UpsertLinkParams) error
 	UpsertServiceFromScan(ctx context.Context, arg sqlcgen.UpsertServiceFromScanParams) error
+	ListDeviceServices(ctx context.Context, deviceID string) ([]sqlcgen.DeviceService, error)
+	ListDeviceMACs(ctx context.Context, deviceID string) ([]sqlcgen.DeviceMAC, error)
+	UpdateDeviceFingerprint(ctx context.Context, arg sqlcgen.UpdateDeviceFingerprintParams) error
 }
 
 type Worker struct {
